@@ -1,0 +1,39 @@
+<% rhythm = @stats[:rhythm] %>
+<% max_total = rhythm.map {|r| r[:total] }.max || 0 %>
+<% busiest = rhythm.max_by {|r| r[:total] } %>
+<section class="panel stats-hide-sm">
+  <div class="section__head panel__title">
+    <div>
+      <h2>Your rhythm</h2>
+      <% if busiest && busiest[:total].positive? %>
+        <p class="muted"><%= h(busiest[:label]) %> was your busiest month, with <%= pluralize(busiest[:total], "play") %>.</p>
+      <% end %>
+    </div>
+    <ul class="chart-legend">
+      <li><span class="chart-legend__swatch chart-legend__swatch--movies"></span>Movies</li>
+      <li><span class="chart-legend__swatch chart-legend__swatch--tv"></span>TV</li>
+    </ul>
+  </div>
+  <div class="panel__body">
+    <% if max_total.zero? %>
+      <p class="muted">No plays in this period.</p>
+    <% else %>
+      <ol class="rhythm-chart">
+        <% rhythm.each do |row| %>
+          <% movies_pct = row[:movies] > 0 ? (row[:movies].to_f / max_total * 100).round(1) : 0 %>
+          <% tv_pct = row[:episodes] > 0 ? (row[:episodes].to_f / max_total * 100).round(1) : 0 %>
+          <li class="rhythm-chart__col" title="<%= h(row[:label]) %>: <%= pluralize(row[:total], "play") %>">
+            <div class="rhythm-chart__stack">
+              <% if row[:peak] && row[:total].positive? %>
+                <span class="rhythm-chart__peak">Peak</span>
+              <% end %>
+              <span class="rhythm-chart__seg rhythm-chart__seg--tv" style="height: <%= tv_pct %>%"></span>
+              <span class="rhythm-chart__seg rhythm-chart__seg--movies" style="height: <%= movies_pct %>%"></span>
+            </div>
+            <span class="rhythm-chart__label"><%= h(row[:label]) %></span>
+          </li>
+        <% end %>
+      </ol>
+    <% end %>
+  </div>
+</section>

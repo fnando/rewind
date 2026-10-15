@@ -11,7 +11,8 @@ module Rewind
         user: current_user,
         media_type: @media_type,
         from: @from,
-        to: @to
+        to: @to,
+        period: @period
       ).to_h
 
       erb :"stats/index"

@@ -1,124 +1,84 @@
 <% @page_title = "Stats" %>
 <main class="page page--wide">
-  <div class="history-head">
-    <div class="history-head__left">
-      <h1>Stats</h1>
-      <nav class="segmented" aria-label="Media type">
-        <a href="/stats?period=<%= h(@period) %>"<%= ' aria-current="page"' if @media_type == "all" %>>All</a>
-        <a href="/stats?type=movie&period=<%= h(@period) %>"<%= ' aria-current="page"' if @media_type == "movie" %>>Movies</a>
-        <a href="/stats?type=tv&period=<%= h(@period) %>"<%= ' aria-current="page"' if @media_type == "tv" %>>TV</a>
-      </nav>
-    </div>
+  <div class="stats-controls">
     <nav class="segmented" aria-label="Period">
-      <% %w[week month year all].each do |p| %>
-        <a href="/stats?type=<%= h(@media_type) %>&period=<%= p %>"<%= ' aria-current="page"' if @period == p %>><%= p.capitalize %></a>
+      <% [%w[week Last\ 7\ days], %w[month Last\ 30\ days], %w[year This\ year], %w[all All\ time]].each do |value, label| %>
+        <a href="/stats?period=<%= value %>&type=<%= h(@media_type) %>"<%= ' aria-current="page"' if @period == value %>><%= label %></a>
+      <% end %>
+    </nav>
+    <nav class="segmented" aria-label="Media type">
+      <% [%w[all All], %w[movie Movies], %w[tv TV]].each do |value, label| %>
+        <a href="/stats?period=<%= h(@period) %>&type=<%= value %>"<%= ' aria-current="page"' if @media_type == value %>><%= label %></a>
       <% end %>
     </nav>
   </div>
 
-  <section class="stat-grid">
-    <div class="stat-card">
-      <span class="stat-card__value"><%= @stats[:totals][:plays] %></span>
-      <span class="stat-card__label">Plays</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-card__value"><%= @stats[:totals][:unique_titles] %></span>
-      <span class="stat-card__label">Unique titles</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-card__value"><%= @stats[:totals][:hours_watched] %></span>
-      <span class="stat-card__label">Hours watched</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-card__value"><%= @stats[:totals][:rewatches] %></span>
-      <span class="stat-card__label">Rewatches</span>
-    </div>
-  </section>
+  <%= erb :"_partials/stats/hero" %>
+  <%= erb :"_partials/stats/cards" %>
+  <%= erb :"_partials/stats/rhythm" %>
+  <%= erb :"_partials/stats/heatmap" %>
 
-  <% max_genre = (@stats[:by_genre].map(&:last).max || 1) %>
-  <% if @stats[:by_genre].any? %>
-    <section class="panel">
-      <h2 class="panel__title">By genre</h2>
-      <ul class="bar-list">
-        <% @stats[:by_genre].each do |name, count| %>
-          <li class="bar-list__row" style="--w: <%= (count.to_f / max_genre * 100).round %>%">
-            <span class="bar-list__label"><%= h(name) %></span>
-            <span class="bar-list__bar"></span>
-            <span class="bar-list__count"><%= count %></span>
-          </li>
-        <% end %>
-      </ul>
-    </section>
+  <% genres = @stats[:top_genres] %>
+  <% if genres.any? %>
+    <%
+      hero_genre = genres.first
+      total_plays = genres.sum {|g| g[:count] }
+      hero_pct = total_plays.positive? ? (hero_genre[:count].to_f / total_plays * 100).round : 0
+      taste_subtitle = genres.size >= 2 ? "Mostly #{genres[0][:name].downcase}, with a soft spot for #{genres[1][:name].downcase}." : nil
+      genre_rows = genres[1..].to_a.map {|g| {name: g[:name], count: g[:count], poster_url: g[:sample] && poster_url(g[:sample], size: "w92")} }
+      hero_poster = hero_genre[:sample] && poster_url(hero_genre[:sample], size: "w185")
+    %>
+    <%= erb :"_partials/stats/rank_list", locals: {
+      title: "Your taste",
+      subtitle: taste_subtitle,
+      hero: {name: hero_genre[:name], meta: "#{pluralize(hero_genre[:count], "play")} · in #{hero_pct}% of everything you watched", poster_url: hero_poster},
+      rows: genre_rows,
+      footer_note: nil,
+      variant: "taste",
+      total_count: total_plays
+    } %>
   <% end %>
 
-  <% max_period = (@stats[:by_period].map(&:last).max || 1) %>
-  <% if @stats[:by_period].any? %>
-    <section class="panel">
-      <h2 class="panel__title">By period</h2>
-      <ol class="bar-chart">
-        <% @stats[:by_period].each do |label, count| %>
-          <li class="bar-chart__col" style="--h: <%= (count.to_f / max_period * 100).round %>%" title="<%= h(label) %>: <%= count %>">
-            <span class="bar-chart__bar"></span>
-            <span class="bar-chart__label"><%= h(label) %></span>
-          </li>
-        <% end %>
-      </ol>
-    </section>
+  <% shows = @stats[:top_shows] %>
+  <% if shows.any? %>
+    <%
+      show_tmdb_ids = shows.map {|s| s[:parent_tmdb_id] }.compact
+      show_items = Rewind::Item.where(media_type: "tv", tmdb_id: show_tmdb_ids).all.each_with_object({}) {|it, h| h[it.tmdb_id] = it }
+      hero_show = shows.first
+      hero_show_item = show_items[hero_show[:parent_tmdb_id]]
+      hero_poster = poster_url(hero_show_item, size: "w185") if hero_show_item
+      show_rows = shows[1..].to_a.map do |row|
+        it = show_items[row[:parent_tmdb_id]]
+        {
+          name: row[:name],
+          count: row[:episode_count],
+          count_label: pluralize(row[:episode_count], "episode"),
+          poster_url: it ? poster_url(it, size: "w92") : nil
+        }
+      end
+    %>
+    <%= erb :"_partials/stats/rank_list", locals: {
+      title: "Shows you couldn't stop",
+      subtitle: "The series you kept coming back to.",
+      hero: {name: hero_show[:name], meta: pluralize(hero_show[:episode_count], "episode"), poster_url: hero_poster},
+      rows: show_rows,
+      footer_note: nil,
+      variant: "shows",
+      total_count: shows.sum {|s| s[:episode_count] }
+    } %>
   <% end %>
 
-  <section class="panel">
-    <h2 class="panel__title">Top movies</h2>
-    <% if @stats[:top_items][:movies].any? %>
-      <ol class="top-list">
-        <% @stats[:top_items][:movies].each do |item, count| %>
-          <li><a href="/items/<%= item.id %>"><%= h(item.title) %></a> · <%= count %></li>
-        <% end %>
-      </ol>
-    <% else %>
-      <p class="muted">No movies in this period.</p>
-    <% end %>
-  </section>
+  <%= erb :"_partials/stats/people_grid", locals: {
+    title: "Familiar faces",
+    subtitle: "The cast you spent the most time with.",
+    people: @stats[:top_cast],
+    variant: "cast"
+  } %>
 
-  <section class="panel">
-    <h2 class="panel__title">Top shows</h2>
-    <% if @stats[:top_items][:shows].any? %>
-      <ol class="top-list">
-        <% @stats[:top_items][:shows].each do |name, count| %>
-          <li><%= h(name) %> · <%= count %> episode<%= "s" unless count == 1 %></li>
-        <% end %>
-      </ol>
-    <% else %>
-      <p class="muted">No shows in this period.</p>
-    <% end %>
-  </section>
-
-  <section class="panel">
-    <h2 class="panel__title">Top people</h2>
-    <div class="two-col">
-      <div>
-        <h3>Directors / Creators</h3>
-        <% if @stats[:top_people][:directors].any? %>
-          <ol class="top-list">
-            <% @stats[:top_people][:directors].each do |name, count| %>
-              <li><%= h(name) %> · <%= count %></li>
-            <% end %>
-          </ol>
-        <% else %>
-          <p class="muted">No data.</p>
-        <% end %>
-      </div>
-      <div>
-        <h3>Cast</h3>
-        <% if @stats[:top_people][:cast].any? %>
-          <ol class="top-list">
-            <% @stats[:top_people][:cast].each do |name, count| %>
-              <li><%= h(name) %> · <%= count %></li>
-            <% end %>
-          </ol>
-        <% else %>
-          <p class="muted">No data.</p>
-        <% end %>
-      </div>
-    </div>
-  </section>
+  <%= erb :"_partials/stats/people_grid", locals: {
+    title: "Behind the camera",
+    subtitle: "Directors and creators you keep coming back to.",
+    people: @stats[:top_directors],
+    variant: "crew"
+  } %>
 </main>

@@ -33,6 +33,20 @@ module Rewind
         session[:flash_error] = msg
       end
 
+      def random_username_placeholder
+        name = Rewind::LEAD_CHARACTERS.sample
+        name.to_s.downcase
+          .unicode_normalize(:nfkd)
+          .gsub(/[^\x00-\x7f]/, "")
+          .gsub(/[^a-z0-9]+/, "-")
+          .gsub(/^-+|-+$/, "")
+      end
+
+      def pluralize(count, singular, plural = nil)
+        word = count == 1 ? singular : (plural || "#{singular}s")
+        "#{count} #{word}"
+      end
+
       def avatar_letter(user)
         (user.name || user.username).to_s[0, 1].upcase
       end

@@ -1,0 +1,37 @@
+<%# locals: title, subtitle, people, variant %>
+<section class="panel">
+  <div class="section__head panel__title">
+    <div>
+      <h2><%= h(title) %></h2>
+      <% if subtitle %>
+        <p class="muted"><%= h(subtitle) %></p>
+      <% end %>
+    </div>
+  </div>
+  <div class="panel__body">
+    <% if people.empty? %>
+      <p class="muted">No data yet.</p>
+    <% else %>
+      <ul class="people-grid people-grid--<%= variant %>">
+        <% people.each do |person| %>
+          <li class="person">
+            <span class="person__avatar-wrap">
+              <span class="person__avatar">
+                <% if person[:profile_path] %>
+                  <img src="https://image.tmdb.org/t/p/w92<%= person[:profile_path] %>" alt="">
+                <% else %>
+                  <%= h(person[:name].to_s.split.map {|w| w[0] }.first(2).join.upcase) %>
+                <% end %>
+              </span>
+              <span class="person__badge" title="<%= pluralize(person[:count], "appearance") %>"><%= person[:count] %></span>
+            </span>
+            <span class="person__name"><%= h(person[:name]) %></span>
+            <% if person[:top_item_title] %>
+              <span class="person__sub"><%= h(person[:top_item_title]) %></span>
+            <% end %>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </div>
+</section>

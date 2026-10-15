@@ -1,0 +1,65 @@
+<% heat = @stats[:heatmap] %>
+<% return "" if heat.nil? %>
+<%
+  cells = heat[:cells]
+  first = cells.first[:date]
+  offset = first.wday
+  # pad front so column 0 starts on Sunday
+  padded = Array.new(offset) { nil } + cells
+  weeks = padded.each_slice(7).to_a
+  # Month label per week column: show month name only where the month changes
+  month_labels = weeks.map.with_index do |week, idx|
+    first_day = week.find {|c| c && c[:date] }&.dig(:date)
+    next nil unless first_day
+
+    prev_week = weeks[idx - 1] if idx.positive?
+    prev_first = prev_week && prev_week.find {|c| c && c[:date] }&.dig(:date)
+    if prev_first.nil? || prev_first.month != first_day.month
+      first_day.strftime("%b")
+    end
+  end
+%>
+<section class="panel stats-hide-sm">
+  <div class="section__head panel__title">
+    <div>
+      <h2>Activity · <%= h(@stats[:period][:label]) %></h2>
+      <p class="muted">
+        <%= pluralize(heat[:days_with_plays], "day") %> with something to watch.
+        <% if heat[:biggest_day] %>
+          Biggest day: <%= heat[:biggest_day][:date].strftime("%a, %b %-d") %>, with <%= pluralize(heat[:biggest_day][:count], "play") %>.
+        <% end %>
+      </p>
+    </div>
+    <ul class="heatmap-legend">
+      <li>Less</li>
+      <% (0..4).each do |lvl| %>
+        <li class="heatmap__cell" data-level="<%= lvl %>" aria-hidden="true"></li>
+      <% end %>
+      <li>More</li>
+    </ul>
+  </div>
+  <div class="panel__body heatmap-wrap">
+    <div class="heatmap" role="img" aria-label="Daily plays heatmap" style="--cols: <%= weeks.size %>;">
+      <div class="heatmap__months">
+        <% month_labels.each do |label| %>
+          <span class="heatmap__month"><%= label %></span>
+        <% end %>
+      </div>
+      <div class="heatmap__days">
+        <% %w[Mon Wed Fri].each_with_index do |label, i| %>
+          <span class="heatmap__day" style="grid-row: <%= [2, 4, 6][i] %>;"><%= label %></span>
+        <% end %>
+      </div>
+      <div class="heatmap__cells">
+        <% padded.each do |cell| %>
+          <% if cell.nil? %>
+            <span class="heatmap__cell heatmap__cell--empty" aria-hidden="true"></span>
+          <% else %>
+            <span class="heatmap__cell<%= " heatmap__cell--muted" unless cell[:in_filter] %>" data-level="<%= cell[:level] %>"
+                  title="<%= cell[:date].strftime("%a, %b %-d, %Y") %><%= cell[:in_filter] ? ": #{pluralize(cell[:count], "play")}" : " (outside filter)" %>"></span>
+          <% end %>
+        <% end %>
+      </div>
+    </div>
+  </div>
+</section>

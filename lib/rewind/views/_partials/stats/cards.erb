@@ -1,0 +1,31 @@
+<% cards = @stats[:cards] %>
+<section class="stat-cards">
+  <div class="stat-card stat-card--titles">
+    <span class="stat-card__icon">◉</span>
+    <span class="stat-card__value"><%= cards[:different_titles] %></span>
+    <span class="stat-card__label"><%= cards[:different_titles] == 1 ? "different title" : "different titles" %></span>
+  </div>
+
+  <div class="stat-card stat-card--rewatches">
+    <span class="stat-card__icon">↻</span>
+    <span class="stat-card__value"><%= cards[:rewatches] %></span>
+    <span class="stat-card__label"><%= cards[:rewatches] == 1 ? "rewatch" : "rewatches" %>, worth seeing twice</span>
+  </div>
+
+  <div class="stat-card stat-card--busiest">
+    <span class="stat-card__icon">▣</span>
+    <% if cards[:busiest] %>
+      <span class="stat-card__value"><%= h(cards[:busiest][:label]) %></span>
+      <span class="stat-card__label"><%= h(cards[:busiest][:context]) %> · <%= pluralize(cards[:busiest][:count], "play") %></span>
+    <% else %>
+      <span class="stat-card__value">—</span>
+      <span class="stat-card__label">not enough data yet</span>
+    <% end %>
+  </div>
+
+  <div class="stat-card stat-card--avg">
+    <span class="stat-card__icon">⏱</span>
+    <span class="stat-card__value"><%= cards[:average_per_week] %></span>
+    <span class="stat-card__label"><%= cards[:average_per_week] == 1 ? "play" : "plays" %> a week, on average</span>
+  </div>
+</section>

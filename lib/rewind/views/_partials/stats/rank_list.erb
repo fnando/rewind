@@ -1,0 +1,42 @@
+<%# locals: title, subtitle, hero, rows, footer_note, variant %>
+<section class="panel rank-panel rank-panel--<%= variant %>">
+  <div class="section__head panel__title">
+    <div>
+      <h2><%= h(title) %></h2>
+      <% if subtitle %>
+        <p class="muted"><%= subtitle %></p>
+      <% end %>
+    </div>
+  </div>
+  <div class="panel__body">
+    <% if hero %>
+      <div class="rank-hero">
+        <% if hero[:poster_url] %>
+          <img class="rank-hero__poster" src="<%= hero[:poster_url] %>" alt="">
+        <% end %>
+        <div class="rank-hero__body">
+          <span class="rank-hero__eyebrow">Your #1</span>
+          <strong class="rank-hero__name"><%= hero[:name_html] || h(hero[:name]) %></strong>
+          <span class="rank-hero__meta"><%= h(hero[:meta]) %></span>
+        </div>
+      </div>
+    <% end %>
+    <% max = [total_count, 1].max %>
+    <ol class="rank-list">
+      <% rows.each_with_index do |row, i| %>
+        <li class="rank-list__row<%= " rank-list__row--with-poster" if row[:poster_url] %>">
+          <span class="rank-list__rank"><%= i + 2 %></span>
+          <% if row[:poster_url] %>
+            <img class="rank-list__poster" src="<%= row[:poster_url] %>" alt="">
+          <% end %>
+          <span class="rank-list__label"><%= row[:name_html] || h(row[:name]) %></span>
+          <span class="rank-list__bar" style="--w: <%= (row[:count].to_f / max * 100).round %>%"></span>
+          <span class="rank-list__count"><%= h(row[:count_label] || row[:count].to_s) %></span>
+        </li>
+      <% end %>
+    </ol>
+    <% if footer_note %>
+      <p class="muted rank-panel__footer"><%= footer_note %></p>
+    <% end %>
+  </div>
+</section>
