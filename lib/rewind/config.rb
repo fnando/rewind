@@ -12,9 +12,10 @@ module Rewind
       @host = ENV["REWIND_HOST"] || "0.0.0.0"
       @port = (ENV["REWIND_PORT"] || 55_455).to_i
       @allowed_hosts = (ENV["REWIND_ALLOWED_HOSTS"] || "").split(",").map(&:strip).reject(&:empty?)
+      @puma_plugins = (ENV["REWIND_PUMA_PLUGINS"] || "").split(",").map(&:strip).reject(&:empty?)
     end
 
-    attr_accessor :allowed_hosts
+    attr_accessor :allowed_hosts, :puma_plugins
 
     def db_path
       File.join(data_dir, "rewind.sqlite3")

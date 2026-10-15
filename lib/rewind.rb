@@ -38,7 +38,7 @@ module Rewind
     end
 
     def logger
-      @logger ||= Logger.new($stdout)
+      @logger ||= Logger.new($stdout, level: Logger::WARN)
     end
 
     def root

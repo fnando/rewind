@@ -149,8 +149,11 @@ module Rewind
     option :host, type: :string
     option :migrate, type: :boolean, default: false,
                      desc: "Run pending migrations before booting"
+    option :verbose, type: :boolean, default: false, aliases: "-v",
+                     desc: "Log every recorded and skipped webhook event"
     def run_server
       CLI.load_env!(options[:env])
+      Rewind.logger.level = Logger::INFO if options[:verbose]
       require_relative "migrator"
       if options[:migrate] || ENV["REWIND_AUTO_MIGRATE"] == "1"
         Rewind::Migrator.migrate!
@@ -162,11 +165,30 @@ module Rewind
       app = Rewind.application
       display_host = %w[0.0.0.0 ::].include?(Rewind.config.host) ? "localhost" : Rewind.config.host
       say "Rewind listening on http://#{display_host}:#{Rewind.config.port}/"
-      require "rackup"
-      Rackup::Handler.default.run(app, Host: Rewind.config.host,
-                                       Port: Rewind.config.port)
+
+      require "puma"
+      require "puma/configuration"
+      require "puma/launcher"
+
+      plugins = %w[tmp_restart] | Rewind.config.puma_plugins
+      conf = Puma::Configuration.new do |c|
+        c.bind "tcp://#{Rewind.config.host}:#{Rewind.config.port}"
+        c.app app
+        plugins.each {|name| c.plugin(name) }
+      end
+      # Pass the original ARGV so Puma's restart (tmp_restart) re-execs the full
+      # `rewind run ...` command instead of a bare `rewind`.
+      Puma::Launcher.new(conf, argv: ARGV).run
     end
     map "run" => :run_server
+
+    desc "restart", "Restart a running server (via Puma's tmp_restart plugin)"
+    def restart
+      path = File.join(Dir.pwd, "tmp", "restart.txt")
+      FileUtils.mkdir_p(File.dirname(path))
+      FileUtils.touch(path)
+      say "Touched #{path}; a running server will restart."
+    end
 
     desc "migrate", "Run all pending database migrations"
     def migrate

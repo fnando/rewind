@@ -65,16 +65,17 @@ when prompted.
 Rewind reads its configuration from environment variables. You can keep them in
 a `.env` file and pass `--env PATH` to any CLI command.
 
-| Variable                | Default                   | Purpose                                                                                     |
-| ----------------------- | ------------------------- | ------------------------------------------------------------------------------------------- |
-| `REWIND_DATA_DIR`       | `./data`                  | Where the SQLite file and session secret live.                                              |
-| `REWIND_HOST`           | `0.0.0.0`                 | Interface the server binds to.                                                              |
-| `REWIND_PORT`           | `55455`                   | Port the server binds to.                                                                   |
-| `REWIND_ALLOWED_HOSTS`  | _(empty)_                 | Comma-separated hostnames allowed by Sinatra's host authorization.                          |
-| `REWIND_SESSION_SECRET` | auto-generated            | Rack session cookie secret. Generated into `$REWIND_DATA_DIR/.session_secret` on first run. |
+| Variable                | Default                   | Purpose                                                                                               |
+| ----------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `REWIND_DATA_DIR`       | `./data`                  | Where the SQLite file and session secret live.                                                        |
+| `REWIND_HOST`           | `0.0.0.0`                 | Interface the server binds to.                                                                        |
+| `REWIND_PORT`           | `55455`                   | Port the server binds to.                                                                             |
+| `REWIND_ALLOWED_HOSTS`  | _(empty)_                 | Comma-separated hostnames allowed by Sinatra's host authorization.                                    |
+| `REWIND_SESSION_SECRET` | auto-generated            | Rack session cookie secret. Generated into `$REWIND_DATA_DIR/.session_secret` on first run.           |
 | `REWIND_SALT`           | _(required)_              | Secret used to hash integration webhook tokens. Must stay stable, or existing webhooks stop matching. |
-| `REWIND_AUTO_MIGRATE`   | _(unset)_                 | When `1`, boot runs pending migrations automatically.                                       |
-| `TMDB_API_KEY`          | _(required for metadata)_ | Your TMDB bearer token.                                                                     |
+| `REWIND_AUTO_MIGRATE`   | _(unset)_                 | When `1`, boot runs pending migrations automatically.                                                 |
+| `REWIND_PUMA_PLUGINS`   | _(empty)_                 | Comma-separated extra Puma plugins to load on top of the built-in `tmp_restart`.                      |
+| `TMDB_API_KEY`          | _(required for metadata)_ | Your TMDB bearer token.                                                                               |
 
 `REWIND_SALT` is required. Generate one with:
 
@@ -101,10 +102,11 @@ rewind run --env .env
 ## CLI reference
 
 ```bash
-rewind migrate                       # run all pending migrations
-rewind run [--port N] [--host HOST]  # start the web server (puma)
-rewind console                       # IRB with models loaded
-rewind config                        # print resolved config (secrets redacted)
+rewind migrate                                 # run all pending migrations
+rewind run [--port N] [--host HOST] [--verbose]  # start the web server (puma)
+rewind restart                                 # restart a running server (touches tmp/restart.txt)
+rewind console                                 # IRB with models loaded
+rewind config                                  # print resolved config (secrets redacted)
 rewind version
 ```
 
@@ -141,9 +143,8 @@ that can be revoked at any time.
 ### 2. In Jellyfin
 
 - Install the Webhook plugin:
-  1. Dashboard → Plugins → **Manage Repositories**. If the official
-     repository isn't listed, add
-     `https://repo.jellyfin.org/files/plugin/manifest.json`.
+  1. Dashboard → Plugins → **Manage Repositories**. If the official repository
+     isn't listed, add `https://repo.jellyfin.org/files/plugin/manifest.json`.
   2. Restart Jellyfin.
   3. Dashboard → Plugins → find **Webhook** in the list and enable it.
 - Dashboard → Plugins → **Webhook** → **Add Generic Destination**.
@@ -201,6 +202,10 @@ puma -p 55455 config.ru
 
 Set `REWIND_AUTO_MIGRATE=1` to run migrations on boot, or run `rewind migrate`
 as a release step.
+
+`rewind run` launches Puma with the built-in `tmp_restart` plugin enabled, so a
+running server can be restarted by touching `tmp/restart.txt` in its working
+directory. Load additional Puma plugins with `REWIND_PUMA_PLUGINS`.
 
 ## Database
 
