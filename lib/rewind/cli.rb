@@ -152,10 +152,10 @@ module Rewind
     def run_server
       CLI.load_env!(options[:env])
       require_relative "migrator"
-      if options[:migrate]
+      if options[:migrate] || ENV["REWIND_AUTO_MIGRATE"] == "1"
         Rewind::Migrator.migrate!
       elsif Rewind::Migrator.pending?
-        say "Pending migrations detected. Run `rewind migrate` or pass --migrate."
+        abort "Pending migrations detected. Run `rewind migrate` or pass --migrate."
       end
       Rewind.config.port = options[:port] if options[:port]
       Rewind.config.host = options[:host] if options[:host]
