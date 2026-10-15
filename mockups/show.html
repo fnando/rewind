@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ludwig · Rewind</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand__mark"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 L3 12 L11 18 Z M21 6 L13 12 L21 18 Z" fill="currentColor"/></svg></span>
+      <span>rewind</span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="/">Dashboard</a>
+      <a href="/plays">History</a>
+      <a href="/stats">Stats</a>
+    </nav>
+    <button class="avatar" type="button" aria-label="Account">N</button>
+  </header>
+
+  <main class="page page--title">
+    <a class="back-link" href="/plays"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>History</a>
+
+    <section class="title-hero">
+      <!-- <img class="title-hero__poster" src="https://image.tmdb.org/t/p/w342{poster_path}" alt=""> -->
+      <div class="title-hero__poster" aria-hidden="true"></div>
+      <div class="title-hero__info">
+        <div class="title-hero__heading">
+          <span class="eyebrow">TV show</span>
+          <h1>Ludwig</h1>
+          <span class="title-meta">2024 · Comedy, Crime · 1 season</span>
+        </div>
+        <p class="overview">A reclusive puzzle setter poses as his missing twin brother, a police detective, to find out what happened to him, and ends up solving murders along the way.</p>
+        <span class="credit">Created by <strong>Mark Brotherton, Ben Cottam</strong></span>
+
+        <div class="progress">
+          <div class="progress__head"><strong>2 of 6 episodes watched</strong><span>33%</span></div>
+          <div class="progress__bar" role="progressbar" aria-label="Episodes watched" aria-valuemin="0" aria-valuemax="6" aria-valuenow="2">
+            <div class="progress__fill" style="width: 33%"></div>
+          </div>
+        </div>
+
+        <div class="hero-actions">
+          <form method="post" action="/plays">
+            <input type="hidden" name="item_id" value="203">
+            <button class="btn btn--primary" type="submit">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              Watched S1 · E3
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="episodes-h">
+      <div class="section__head">
+        <h2 id="episodes-h">Episodes</h2>
+        <nav class="segmented" aria-label="Seasons">
+          <a href="?season=1" aria-current="page">Season 1</a>
+        </nav>
+      </div>
+
+      <ol class="play-grid">
+        <!-- Watched episode, rewatched. Stars/remove act on the latest play. -->
+        <li class="play-card">
+          <!-- <img class="play-card__still" src="https://image.tmdb.org/t/p/w185{still_path}" alt=""> -->
+          <div class="play-card__still" aria-hidden="true"></div>
+          <div class="play-card__body">
+            <span class="play-card__title">Episode 1</span>
+            <span class="play-card__detail">S1 · E1</span>
+            <span class="play-card__status is-watched"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Watched Oct 14 · Jellyfin</span>
+            <span class="badge">2 watches</span>
+            <div class="play-card__actions">
+              <form class="stars" method="post" action="/plays/103/rating" aria-label="Rate your latest watch of Episode 1">
+                <button class="is-on" name="rating" value="1" aria-label="1 star"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+                <button class="is-on" name="rating" value="2" aria-label="2 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+                <button class="is-on" name="rating" value="3" aria-label="3 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+                <button class="is-on" name="rating" value="4" aria-label="4 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+                <button class="is-on" name="rating" value="5" aria-label="5 stars" aria-pressed="true"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+              </form>
+              <div class="play-card__tools">
+                <form method="post" action="/plays">
+                  <input type="hidden" name="item_id" value="201">
+                  <button class="icon-btn" type="submit" aria-label="Log a rewatch of Episode 1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+                </form>
+                <form method="post" action="/plays/103">
+                  <input type="hidden" name="_method" value="delete">
+                  <button class="icon-btn" type="submit" aria-label="Remove your latest watch of Episode 1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </li>
+
+        <!-- Watched once, not rated -->
+        <li class="play-card">
+          <div class="play-card__still" aria-hidden="true"></div>
+          <div class="play-card__body">
+            <span class="play-card__title">Episode 2</span>
+            <span class="play-card__detail">S1 · E2</span>
+            <span class="play-card__status is-watched"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Watched Oct 14 · Jellyfin</span>
+            <div class="play-card__actions">
+              <form class="stars" method="post" action="/plays/101/rating" aria-label="Rate your latest watch of Episode 2">
+                <button name="rating" value="1" aria-label="1 star"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+                <button name="rating" value="2" aria-label="2 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+                <button name="rating" value="3" aria-label="3 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+                <button name="rating" value="4" aria-label="4 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+                <button name="rating" value="5" aria-label="5 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+              </form>
+              <div class="play-card__tools">
+                <form method="post" action="/plays">
+                  <input type="hidden" name="item_id" value="202">
+                  <button class="icon-btn" type="submit" aria-label="Log a rewatch of Episode 2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+                </form>
+                <form method="post" action="/plays/101">
+                  <input type="hidden" name="_method" value="delete">
+                  <button class="icon-btn" type="submit" aria-label="Remove your latest watch of Episode 2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </li>
+
+        <!-- Unwatched episodes -->
+        <li class="play-card play-card--unwatched">
+          <div class="play-card__still" aria-hidden="true"></div>
+          <div class="play-card__body">
+            <span class="play-card__title">Episode 3</span>
+            <span class="play-card__detail">S1 · E3</span>
+            <span class="play-card__status">Not watched</span>
+            <div class="play-card__actions">
+              <form method="post" action="/plays">
+                <input type="hidden" name="item_id" value="203">
+                <button class="btn btn--soft" type="submit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Mark watched</button>
+              </form>
+            </div>
+          </div>
+        </li>
+
+        <li class="play-card play-card--unwatched">
+          <div class="play-card__still" aria-hidden="true"></div>
+          <div class="play-card__body">
+            <span class="play-card__title">Episode 4</span>
+            <span class="play-card__detail">S1 · E4</span>
+            <span class="play-card__status">Not watched</span>
+            <div class="play-card__actions">
+              <form method="post" action="/plays">
+                <input type="hidden" name="item_id" value="204">
+                <button class="btn btn--soft" type="submit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Mark watched</button>
+              </form>
+            </div>
+          </div>
+        </li>
+
+        <li class="play-card play-card--unwatched">
+          <div class="play-card__still" aria-hidden="true"></div>
+          <div class="play-card__body">
+            <span class="play-card__title">Episode 5</span>
+            <span class="play-card__detail">S1 · E5</span>
+            <span class="play-card__status">Not watched</span>
+            <div class="play-card__actions">
+              <form method="post" action="/plays">
+                <input type="hidden" name="item_id" value="205">
+                <button class="btn btn--soft" type="submit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Mark watched</button>
+              </form>
+            </div>
+          </div>
+        </li>
+
+        <li class="play-card play-card--unwatched">
+          <div class="play-card__still" aria-hidden="true"></div>
+          <div class="play-card__body">
+            <span class="play-card__title">Episode 6</span>
+            <span class="play-card__detail">S1 · E6</span>
+            <span class="play-card__status">Not watched</span>
+            <div class="play-card__actions">
+              <form method="post" action="/plays">
+                <input type="hidden" name="item_id" value="206">
+                <button class="btn btn--soft" type="submit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Mark watched</button>
+              </form>
+            </div>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section" aria-labelledby="cast-h">
+      <h2 id="cast-h">Top cast</h2>
+      <ul class="cast-grid">
+        <li class="cast"><span class="cast__photo" aria-hidden="true"></span><span class="cast__text"><span class="cast__name">David Mitchell</span><span class="cast__role">John Taylor</span></span></li>
+        <li class="cast"><span class="cast__photo" aria-hidden="true"></span><span class="cast__text"><span class="cast__name">Anna Maxwell Martin</span><span class="cast__role">Lucy Taylor</span></span></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

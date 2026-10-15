@@ -1,0 +1,35 @@
+<% @page_title = "History" %>
+<main class="page page--wide">
+  <div class="history-head">
+    <div class="history-head__left">
+      <h1>History</h1>
+      <nav class="segmented" aria-label="Media type">
+        <a href="/plays"<%= ' aria-current="page"' if @type.nil? || @type == "all" %>>All</a>
+        <a href="/plays?type=movie"<%= ' aria-current="page"' if @type == "movie" %>>Movies</a>
+        <a href="/plays?type=episode"<%= ' aria-current="page"' if @type == "episode" %>>TV</a>
+      </nav>
+    </div>
+    <a class="btn btn--primary" href="/search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Log a watch
+    </a>
+  </div>
+
+  <% if @plays.empty? %>
+    <p class="muted">No plays recorded for this filter.</p>
+  <% end %>
+
+  <% @plays_by_day.each do |day, plays| %>
+    <section class="day" aria-labelledby="day-<%= day.iso8601 %>">
+      <h2 class="day__title" id="day-<%= day.iso8601 %>">
+        <%= h(day_label(day)) %>
+        <span class="day__meta"><%= day.strftime("%A, %B %-d") %> · <%= plays.size %> play<%= "s" unless plays.size == 1 %></span>
+      </h2>
+      <ul class="play-grid">
+        <% plays.each do |play| %>
+          <%= erb :"_partials/play_card", locals: {play: play} %>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+</main>

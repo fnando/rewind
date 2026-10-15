@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Rewind</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand__mark"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 L3 12 L11 18 Z M21 6 L13 12 L21 18 Z" fill="currentColor"/></svg></span>
+      <span>rewind</span>
+    </a>
+  </header>
+
+  <main class="page page--narrow">
+    <div class="page-head">
+      <h1>Sign in</h1>
+      <p>Welcome back to your watch log.</p>
+    </div>
+
+    <form class="panel" method="post" action="/login">
+      <div class="panel__body">
+        <div class="field">
+          <label for="email">Email</label>
+          <input class="input" id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input class="input" id="password" name="password" type="password" autocomplete="current-password" placeholder="Password" required>
+        </div>
+        <button class="btn btn--primary btn--block" type="submit">Sign in</button>
+      </div>
+      <p class="panel__note">Forgot your password? Ask your admin to issue a new one.</p>
+    </form>
+  </main>
+</body>
+</html>

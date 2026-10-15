@@ -1,0 +1,112 @@
+<% @page_title = "Settings" %>
+<main class="page page--wide">
+  <div class="page-head">
+    <h1>Settings</h1>
+  </div>
+
+  <section class="panel">
+    <h2 class="panel__title">Session</h2>
+    <div class="panel__body">
+      <p class="muted">Signed in as <strong><%= h(current_user.username) %></strong>.</p>
+      <form method="post" action="/logout">
+        <%= csrf_tag %>
+        <button class="btn btn--secondary" type="submit">Log out</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">Timezone</h2>
+    <form method="post" action="/settings/timezone" class="panel__body panel__body--inline">
+      <%= csrf_tag %>
+      <select class="input" name="timezone">
+        <% TZInfo::Timezone.all_identifiers.sort.each do |tz| %>
+          <option value="<%= tz %>" <%= "selected" if current_user.timezone == tz %>><%= tz %></option>
+        <% end %>
+      </select>
+      <button class="btn btn--secondary" type="submit">Save</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">Rating style</h2>
+    <form method="post" action="/settings/rating-style" class="panel__body panel__body--inline">
+      <%= csrf_tag %>
+      <label><input type="radio" name="rating_style" value="stars" <%= "checked" if current_user.rating_style == "stars" %>> Stars (1–5)</label>
+      <label><input type="radio" name="rating_style" value="thumbs" <%= "checked" if current_user.rating_style == "thumbs" %>> Thumbs up / down</label>
+      <button class="btn btn--secondary" type="submit">Save</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">Password</h2>
+    <div class="panel__body">
+      <p class="muted"><a href="/settings/password">Change your password →</a></p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">Integrations</h2>
+    <div class="panel__body">
+      <% if @integrations.any? %>
+        <ul class="integration-list">
+          <% @integrations.each do |i| %>
+            <%= erb :"_partials/integration_card", locals: {integration: i} %>
+          <% end %>
+        </ul>
+      <% else %>
+        <p class="muted">No integrations yet.</p>
+      <% end %>
+    </div>
+
+    <form method="post" action="/settings/integrations" class="panel__body">
+      <%= csrf_tag %>
+      <h3>Add integration</h3>
+      <div class="field">
+        <label for="kind">Server</label>
+        <select class="input" id="kind" name="kind">
+          <option value="jellyfin">Jellyfin</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="label">Label</label>
+        <input class="input" id="label" name="label" type="text" placeholder="Living room Jellyfin" required>
+      </div>
+      <div class="field">
+        <label for="instance_url">Instance URL</label>
+        <input class="input" id="instance_url" name="instance_url" type="url" placeholder="https://jellyfin.example.com">
+        <span class="field__hint">Where your Jellyfin lives. Used for display and future features.</span>
+      </div>
+      <div class="field">
+        <label for="external_user_id">Jellyfin user ID</label>
+        <input class="input" id="external_user_id" name="external_user_id" type="text" placeholder="e.g. 0c29eba6-04e4-4d6a-9baa-43cd468d25b4" required>
+        <span class="field__hint">Jellyfin → Dashboard → Users → your user: copy the <code>userId</code> from the URL.</span>
+      </div>
+      <button class="btn btn--primary" type="submit">Create integration</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">Jellyfin webhook template</h2>
+    <div class="panel__body">
+      <p class="muted">Enable the <strong>Playback Start</strong>, <strong>Playback Progress</strong> and <strong>Playback Stop</strong> notifications and paste this template. A play is recorded the first time your position reaches 85% of the runtime (or when the item completes).</p>
+      <pre class="code-block">{
+  "NotificationType": "{{NotificationType}}",
+  "Id": "{{Id}}",
+  "UtcTimestamp": "{{UtcTimestamp}}",
+  "ItemType": "{{ItemType}}",
+  "UserId": "{{UserId}}",
+  "PlaySessionId": "{{PlaySessionId}}",
+  "PlayedToCompletion": "{{PlayedToCompletion}}",
+  "PlaybackPositionTicks": "{{PlaybackPositionTicks}}",
+  "RunTimeTicks": "{{RunTimeTicks}}",
+  "Provider_tmdb": "{{Provider_tmdb}}",
+  "Provider_imdb": "{{Provider_imdb}}",
+  "SeriesProvider_tmdb": "{{SeriesProvider_tmdb}}",
+  "SeriesProvider_imdb": "{{SeriesProvider_imdb}}",
+  "SeasonNumber": "{{SeasonNumber00}}",
+  "EpisodeNumber": "{{EpisodeNumber00}}"
+}</pre>
+    </div>
+  </section>
+</main>

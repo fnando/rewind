@@ -1,0 +1,40 @@
+<% kind_label = {"movie" => "movie", "episode" => "episode", "tv" => "show"}.fetch(item.media_type, "item") %>
+<% editing = (params[:editing] == "1") || user_item.nil? || user_item.review.to_s.empty? %>
+<section class="section" aria-labelledby="review-h">
+  <div class="section__head">
+    <h2 id="review-h">What did you think about this <%= kind_label %>?</h2>
+    <% unless editing %>
+      <a class="btn btn--ghost btn--sm" href="/items/<%= item.id %>?editing=1">Edit</a>
+    <% end %>
+  </div>
+  <% if editing %>
+    <form method="post" action="/items/<%= item.id %>/review" class="panel">
+      <%= csrf_tag %>
+      <div class="panel__body">
+        <textarea class="input" name="review" rows="4" placeholder="Your thoughts (optional)"><%= h(user_item&.review) %></textarea>
+      </div>
+      <div class="panel__foot panel__foot--inline">
+        <button class="btn btn--primary" type="submit">Save review</button>
+        <% unless user_item.nil? || user_item.review.to_s.empty? %>
+          <a class="btn btn--ghost" href="/items/<%= item.id %>">Cancel</a>
+        <% end %>
+      </div>
+    </form>
+  <% else %>
+    <div class="panel">
+      <div class="panel__body">
+        <p class="review__text"><%= h(user_item.review) %></p>
+        <% if user_item.review_created_at %>
+          <p class="review__meta">
+            <% created = user_item.review_created_at %>
+            <% updated = user_item.review_updated_at %>
+            Written <time datetime="<%= created.iso8601 %>"><%= in_user_tz(created).strftime("%b %-d, %Y") %></time>
+            <% if updated && (updated.to_i - created.to_i) > 60 %>
+              · edited <time datetime="<%= updated.iso8601 %>"><%= in_user_tz(updated).strftime("%b %-d, %Y") %></time>
+            <% end %>
+          </p>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</section>

@@ -1,0 +1,10 @@
+{
+  "NotificationType": "PlaybackStop",
+  "Id": "abc-movie-004",
+  "UtcTimestamp": "2026-10-14T22:40:00.000Z",
+  "ItemType": "Movie",
+  "PlayedToCompletion": true,
+  "UserId": "jf-user-1",
+  "Provider_tmdb": "",
+  "Provider_imdb": ""
+}

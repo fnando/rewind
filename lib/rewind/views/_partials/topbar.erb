@@ -1,0 +1,13 @@
+<header class="topbar">
+  <a class="brand" href="/">
+    <span class="brand__mark"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 L3 12 L11 18 Z M21 6 L13 12 L21 18 Z" fill="currentColor"/></svg></span>
+    <span>rewind</span>
+  </a>
+  <nav class="nav" aria-label="Main">
+    <a href="/plays"<%= ' aria-current="page"' if nav_current?("/plays") || current_path == "/" %>>History</a>
+    <a href="/stats"<%= ' aria-current="page"' if nav_current?("/stats") %>>Stats</a>
+    <a href="/search"<%= ' aria-current="page"' if nav_current?("/search") %>>Search</a>
+    <a href="/settings"<%= ' aria-current="page"' if nav_current?("/settings") %>>Settings</a>
+  </nav>
+  <a class="avatar" href="/settings" aria-label="Settings (signed in as <%= h(current_user.username) %>)"><%= h(avatar_letter(current_user)) %></a>
+</header>

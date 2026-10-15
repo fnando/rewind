@@ -1,0 +1,124 @@
+<% @page_title = "Stats" %>
+<main class="page page--wide">
+  <div class="history-head">
+    <div class="history-head__left">
+      <h1>Stats</h1>
+      <nav class="segmented" aria-label="Media type">
+        <a href="/stats?period=<%= h(@period) %>"<%= ' aria-current="page"' if @media_type == "all" %>>All</a>
+        <a href="/stats?type=movie&period=<%= h(@period) %>"<%= ' aria-current="page"' if @media_type == "movie" %>>Movies</a>
+        <a href="/stats?type=tv&period=<%= h(@period) %>"<%= ' aria-current="page"' if @media_type == "tv" %>>TV</a>
+      </nav>
+    </div>
+    <nav class="segmented" aria-label="Period">
+      <% %w[week month year all].each do |p| %>
+        <a href="/stats?type=<%= h(@media_type) %>&period=<%= p %>"<%= ' aria-current="page"' if @period == p %>><%= p.capitalize %></a>
+      <% end %>
+    </nav>
+  </div>
+
+  <section class="stat-grid">
+    <div class="stat-card">
+      <span class="stat-card__value"><%= @stats[:totals][:plays] %></span>
+      <span class="stat-card__label">Plays</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card__value"><%= @stats[:totals][:unique_titles] %></span>
+      <span class="stat-card__label">Unique titles</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card__value"><%= @stats[:totals][:hours_watched] %></span>
+      <span class="stat-card__label">Hours watched</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card__value"><%= @stats[:totals][:rewatches] %></span>
+      <span class="stat-card__label">Rewatches</span>
+    </div>
+  </section>
+
+  <% max_genre = (@stats[:by_genre].map(&:last).max || 1) %>
+  <% if @stats[:by_genre].any? %>
+    <section class="panel">
+      <h2 class="panel__title">By genre</h2>
+      <ul class="bar-list">
+        <% @stats[:by_genre].each do |name, count| %>
+          <li class="bar-list__row" style="--w: <%= (count.to_f / max_genre * 100).round %>%">
+            <span class="bar-list__label"><%= h(name) %></span>
+            <span class="bar-list__bar"></span>
+            <span class="bar-list__count"><%= count %></span>
+          </li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+
+  <% max_period = (@stats[:by_period].map(&:last).max || 1) %>
+  <% if @stats[:by_period].any? %>
+    <section class="panel">
+      <h2 class="panel__title">By period</h2>
+      <ol class="bar-chart">
+        <% @stats[:by_period].each do |label, count| %>
+          <li class="bar-chart__col" style="--h: <%= (count.to_f / max_period * 100).round %>%" title="<%= h(label) %>: <%= count %>">
+            <span class="bar-chart__bar"></span>
+            <span class="bar-chart__label"><%= h(label) %></span>
+          </li>
+        <% end %>
+      </ol>
+    </section>
+  <% end %>
+
+  <section class="panel">
+    <h2 class="panel__title">Top movies</h2>
+    <% if @stats[:top_items][:movies].any? %>
+      <ol class="top-list">
+        <% @stats[:top_items][:movies].each do |item, count| %>
+          <li><a href="/items/<%= item.id %>"><%= h(item.title) %></a> · <%= count %></li>
+        <% end %>
+      </ol>
+    <% else %>
+      <p class="muted">No movies in this period.</p>
+    <% end %>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">Top shows</h2>
+    <% if @stats[:top_items][:shows].any? %>
+      <ol class="top-list">
+        <% @stats[:top_items][:shows].each do |name, count| %>
+          <li><%= h(name) %> · <%= count %> episode<%= "s" unless count == 1 %></li>
+        <% end %>
+      </ol>
+    <% else %>
+      <p class="muted">No shows in this period.</p>
+    <% end %>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">Top people</h2>
+    <div class="two-col">
+      <div>
+        <h3>Directors / Creators</h3>
+        <% if @stats[:top_people][:directors].any? %>
+          <ol class="top-list">
+            <% @stats[:top_people][:directors].each do |name, count| %>
+              <li><%= h(name) %> · <%= count %></li>
+            <% end %>
+          </ol>
+        <% else %>
+          <p class="muted">No data.</p>
+        <% end %>
+      </div>
+      <div>
+        <h3>Cast</h3>
+        <% if @stats[:top_people][:cast].any? %>
+          <ol class="top-list">
+            <% @stats[:top_people][:cast].each do |name, count| %>
+              <li><%= h(name) %> · <%= count %></li>
+            <% end %>
+          </ol>
+        <% else %>
+          <p class="muted">No data.</p>
+        <% end %>
+      </div>
+    </div>
+  </section>
+</main>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= @page_title ? "#{@page_title} · " : "" %>Rewind</title>
+  <link rel="stylesheet" href="/styles.css?v=<%= Rewind.config.styles_digest %>">
+</head>
+<body>
+  <% notice, error = flash_pop %>
+  <% if current_user %>
+    <%= erb :"_partials/topbar" %>
+  <% end %>
+  <% if notice %>
+    <div class="flash flash--notice" role="status"><%= h(notice) %></div>
+  <% end %>
+  <% if error %>
+    <div class="flash flash--error" role="alert"><%= h(error) %></div>
+  <% end %>
+  <%= yield %>
+</body>
+</html>

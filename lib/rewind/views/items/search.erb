@@ -1,0 +1,50 @@
+<% @page_title = "Search" %>
+<main class="page page--wide">
+  <div class="page-head">
+    <h1>Search TMDB</h1>
+    <p>Find a movie or show, then log a watch.</p>
+  </div>
+
+  <form class="panel" method="get" action="/search">
+    <div class="panel__body">
+      <div class="field">
+        <label for="q">Query</label>
+        <input class="input" id="q" name="q" type="search" value="<%= h(@query) %>" placeholder="e.g. Inception" autofocus>
+      </div>
+      <button class="btn btn--primary" type="submit">Search</button>
+    </div>
+  </form>
+
+  <% if @error %>
+    <div class="flash flash--error"><%= h(@error) %></div>
+  <% end %>
+
+  <% unless Rewind.config.tmdb_api_key %>
+    <div class="flash flash--notice">TMDB_API_KEY not configured. Set it in the environment and restart.</div>
+  <% end %>
+
+  <% if @results.any? %>
+    <ul class="search-grid">
+      <% @results.each do |r| %>
+        <li class="search-card">
+          <% if r[:poster_path] %>
+            <img class="search-card__poster" src="https://image.tmdb.org/t/p/w185<%= r[:poster_path] %>" alt="">
+          <% else %>
+            <img class="search-card__poster" src="/poster-placeholder.svg" alt="">
+          <% end %>
+          <div class="search-card__body">
+            <strong><%= h(r[:title]) %></strong>
+            <span class="muted"><%= h(r[:media_type]) %><% if r[:release_date] %> · <%= r[:release_date][0, 4] %><% end %></span>
+            <p><%= h(r[:overview].to_s[0, 180]) %></p>
+            <form method="post" action="/items/import">
+              <%= csrf_tag %>
+              <input type="hidden" name="media_type" value="<%= h(r[:media_type]) %>">
+              <input type="hidden" name="tmdb_id" value="<%= r[:tmdb_id] %>">
+              <button class="btn btn--secondary" type="submit">Open</button>
+            </form>
+          </div>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+</main>

@@ -1,0 +1,29 @@
+<li class="play-card">
+  <img class="play-card__poster" src="<%= poster_url(play.item) %>" alt="">
+  <div class="play-card__body">
+    <% if play.item.media_type == "episode" %>
+      <% show = @shows_by_tmdb && @shows_by_tmdb[play.item.parent_tmdb_id] %>
+      <% series_name = play.item.metadata["series_name"] || show&.title || play.item.title %>
+      <% if show %>
+        <a class="play-card__title" href="/items/<%= show.id %>"><%= h(series_name) %></a>
+      <% else %>
+        <span class="play-card__title"><%= h(series_name) %></span>
+      <% end %>
+      <span class="play-card__detail">S<%= play.item.season_number %> · E<%= play.item.episode_number %> — <a href="/items/<%= play.item.id %>"><%= h(play.item.title) %></a></span>
+    <% else %>
+      <a class="play-card__title" href="/items/<%= play.item.id %>"><%= h(play.item.title) %></a>
+      <% if play.item.release_date %>
+        <span class="play-card__detail"><%= play.item.release_date[0, 4] %></span>
+      <% end %>
+    <% end %>
+    <span class="play-card__meta"><time datetime="<%= play.played_at.iso8601 %>"><%= format_time(play.played_at) %></time> · <%= h(play.source.capitalize) %></span>
+    <div class="play-card__actions">
+      <%= rating_input(play.item, @user_items_by_item && @user_items_by_item[play.item_id], current_user) %>
+      <form method="post" action="/plays/<%= play.id %>">
+        <%= csrf_tag %>
+        <input type="hidden" name="_method" value="delete">
+        <button class="icon-btn" type="submit" aria-label="Remove this watch"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+      </form>
+    </div>
+  </div>
+</li>

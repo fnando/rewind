@@ -1,0 +1,26 @@
+<li class="integration">
+  <div class="integration__head">
+    <strong><%= h(integration.label) %></strong>
+    <span class="pill pill--<%= integration.kind %>"><%= h(integration.kind) %></span>
+    <% if integration.disabled? %><span class="pill pill--muted">disabled</span><% end %>
+  </div>
+  <code class="code-inline"><%= h("#{request.base_url}/webhooks/#{integration.kind}/#{integration.token}") %></code>
+  <p class="muted">
+    <% if integration.instance_url %><%= h(integration.instance_url) %> · <% end %>
+    Last event: <%= integration.last_event_at ? integration.last_event_at.strftime("%Y-%m-%d %H:%M") : "never" %>
+    <% if integration.external_user_id %> · filter: <%= h(integration.external_user_id) %><% end %>
+  </p>
+  <div class="integration__actions">
+    <form method="post" action="/settings/integrations/<%= integration.id %>/rotate">
+      <%= csrf_tag %><button class="btn btn--ghost btn--sm" type="submit">Rotate token</button>
+    </form>
+    <form method="post" action="/settings/integrations/<%= integration.id %>/toggle">
+      <%= csrf_tag %><button class="btn btn--ghost btn--sm" type="submit"><%= integration.disabled? ? "Enable" : "Disable" %></button>
+    </form>
+    <form method="post" action="/settings/integrations/<%= integration.id %>" onsubmit="return confirm('Delete this integration?');">
+      <%= csrf_tag %>
+      <input type="hidden" name="_method" value="delete">
+      <button class="btn btn--ghost btn--sm" type="submit">Delete</button>
+    </form>
+  </div>
+</li>

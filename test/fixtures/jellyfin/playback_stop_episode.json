@@ -1,0 +1,12 @@
+{
+  "NotificationType": "PlaybackStop",
+  "Id": "abc-episode-001",
+  "UtcTimestamp": "2026-10-14T23:12:00.000Z",
+  "ItemType": "Episode",
+  "PlayedToCompletion": true,
+  "UserId": "jf-user-1",
+  "SeriesProvider_tmdb": "1399",
+  "SeasonNumber": 1,
+  "EpisodeNumber": 2,
+  "Name": "The Kingsroad"
+}

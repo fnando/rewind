@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Whiplash · Rewind</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand__mark"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 L3 12 L11 18 Z M21 6 L13 12 L21 18 Z" fill="currentColor"/></svg></span>
+      <span>rewind</span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="/">Dashboard</a>
+      <a href="/plays">History</a>
+      <a href="/stats">Stats</a>
+    </nav>
+    <button class="avatar" type="button" aria-label="Account">N</button>
+  </header>
+
+  <main class="page page--title">
+    <a class="back-link" href="/plays"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>History</a>
+
+    <section class="title-hero">
+      <!-- <img class="title-hero__poster" src="https://image.tmdb.org/t/p/w342{poster_path}" alt=""> -->
+      <div class="title-hero__poster" aria-hidden="true"></div>
+      <div class="title-hero__info">
+        <div class="title-hero__heading">
+          <span class="eyebrow">Movie</span>
+          <h1>Whiplash</h1>
+          <span class="title-meta">2014 · 1h 47m · Drama, Music</span>
+        </div>
+        <p class="overview">A young jazz drummer enrolls at a cutthroat Manhattan conservatory, where an exacting instructor pushes him far past his limits.</p>
+        <span class="credit">Directed by <strong>Damien Chazelle</strong></span>
+
+        <div class="chips">
+          <span class="chip chip--soft">Watched 2 times</span>
+          <span class="chip">Last watched Oct 13, 2026</span>
+        </div>
+
+        <div class="hero-actions">
+          <a class="btn btn--primary" href="/plays/new?item_id=6">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Log a watch
+          </a>
+          <div class="rating-readout">
+            <span>Your rating</span>
+            <span class="rating-readout__stars" role="img" aria-label="Rated 4 of 5 (latest watch)">
+              <svg class="is-on" viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+              <svg class="is-on" viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+              <svg class="is-on" viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+              <svg class="is-on" viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+              <svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="watches-h">
+      <h2 id="watches-h">Your watches</h2>
+      <ul class="watch-list">
+        <li class="watch-row">
+          <div class="watch-row__when">
+            <strong><time datetime="2026-10-13T22:49">Tue, Oct 13, 2026</time></strong>
+            <span>10:49 PM · Logged manually</span>
+          </div>
+          <div class="watch-row__actions">
+            <form class="stars" method="post" action="/plays/106/rating" aria-label="Rate the watch from Oct 13, 2026">
+              <button class="is-on" name="rating" value="1" aria-label="1 star"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+              <button class="is-on" name="rating" value="2" aria-label="2 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+              <button class="is-on" name="rating" value="3" aria-label="3 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+              <button class="is-on" name="rating" value="4" aria-label="4 stars" aria-pressed="true"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+              <button name="rating" value="5" aria-label="5 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+            </form>
+            <form method="post" action="/plays/106">
+              <input type="hidden" name="_method" value="delete">
+              <button class="icon-btn" type="submit" aria-label="Remove the watch from Oct 13, 2026"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+            </form>
+          </div>
+        </li>
+
+        <li class="watch-row">
+          <div class="watch-row__when">
+            <strong><time datetime="2025-03-08T21:12">Sat, Mar 8, 2025</time></strong>
+            <span>9:12 PM · via Jellyfin</span>
+          </div>
+          <div class="watch-row__actions">
+            <form class="stars" method="post" action="/plays/41/rating" aria-label="Rate the watch from Mar 8, 2025">
+              <button name="rating" value="1" aria-label="1 star"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+              <button name="rating" value="2" aria-label="2 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+              <button name="rating" value="3" aria-label="3 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+              <button name="rating" value="4" aria-label="4 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+              <button name="rating" value="5" aria-label="5 stars"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+            </form>
+            <form method="post" action="/plays/41">
+              <input type="hidden" name="_method" value="delete">
+              <button class="icon-btn" type="submit" aria-label="Remove the watch from Mar 8, 2025"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+            </form>
+          </div>
+        </li>
+
+        <!-- Just-removed row (render in place, e.g. from a flash):
+        <li class="watch-row watch-row--removed" role="status">
+          <span>Removed the watch from Mar 8, 2025.</span>
+          <form method="post" action="/plays/41/restore"><button class="btn btn--secondary btn--sm" type="submit">Undo</button></form>
+        </li> -->
+      </ul>
+    </section>
+
+    <section class="section" aria-labelledby="cast-h">
+      <h2 id="cast-h">Top cast</h2>
+      <ul class="cast-grid">
+        <!-- <img class="cast__photo" src="https://image.tmdb.org/t/p/w92{profile_path}" alt=""> -->
+        <li class="cast"><span class="cast__photo" aria-hidden="true"></span><span class="cast__text"><span class="cast__name">Miles Teller</span><span class="cast__role">Andrew Neiman</span></span></li>
+        <li class="cast"><span class="cast__photo" aria-hidden="true"></span><span class="cast__text"><span class="cast__name">J.K. Simmons</span><span class="cast__role">Terence Fletcher</span></span></li>
+        <li class="cast"><span class="cast__photo" aria-hidden="true"></span><span class="cast__text"><span class="cast__name">Paul Reiser</span><span class="cast__role">Jim Neiman</span></span></li>
+        <li class="cast"><span class="cast__photo" aria-hidden="true"></span><span class="cast__text"><span class="cast__name">Melissa Benoist</span><span class="cast__role">Nicole</span></span></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "NotificationType": "PlaybackStop",
+  "Id": "abc-movie-001",
+  "UtcTimestamp": "2026-10-14T22:30:00.000Z",
+  "ItemType": "Movie",
+  "PlayedToCompletion": true,
+  "UserId": "jf-user-1",
+  "Provider_tmdb": "27205",
+  "Name": "Inception"
+}

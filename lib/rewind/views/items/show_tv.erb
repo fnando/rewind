@@ -1,0 +1,114 @@
+<% @page_title = @item.title %>
+<main class="page page--title">
+  <section class="title-hero">
+    <img class="title-hero__poster" src="<%= poster_url(@item, size: "w342") %>" alt="">
+    <div class="title-hero__info">
+      <div class="title-hero__heading">
+        <span class="eyebrow">TV show</span>
+        <h1><%= h(@item.title) %></h1>
+        <span class="title-meta">
+          <% parts = [] %>
+          <% parts << @item.release_date[0, 4] if @item.release_date %>
+          <% parts << @item.genres.join(", ") if @item.genres.any? %>
+          <% n = @item.metadata["number_of_seasons"].to_i %>
+          <% parts << "#{n} season#{"s" unless n == 1}" if n.positive? %>
+          <%= h(parts.join(" · ")) %>
+        </span>
+      </div>
+      <% if @item.overview %><p class="overview"><%= h(@item.overview) %></p><% end %>
+      <% crs = creators(@item) %>
+      <% if crs.any? %>
+        <span class="credit">Created by <strong><%= h(crs.join(", ")) %></strong></span>
+      <% end %>
+
+      <% if @total_episodes.positive? %>
+        <div class="progress">
+          <div class="progress__head">
+            <strong><%= @all_episode_plays_count %> of <%= @total_episodes %> episodes watched</strong>
+            <span><%= (@all_episode_plays_count.to_f / @total_episodes * 100).round %>%</span>
+          </div>
+          <div class="progress__bar" role="progressbar" aria-valuemin="0" aria-valuemax="<%= @total_episodes %>" aria-valuenow="<%= @all_episode_plays_count %>">
+            <div class="progress__fill" style="width: <%= [100, (@all_episode_plays_count.to_f / @total_episodes * 100).round].min %>%"></div>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="episodes-h">
+    <div class="section__head">
+      <h2 id="episodes-h">Episodes</h2>
+      <% if @seasons.size > 1 %>
+        <nav class="segmented" aria-label="Seasons">
+          <% @seasons.each do |s| %>
+            <a href="?season=<%= s["season_number"] %>"<%= ' aria-current="page"' if s["season_number"] == @current_season %>>Season <%= s["season_number"] %></a>
+          <% end %>
+        </nav>
+      <% end %>
+    </div>
+
+    <ol class="play-grid">
+      <% (1..@episode_count).each do |n| %>
+        <% plays = @plays_by_episode[n] || [] %>
+        <% latest = plays.first %>
+        <% ep = @season_episodes[n] || {} %>
+        <% ep_name = ep["name"] || "Episode #{n}" %>
+        <li class="play-card<%= " play-card--unwatched" unless latest %>">
+          <img class="play-card__still" src="<%= still_url(ep["still_path"]) %>" alt="">
+          <div class="play-card__body">
+            <% if latest %>
+              <a class="play-card__title" href="/items/<%= latest.item_id %>"><%= h(ep_name) %></a>
+            <% else %>
+              <span class="play-card__title"><%= h(ep_name) %></span>
+            <% end %>
+            <span class="play-card__detail">S<%= @current_season %> · E<%= n %></span>
+            <% if latest %>
+              <span class="play-card__status is-watched"><%= check_svg %>Watched <%= in_user_tz(latest.played_at).strftime("%b %-d") %> · <%= latest.source.capitalize %></span>
+              <% if plays.size > 1 %>
+                <span class="badge"><%= plays.size %> watches</span>
+              <% end %>
+              <div class="play-card__actions">
+                <%= rating_input(latest.item, @user_items_by_episode[n], current_user) %>
+                <div class="play-card__tools">
+                  <form method="post" action="/items/<%= @item.id %>/log-episode">
+                    <%= csrf_tag %>
+                    <input type="hidden" name="season" value="<%= @current_season %>">
+                    <input type="hidden" name="episode" value="<%= n %>">
+                    <button class="icon-btn" type="submit" aria-label="Log a rewatch"><%= plus_svg %></button>
+                  </form>
+                  <form method="post" action="/plays/<%= latest.id %>">
+                    <%= csrf_tag %>
+                    <input type="hidden" name="_method" value="delete">
+                    <button class="icon-btn" type="submit" aria-label="Remove latest watch"><%= trash_svg %></button>
+                  </form>
+                </div>
+              </div>
+            <% else %>
+              <span class="play-card__status">Not watched</span>
+              <div class="play-card__actions">
+                <form method="post" action="/items/<%= @item.id %>/log-episode">
+                  <%= csrf_tag %>
+                  <input type="hidden" name="season" value="<%= @current_season %>">
+                  <input type="hidden" name="episode" value="<%= n %>">
+                  <button class="btn btn--soft" type="submit"><%= check_svg(size: 14) %>Mark watched</button>
+                </form>
+              </div>
+            <% end %>
+          </div>
+        </li>
+      <% end %>
+    </ol>
+  </section>
+
+  <% cast = top_cast(@item) %>
+  <% if cast.any? %>
+    <section class="section" aria-labelledby="cast-h">
+      <h2 id="cast-h">Top cast</h2>
+      <ul class="cast-grid">
+        <% cast.each do |actor| %>
+          <%= erb :"_partials/cast_card", locals: {actor: actor} %>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+</main>
