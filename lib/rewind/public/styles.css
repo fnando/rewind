@@ -224,6 +224,54 @@ button { font: inherit; color: inherit; }
   font-weight: 600;
 }
 
+/* macOS-style search: shows only the magnifier until the field is focused (or
+   already holds a query), then animates open. On small screens it is hidden in
+   favor of the "Search" nav link. */
+.topsearch { position: relative; flex: none; display: flex; align-items: center; }
+.topsearch__icon {
+  position: absolute;
+  left: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  pointer-events: none;
+}
+.topsearch__input {
+  width: 40px;
+  height: 40px;
+  padding: 0 0 0 40px;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: width 0.25s ease, padding-right 0.25s ease,
+              background-color 0.2s ease, border-color 0.2s ease,
+              box-shadow 0.2s ease;
+}
+.topsearch__input::placeholder { color: transparent; }
+.topsearch__input:placeholder-shown:hover { background: var(--nav-active-bg); }
+.topsearch__input:focus,
+.topsearch__input:not(:placeholder-shown) {
+  width: 240px;
+  padding-right: 12px;
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  cursor: text;
+}
+.topsearch__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.topsearch__input:focus::placeholder { color: var(--placeholder); }
+.nav a.nav__search { display: none; }
+
 .avatar {
   flex: none;
   width: 36px;
@@ -365,6 +413,9 @@ label.btn { cursor: pointer; display: inline-flex; align-items: center; }
   color: var(--text);
 }
 .panel--warn pre code { font-family: inherit; }
+
+.search-row { display: flex; gap: 10px; align-items: stretch; }
+.search-row .input { flex: 1; min-width: 0; }
 
 .search-grid {
   list-style: none;
@@ -1273,6 +1324,8 @@ select.input::-ms-expand { display: none; }
 
 @media (max-width: 640px) {
   :root { --gutter: 16px; }
+  .topsearch { display: none; }
+  .nav a.nav__search { display: flex; }
   .page { padding-top: 28px; padding-bottom: 48px; gap: 22px; }
   .page--narrow { padding-top: 40px; }
   .page-head h1 { font-size: 24px; }
