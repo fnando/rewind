@@ -351,6 +351,21 @@ label.btn { cursor: pointer; display: inline-flex; align-items: center; }
 }
 .panel__title p { font-weight: 400; margin: 2px 0 0; font-size: 13px; }
 
+.panel--warn .panel__body { gap: 12px; }
+.panel--warn p { margin: 0; line-height: 1.5; color: var(--text-2); }
+.panel--warn pre {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+}
+.panel--warn pre code { font-family: inherit; }
+
 .search-grid {
   list-style: none;
   margin: 0;
