@@ -1,6 +1,6 @@
 # rewind-app
 
-[![Tests](https://github.com/fnando/rewind-app/workflows/ruby-tests/badge.svg)](https://github.com/fnando/rewind-app)
+[![Tests](https://github.com/fnando/rewind/workflows/ruby-tests/badge.svg)](https://github.com/fnando/rewind)
 [![Gem](https://img.shields.io/gem/v/rewind-app.svg)](https://rubygems.org/gems/rewind-app)
 [![Gem](https://img.shields.io/gem/dt/rewind-app.svg)](https://rubygems.org/gems/rewind-app)
 [![MIT License](https://img.shields.io/:License-MIT-blue.svg)](https://tldrlegal.com/license/mit-license)
@@ -229,21 +229,21 @@ bundle exec rubocop         # lint (rubocop-fnando)
 
 ## Contributors
 
-- https://github.com/fnando/rewind-app/contributors
+- https://github.com/fnando/rewind/contributors
 
 ## Contributing
 
 For more details about how to contribute, please read
-https://github.com/fnando/rewind-app/blob/main/CONTRIBUTING.md.
+https://github.com/fnando/rewind/blob/main/CONTRIBUTING.md.
 
 ## License
 
 The gem is available as open source under the terms of the
 [MIT License](https://opensource.org/licenses/MIT). A copy of the license can be
-found at https://github.com/fnando/rewind-app/blob/main/LICENSE.md.
+found at https://github.com/fnando/rewind/blob/main/LICENSE.md.
 
 ## Code of Conduct
 
 Everyone interacting in the rewind-app project's codebases, issue trackers, chat
 rooms and mailing lists is expected to follow the
-[code of conduct](https://github.com/fnando/rewind-app/blob/main/CODE_OF_CONDUCT.md).
+[code of conduct](https://github.com/fnando/rewind/blob/main/CODE_OF_CONDUCT.md).

@@ -9,7 +9,7 @@ changes to this document in a pull request.
 ## Code of Conduct
 
 Everyone interacting in this project's codebases, issue trackers, chat rooms and
-mailing lists is expected to follow the [code of conduct](https://github.com/fnando/rewind-app/blob/main/CODE_OF_CONDUCT.md).
+mailing lists is expected to follow the [code of conduct](https://github.com/fnando/rewind/blob/main/CODE_OF_CONDUCT.md).
 
 ## Reporting bugs
 
@@ -26,7 +26,7 @@ the behavior, and find related reports.
 ## Contributing with code
 
 Before making any radicals changes, please make sure you discuss your intention
-by [opening an issue on Github](https://github.com/fnando/rewind-app/issues).
+by [opening an issue on Github](https://github.com/fnando/rewind/issues).
 
 When you're ready to make your pull request, follow checklist below to make sure
 your contribution is according to how this project works.
