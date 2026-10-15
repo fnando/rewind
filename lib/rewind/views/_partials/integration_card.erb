@@ -4,7 +4,12 @@
     <span class="pill pill--<%= integration.kind %>"><%= h(integration.kind) %></span>
     <% if integration.disabled? %><span class="pill pill--muted">disabled</span><% end %>
   </div>
-  <code class="code-inline"><%= h("#{request.base_url}/webhooks/#{integration.kind}/#{integration.token}") %></code>
+  <% if @revealed_token && @revealed_token_id == integration.id %>
+    <code class="code-inline"><%= h("#{request.base_url}/webhooks/#{integration.kind}/#{@revealed_token}") %></code>
+    <p class="field__hint">Copy this now — the token won't be shown again. Lost it? Use <strong>Rotate token</strong> to generate a new one.</p>
+  <% else %>
+    <code class="code-inline"><%= h("#{request.base_url}/webhooks/#{integration.kind}/") %>••••••••</code>
+  <% end %>
   <p class="muted">
     <% if integration.instance_url %><%= h(integration.instance_url) %> · <% end %>
     Last event: <%= integration.last_event_at ? integration.last_event_at.strftime("%Y-%m-%d %H:%M") : "never" %>

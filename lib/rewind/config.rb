@@ -2,12 +2,13 @@
 
 module Rewind
   class Config
-    attr_accessor :data_dir, :tmdb_api_key, :session_secret, :host, :port
+    attr_accessor :data_dir, :tmdb_api_key, :session_secret, :host, :port, :salt
 
     def initialize
       @data_dir = ENV["REWIND_DATA_DIR"] || File.join(Dir.pwd, "data")
       @tmdb_api_key = ENV.fetch("TMDB_API_KEY", nil)
       @session_secret = ENV.fetch("REWIND_SESSION_SECRET", nil)
+      @salt = ENV.fetch("REWIND_SALT", nil)
       @host = ENV["REWIND_HOST"] || "0.0.0.0"
       @port = (ENV["REWIND_PORT"] || 55_455).to_i
       @allowed_hosts = (ENV["REWIND_ALLOWED_HOSTS"] || "").split(",").map(&:strip).reject(&:empty?)
@@ -46,6 +47,13 @@ module Rewind
       end
     end
 
+    def require_salt!
+      return unless salt.to_s.empty?
+
+      raise Rewind::Error,
+            "REWIND_SALT must be set (used to hash integration webhook tokens)"
+    end
+
     def migrations_dir
       File.join(Rewind.root, "lib", "rewind", "db", "migrations")
     end
@@ -70,7 +78,8 @@ module Rewind
         host: host,
         port: port,
         tmdb_api_key: redact ? redact_value(tmdb_api_key) : tmdb_api_key,
-        session_secret: redact ? redact_value(session_secret) : session_secret
+        session_secret: redact ? redact_value(session_secret) : session_secret,
+        salt: redact ? redact_value(salt) : salt
       }
     end
 

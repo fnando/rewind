@@ -72,14 +72,25 @@ a `.env` file and pass `--env PATH` to any CLI command.
 | `REWIND_PORT`           | `55455`                   | Port the server binds to.                                                                   |
 | `REWIND_ALLOWED_HOSTS`  | _(empty)_                 | Comma-separated hostnames allowed by Sinatra's host authorization.                          |
 | `REWIND_SESSION_SECRET` | auto-generated            | Rack session cookie secret. Generated into `$REWIND_DATA_DIR/.session_secret` on first run. |
+| `REWIND_SALT`           | _(required)_              | Secret used to hash integration webhook tokens. Must stay stable, or existing webhooks stop matching. |
 | `REWIND_AUTO_MIGRATE`   | _(unset)_                 | When `1`, boot runs pending migrations automatically.                                       |
 | `TMDB_API_KEY`          | _(required for metadata)_ | Your TMDB bearer token.                                                                     |
+
+`REWIND_SALT` is required. Generate one with:
+
+```bash
+dd if=/dev/urandom bs=32 count=1 2>/dev/null | openssl base64 -A
+```
+
+Set it once and keep it stable — webhook tokens are stored only as HMAC-SHA256
+digests of this salt, so changing it invalidates every existing webhook URL.
 
 Example `.env`:
 
 ```
 REWIND_DATA_DIR=/var/lib/rewind
 REWIND_ALLOWED_HOSTS=rewind.example.com,localhost
+REWIND_SALT=<salt here>
 TMDB_API_KEY=eyJ…
 ```
 

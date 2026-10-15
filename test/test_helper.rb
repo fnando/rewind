@@ -2,6 +2,7 @@
 
 ENV["RACK_ENV"] = "test"
 ENV["REWIND_SESSION_SECRET"] ||= "a" * 128
+ENV["REWIND_SALT"] ||= "test-salt"
 ENV["TMDB_API_KEY"] ||= "test-tmdb-key"
 
 require "simplecov"

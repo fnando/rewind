@@ -6,7 +6,10 @@ module Rewind
       kind = params[:kind]
       halt 404 unless Integration::KINDS.include?(kind)
 
-      integration = Integration.where(kind: kind, token: params[:token]).first
+      integration = Integration.where(
+        kind: kind,
+        token_digest: Integration.digest_token(params[:token])
+      ).first
       halt 404 unless integration
       halt 403 if integration.disabled?
 

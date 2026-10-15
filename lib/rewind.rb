@@ -6,6 +6,7 @@ require "sqlite3"
 require "bcrypt"
 require "json"
 require "securerandom"
+require "openssl"
 require "fileutils"
 require "logger"
 require "digest/md5"
@@ -45,6 +46,7 @@ module Rewind
     end
 
     def boot!
+      config.require_salt!
       db
       require_relative "rewind/models"
     end

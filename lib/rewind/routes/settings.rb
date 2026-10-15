@@ -4,6 +4,8 @@ module Rewind
   class Application < Sinatra::Base
     get "/settings" do
       @integrations = current_user.integrations_dataset.order(:created_at).all
+      @revealed_token = session.delete(:revealed_token)
+      @revealed_token_id = session.delete(:revealed_token_id)
       erb :"settings/index"
     end
 
@@ -102,13 +104,16 @@ module Rewind
       end
 
       integration.save
+      session[:revealed_token] = integration.plain_token
+      session[:revealed_token_id] = integration.id
       redirect "/settings"
     end
 
     post "/settings/integrations/:id/rotate" do
       integration = current_user.integrations_dataset.where(id: params[:id].to_i).first
       halt 404 unless integration
-      integration.rotate_token!
+      session[:revealed_token] = integration.rotate_token!
+      session[:revealed_token_id] = integration.id
       redirect "/settings"
     end
 

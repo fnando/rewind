@@ -54,6 +54,35 @@ class IntegrationModelTest < Minitest::Test
     refute integration.valid?
     assert_includes integration.errors[:external_user_id], "is required for Jellyfin integrations"
   end
+
+  test "stores the token hashed, never in plaintext" do
+    user = create_user
+    token = Rewind::Integration.generate_token
+    integration = Rewind::Integration.create(
+      user_id: user.id, kind: "jellyfin", label: "L",
+      external_user_id: "jf-1", token: token
+    )
+
+    reloaded = Rewind::Integration[integration.id]
+    assert_equal Rewind::Integration.digest_token(token), reloaded.token_digest
+    refute_equal token, reloaded.token_digest
+    assert_nil reloaded.token
+  end
+
+  test "rotate_token! returns a new plaintext token and changes the digest" do
+    user = create_user
+    integration = Rewind::Integration.create(
+      user_id: user.id, kind: "jellyfin", label: "L",
+      external_user_id: "jf-1", token: Rewind::Integration.generate_token
+    )
+    before = integration.token_digest
+
+    new_token = integration.rotate_token!
+
+    assert_equal new_token, integration.plain_token
+    refute_equal before, integration.token_digest
+    assert_equal Rewind::Integration.digest_token(new_token), integration.token_digest
+  end
 end
 
 class PlayModelTest < Minitest::Test
