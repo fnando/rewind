@@ -6,7 +6,7 @@
 
   <section class="panel">
     <h2 class="panel__title">Session</h2>
-    <div class="panel__body">
+    <div class="panel__body panel__body--inline">
       <p class="muted">Signed in as <strong><%= h(current_user.username) %></strong>.</p>
       <form method="post" action="/logout">
         <%= csrf_tag %>
@@ -59,31 +59,33 @@
       <% end %>
     </div>
 
-    <form method="post" action="/settings/integrations" class="panel__body">
-      <%= csrf_tag %>
-      <h3>Add integration</h3>
-      <div class="field">
-        <label for="kind">Server</label>
-        <select class="input" id="kind" name="kind">
-          <option value="jellyfin">Jellyfin</option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="label">Label</label>
-        <input class="input" id="label" name="label" type="text" placeholder="Living room Jellyfin" required>
-      </div>
-      <div class="field">
-        <label for="instance_url">Instance URL</label>
-        <input class="input" id="instance_url" name="instance_url" type="url" placeholder="https://jellyfin.example.com">
-        <span class="field__hint">Where your Jellyfin lives. Used for display and future features.</span>
-      </div>
-      <div class="field">
-        <label for="external_user_id">Jellyfin user ID</label>
-        <input class="input" id="external_user_id" name="external_user_id" type="text" placeholder="e.g. 0c29eba6-04e4-4d6a-9baa-43cd468d25b4" required>
-        <span class="field__hint">Jellyfin → Dashboard → Users → your user: copy the <code>userId</code> from the URL.</span>
-      </div>
-      <button class="btn btn--primary" type="submit">Create integration</button>
-    </form>
+    <details class="disclosure">
+      <summary>Add integration</summary>
+      <form method="post" action="/settings/integrations" class="panel__body">
+        <%= csrf_tag %>
+        <div class="field">
+          <label for="kind">Server</label>
+          <select class="input" id="kind" name="kind">
+            <option value="jellyfin">Jellyfin</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="label">Label</label>
+          <input class="input" id="label" name="label" type="text" placeholder="Living room Jellyfin" required>
+        </div>
+        <div class="field">
+          <label for="instance_url">Instance URL</label>
+          <input class="input" id="instance_url" name="instance_url" type="url" placeholder="https://jellyfin.example.com">
+          <span class="field__hint">Where your Jellyfin lives. Used for display and future features.</span>
+        </div>
+        <div class="field">
+          <label for="external_user_id">Jellyfin user ID</label>
+          <input class="input" id="external_user_id" name="external_user_id" type="text" placeholder="e.g. 0c29eba6-04e4-4d6a-9baa-43cd468d25b4" required>
+          <span class="field__hint">Jellyfin → Dashboard → Users → your user: copy the <code>userId</code> from the URL.</span>
+        </div>
+        <button class="btn btn--primary" type="submit">Create integration</button>
+      </form>
+    </details>
   </section>
 
   <section class="panel">
