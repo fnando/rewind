@@ -20,8 +20,8 @@ module Rewind
     post "/settings/avatar" do
       begin
         Services::Avatar.write(current_user, params[:avatar])
-      rescue Services::Avatar::Error => e
-        session[:flash_error] = e.message
+      rescue Services::Avatar::Error => error
+        session[:flash_error] = error.message
       end
       redirect "/settings"
     end
@@ -60,7 +60,8 @@ module Rewind
       new_password = params[:new_password].to_s
       confirmation = params[:password_confirmation].to_s
 
-      unless current_user.must_change_password || current_user.authenticate(current)
+      unless current_user.must_change_password ||
+             current_user.authenticate(current)
         @error = "Current password is incorrect."
         return erb(:"settings/password")
       end
@@ -92,9 +93,17 @@ module Rewind
       integration = Integration.new(
         user_id: current_user.id,
         kind: kind,
-        label: params[:label].to_s.strip.empty? ? "#{kind.capitalize} server" : params[:label],
+        label: if params[:label].to_s.strip.empty?
+                 "#{kind.capitalize} server"
+               else
+                 params[:label]
+               end,
         instance_url: instance_url,
-        external_user_id: params[:external_user_id].to_s.strip.empty? ? nil : params[:external_user_id].strip,
+        external_user_id: if params[:external_user_id].to_s.strip.empty?
+                            nil
+                          else
+                            params[:external_user_id].strip
+                          end,
         token: Integration.generate_token
       )
 
@@ -110,7 +119,8 @@ module Rewind
     end
 
     post "/settings/integrations/:id/rotate" do
-      integration = current_user.integrations_dataset.where(id: params[:id].to_i).first
+      integration = current_user.integrations_dataset
+                                .where(id: params[:id].to_i).first
       halt 404 unless integration
       session[:revealed_token] = integration.rotate_token!
       session[:revealed_token_id] = integration.id
@@ -118,14 +128,16 @@ module Rewind
     end
 
     post "/settings/integrations/:id/toggle" do
-      integration = current_user.integrations_dataset.where(id: params[:id].to_i).first
+      integration = current_user.integrations_dataset
+                                .where(id: params[:id].to_i).first
       halt 404 unless integration
       integration.update(disabled_at: integration.disabled? ? nil : Time.now)
       redirect "/settings"
     end
 
     delete "/settings/integrations/:id" do
-      integration = current_user.integrations_dataset.where(id: params[:id].to_i).first
+      integration = current_user.integrations_dataset
+                                .where(id: params[:id].to_i).first
       halt 404 unless integration
       integration.destroy
       redirect "/settings"

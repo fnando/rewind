@@ -34,6 +34,7 @@ module Rewind
       def tv_item(tmdb_id)
         cache_item("tv", tmdb_id) do
           data = tv(tmdb_id)
+
           {
             media_type: "tv",
             tmdb_id: data["id"],
@@ -47,7 +48,9 @@ module Rewind
               "genres" => data["genres"],
               "credits" => data["credits"],
               "number_of_seasons" => data["number_of_seasons"],
-              "seasons" => Array(data["seasons"]).map {|s| s.slice("season_number", "name", "episode_count") }
+              "seasons" => Array(data["seasons"]).map do |s|
+                s.slice("season_number", "name", "episode_count")
+              end
             }
           }
         end
@@ -62,17 +65,17 @@ module Rewind
       end
 
       def episode(show_id, season, ep)
-        cache_item("episode", "#{show_id}:#{season}:#{ep}", tmdb_lookup: {show_id: show_id, season: season, ep: ep}) do
-          data = get("/tv/#{show_id}/season/#{season}/episode/#{ep}", append_to_response: "credits")
+        cache_item("episode", "#{show_id}:#{season}:#{ep}",
+                   tmdb_lookup: {show_id: show_id, season: season, ep: ep}) do
+          data = get("/tv/#{show_id}/season/#{season}/episode/#{ep}",
+                     append_to_response: "credits")
           tv_item(show_id)
           show = tv(show_id)
           build_episode_attrs(data, show, show_id, season, ep)
         end
       end
 
-      private
-
-      def normalize_search_result(result)
+      private def normalize_search_result(result)
         case result["media_type"]
         when "movie"
           {
@@ -95,7 +98,7 @@ module Rewind
         end
       end
 
-      def cache_item(media_type, cache_key, tmdb_lookup: nil)
+      private def cache_item(media_type, cache_key, tmdb_lookup: nil)
         existing =
           if media_type == "episode"
             Rewind::Item.where(
@@ -105,12 +108,18 @@ module Rewind
               episode_number: tmdb_lookup[:ep]
             ).first
           else
-            Rewind::Item.where(media_type: media_type, tmdb_id: cache_key.to_i).first
+            Rewind::Item.where(media_type: media_type,
+                               tmdb_id: cache_key.to_i).first
           end
 
-        return existing if existing && existing.fetched_at && existing.fetched_at > Time.now - (CACHE_TTL_DAYS * 86_400)
+        cache_cutoff = Time.now - (CACHE_TTL_DAYS * 86_400)
+
+        if existing&.fetched_at && existing.fetched_at > cache_cutoff
+          return existing
+        end
 
         attrs = yield
+
         if existing
           existing.update(attrs.merge(fetched_at: Time.now))
           existing
@@ -119,7 +128,7 @@ module Rewind
         end
       end
 
-      def build_movie_attrs(data)
+      private def build_movie_attrs(data)
         {
           media_type: "movie",
           tmdb_id: data["id"],
@@ -135,7 +144,7 @@ module Rewind
         }
       end
 
-      def build_episode_attrs(data, show, show_id, season, ep)
+      private def build_episode_attrs(data, show, show_id, season, ep)
         {
           media_type: "episode",
           tmdb_id: data["id"],
@@ -155,14 +164,19 @@ module Rewind
         }
       end
 
-      def get(path, params = {})
+      private def get(path, params = {})
         raise Error, "TMDB_API_KEY not configured" if @api_key.to_s.empty?
 
         response = HTTPX
-          .with(headers: {"Authorization" => "Bearer #{@api_key}", "Accept" => "application/json"})
-          .get("#{BASE_URL}#{path}", params: params)
+                   .with(headers: {
+                           "Authorization" => "Bearer #{@api_key}",
+                           "Accept" => "application/json"
+                         })
+                   .get("#{BASE_URL}#{path}", params: params)
 
-        raise Error, "TMDB request failed: #{response.status}" unless response.status.between?(200, 299)
+        unless response.status.between?(200, 299)
+          raise Error, "TMDB request failed: #{response.status}"
+        end
 
         JSON.parse(response.body.to_s)
       end

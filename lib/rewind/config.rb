@@ -2,7 +2,8 @@
 
 module Rewind
   class Config
-    attr_accessor :data_dir, :tmdb_api_key, :session_secret, :host, :port, :salt
+    attr_accessor :data_dir, :tmdb_api_key, :session_secret, :host, :port,
+                  :salt, :allowed_hosts, :puma_plugins
 
     def initialize
       @data_dir = ENV["REWIND_DATA_DIR"] || File.join(Dir.pwd, "data")
@@ -11,11 +12,13 @@ module Rewind
       @salt = ENV.fetch("REWIND_SALT", nil)
       @host = ENV["REWIND_HOST"] || "0.0.0.0"
       @port = (ENV["REWIND_PORT"] || 55_455).to_i
-      @allowed_hosts = (ENV["REWIND_ALLOWED_HOSTS"] || "").split(",").map(&:strip).reject(&:empty?)
-      @puma_plugins = (ENV["REWIND_PUMA_PLUGINS"] || "").split(",").map(&:strip).reject(&:empty?)
+      @allowed_hosts =
+        (ENV["REWIND_ALLOWED_HOSTS"] || "")
+        .split(",").map(&:strip).reject(&:empty?)
+      @puma_plugins =
+        (ENV["REWIND_PUMA_PLUGINS"] || "")
+        .split(",").map(&:strip).reject(&:empty?)
     end
-
-    attr_accessor :allowed_hosts, :puma_plugins
 
     def db_path
       File.join(data_dir, "rewind.sqlite3")
@@ -68,8 +71,8 @@ module Rewind
     end
 
     def styles_digest
-      @styles_digest ||= Digest::MD5.hexdigest(File.read(File.join(public_dir,
-                                                                   "styles.css")))
+      path = File.join(public_dir, "styles.css")
+      @styles_digest ||= Digest::MD5.hexdigest(File.read(path))
     end
 
     def to_h(redact: true)

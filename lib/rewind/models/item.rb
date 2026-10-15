@@ -18,7 +18,7 @@ module Rewind
     end
 
     def genres
-      Array(metadata["genres"]).map {|g| g.is_a?(Hash) ? g["name"] : g }.compact
+      Array(metadata["genres"]).filter_map {|g| g.is_a?(Hash) ? g["name"] : g }
     end
 
     def credits
@@ -28,7 +28,9 @@ module Rewind
     def display_title
       if media_type == "episode"
         parent = metadata["series_name"]
-        "#{parent} S#{season_number.to_s.rjust(2, "0")}E#{episode_number.to_s.rjust(2, "0")} · #{title}"
+        season = season_number.to_s.rjust(2, "0")
+        episode = episode_number.to_s.rjust(2, "0")
+        "#{parent} S#{season}E#{episode} · #{title}"
       else
         title
       end

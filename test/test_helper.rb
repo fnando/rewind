@@ -37,7 +37,7 @@ require "webmock/minitest"
 
 WebMock.disable_net_connect!(allow_localhost: true)
 
-Dir["#{__dir__}/support/**/*.rb"].sort.each do |file|
+Dir["#{__dir__}/support/**/*.rb"].each do |file|
   require file
 end
 
@@ -45,7 +45,7 @@ module Minitest
   class Test
     include Rack::Test::Methods
 
-    alias_method :_rewind_original_run, :run
+    alias _rewind_original_run run
 
     def run
       result = nil
@@ -65,7 +65,10 @@ module Minitest
     end
 
     def create_user(attrs = {})
-      user = Rewind::User.new(username: attrs[:username] || "user#{SecureRandom.hex(3)}", name: attrs[:name])
+      user = Rewind::User.new(
+        username: attrs[:username] || "user#{SecureRandom.hex(3)}",
+        name: attrs[:name]
+      )
       user.password = attrs[:password] || "a-secure-password-123"
       user.must_change_password = attrs.fetch(:must_change_password, false)
       user.save

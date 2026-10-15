@@ -23,7 +23,9 @@ module Rewind
       def for_media_type(type)
         return self if type.nil? || type.to_s == "all"
 
-        join(:items, id: :item_id).where(Sequel[:items][:media_type] => type.to_s).select_all(:plays)
+        join(:items, id: :item_id)
+          .where(Sequel[:items][:media_type] => type.to_s)
+          .select_all(:plays)
       end
     end
 

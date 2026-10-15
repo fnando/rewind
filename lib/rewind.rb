@@ -19,7 +19,10 @@ module Rewind
   require_relative "rewind/version"
   require_relative "rewind/config"
 
-  LEAD_CHARACTERS = JSON.parse(File.read(File.expand_path("rewind/data/lead_characters.json", __dir__))).freeze
+  LEAD_CHARACTERS = JSON.parse(File.read(File.expand_path(
+                                           "rewind/data/lead_characters.json",
+                                           __dir__
+                                         ))).freeze
 
   class Error < StandardError; end
 

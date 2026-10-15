@@ -8,8 +8,8 @@ module Rewind
       if !@query.empty? && Rewind.config.tmdb_api_key
         begin
           @results = Services::TMDB.new.search_multi(@query)
-        rescue Services::TMDB::Error => e
-          @error = e.message
+        rescue Services::TMDB::Error => error
+          @error = error.message
         end
       end
       erb :"items/search"
@@ -34,7 +34,8 @@ module Rewind
       if ui
         ui.update(rating: rating)
       else
-        UserItem.create(user_id: current_user.id, item_id: item.id, rating: rating)
+        UserItem.create(user_id: current_user.id, item_id: item.id,
+                        rating: rating)
       end
 
       redirect(request.referer || "/items/#{item.id}")
@@ -61,7 +62,10 @@ module Rewind
       if ui
         ui.update(attrs)
       else
-        UserItem.create({user_id: current_user.id, item_id: item.id}.merge(attrs))
+        UserItem.create({
+          user_id: current_user.id,
+          item_id: item.id
+        }.merge(attrs))
       end
 
       redirect("/items/#{item.id}")
@@ -90,7 +94,10 @@ module Rewind
 
       season = params[:season].to_i
       episode = params[:episode].to_i
-      halt 400, "Invalid season/episode" unless season.positive? && episode.positive?
+      unless season.positive? && episode.positive?
+        halt 400,
+             "Invalid season/episode"
+      end
 
       item = Services::TMDB.new.episode(show.tmdb_id, season, episode)
       Play.create(
@@ -106,38 +113,55 @@ module Rewind
     get "/items/:id" do
       @item = Item[params[:id].to_i]
       halt 404 unless @item
-      @user_item = UserItem.where(user_id: current_user.id, item_id: @item.id).first
+      @user_item = UserItem.where(user_id: current_user.id,
+                                  item_id: @item.id).first
 
       if @item.media_type == "episode"
         @plays = Play.where(user_id: current_user.id, item_id: @item.id)
-          .order(Sequel.desc(:played_at))
-          .all
-        @show = Item.where(media_type: "tv", tmdb_id: @item.parent_tmdb_id).first
+                     .order(Sequel.desc(:played_at))
+                     .all
+        @show = Item.where(media_type: "tv",
+                           tmdb_id: @item.parent_tmdb_id).first
         erb :"items/show_episode"
       elsif @item.media_type == "tv"
-        seasons = Array(@item.metadata["seasons"]).reject {|s| s["season_number"].to_i.zero? }
-        seasons = [{"season_number" => 1, "episode_count" => 10}] if seasons.empty?
+        seasons = Array(@item.metadata["seasons"]).reject do |s|
+          s["season_number"].to_i.zero?
+        end
+        if seasons.empty?
+          seasons = [
+            {
+              "season_number" => 1,
+              "episode_count" => 10
+            }
+          ]
+        end
         @seasons = seasons
-        @current_season = (params[:season] || seasons.first["season_number"]).to_i
-        current = seasons.find {|s| s["season_number"] == @current_season } || seasons.first
+        @current_season =
+          (params[:season] || seasons.first["season_number"]).to_i
+        current = seasons.find do |s|
+          s["season_number"] == @current_season
+        end || seasons.first
         @episode_count = current["episode_count"].to_i
 
         @episode_plays = Play.where(user_id: current_user.id)
-          .join(:items, id: :item_id)
-          .where(Sequel[:items][:media_type] => "episode",
-                 Sequel[:items][:parent_tmdb_id] => @item.tmdb_id,
-                 Sequel[:items][:season_number] => @current_season)
-          .select_all(:plays)
-          .order(Sequel.desc(Sequel[:plays][:played_at]))
-          .eager(:item)
-          .all
+                             .join(:items, id: :item_id)
+                             .where(
+                               Sequel[:items][:media_type] => "episode",
+                               Sequel[:items][:parent_tmdb_id] => @item.tmdb_id,
+                               Sequel[:items][:season_number] => @current_season
+                             )
+                             .select_all(:plays)
+                             .order(Sequel.desc(Sequel[:plays][:played_at]))
+                             .eager(:item)
+                             .all
 
         @plays_by_episode = @episode_plays.group_by {|p| p.item.episode_number }
 
         @user_items_by_episode = {}
         episode_item_ids = @episode_plays.map(&:item_id).uniq
         unless episode_item_ids.empty?
-          UserItem.where(user_id: current_user.id, item_id: episode_item_ids).each do |ui|
+          UserItem.where(user_id: current_user.id,
+                         item_id: episode_item_ids).each do |ui|
             item = @episode_plays.find {|p| p.item_id == ui.item_id }&.item
             @user_items_by_episode[item.episode_number] = ui if item
           end
@@ -146,27 +170,33 @@ module Rewind
         @season_episodes =
           if Rewind.config.tmdb_api_key
             begin
-              Array(Services::TMDB.new.season(@item.tmdb_id, @current_season)["episodes"])
-                .each_with_object({}) {|e, h| h[e["episode_number"]] = e }
+              Array(Services::TMDB.new.season(@item.tmdb_id,
+                                              @current_season)["episodes"])
+                .each_with_object({}) do |e, h|
+                h[e["episode_number"]] = e
+              end
             rescue Services::TMDB::Error
               {}
             end
           else
             {}
           end
-        @all_episode_plays_count = Play.where(user_id: current_user.id)
-          .join(:items, id: :item_id)
-          .where(Sequel[:items][:media_type] => "episode",
-                 Sequel[:items][:parent_tmdb_id] => @item.tmdb_id)
-          .select(Sequel[:plays][:item_id])
-          .distinct
-          .count
+        @all_episode_plays_count =
+          Play.where(user_id: current_user.id)
+              .join(:items, id: :item_id)
+              .where(
+                Sequel[:items][:media_type] => "episode",
+                Sequel[:items][:parent_tmdb_id] => @item.tmdb_id
+              )
+              .select(Sequel[:plays][:item_id])
+              .distinct
+              .count
         @total_episodes = seasons.sum {|s| s["episode_count"].to_i }
         erb :"items/show_tv"
       else
         @plays = Play.where(user_id: current_user.id, item_id: @item.id)
-          .order(Sequel.desc(:played_at))
-          .all
+                     .order(Sequel.desc(:played_at))
+                     .all
         erb :"items/show"
       end
     end

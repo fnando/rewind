@@ -7,7 +7,10 @@ module Rewind
 
     def validate
       super
-      errors.add(:rating, "must be between 1 and 5") if !rating.nil? && !(1..5).cover?(rating)
+      return unless !rating.nil? && !(1..5).cover?(rating)
+
+      errors.add(:rating,
+                 "must be between 1 and 5")
     end
   end
 end

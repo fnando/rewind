@@ -9,16 +9,18 @@ module Rewind
       SIZE = 250
       Error = Class.new(Rewind::Error)
 
-      module_function
-
-      def write(user, uploaded)
+      module_function def write(user, uploaded)
         raise Error, "No file uploaded" unless uploaded && uploaded[:tempfile]
 
         FileUtils.mkdir_p(Rewind.config.avatars_dir)
         path = Rewind.config.avatar_path(user.id)
 
         image = MiniMagick::Image.read(uploaded[:tempfile])
-        raise Error, "Invalid image" if image.width.to_i.zero? || image.height.to_i.zero?
+
+        if image.width.to_i.zero? || image.height.to_i.zero?
+          raise Error,
+                "Invalid image"
+        end
 
         image.combine_options do |c|
           c.auto_orient
@@ -31,16 +33,16 @@ module Rewind
         image.format "jpeg"
         image.write(path)
         path
-      rescue MiniMagick::Invalid, MiniMagick::Error => e
-        raise Error, "Could not process image: #{e.message}"
+      rescue MiniMagick::Invalid, MiniMagick::Error => error
+        raise Error, "Could not process image: #{error.message}"
       end
 
-      def delete(user)
+      module_function def delete(user)
         path = Rewind.config.avatar_path(user.id)
         FileUtils.rm_f(path)
       end
 
-      def path_for(user)
+      module_function def path_for(user)
         path = Rewind.config.avatar_path(user.id)
         File.exist?(path) ? path : nil
       end

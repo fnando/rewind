@@ -70,9 +70,10 @@ module Rewind
     before do
       path = request.path_info
       next if path.start_with?("/webhooks/")
-      if path == "/login" || path == "/logout" || path.start_with?("/assets") || path.start_with?("/public")
-        next
-      end
+
+      public_paths = ["/login", "/logout"]
+      next if public_paths.include?(path)
+      next if path.start_with?("/assets", "/public")
 
       halt redirect "/login" unless @current_user
     end
@@ -89,7 +90,8 @@ module Rewind
 
     error do
       e = env["sinatra.error"]
-      Rewind.logger.error("#{e.class}: #{e.message}\n#{e.backtrace&.first(10)&.join("\n")}")
+      backtrace = e.backtrace&.first(10)&.join("\n")
+      Rewind.logger.error("#{e.class}: #{e.message}\n#{backtrace}")
       status 500
       erb :"errors/500", layout: :layout
     end

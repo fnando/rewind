@@ -32,9 +32,17 @@ module Rewind
     def validate
       super
       errors.add(:username, "is required") if username.to_s.strip.empty?
-      errors.add(:username, "must be url-safe") if username && username !~ /\A[a-z0-9][a-z0-9_-]{0,30}\z/i
-      errors.add(:rating_style, "must be stars or thumbs") unless RATING_STYLES.include?(rating_style)
-      errors.add(:timezone, "is not a valid IANA timezone") unless TZInfo::Timezone.all_identifiers.include?(timezone)
+      if username && username !~ /\A[a-z0-9][a-z0-9_-]{0,30}\z/i
+        errors.add(:username,
+                   "must be url-safe")
+      end
+      unless RATING_STYLES.include?(rating_style)
+        errors.add(:rating_style,
+                   "must be stars or thumbs")
+      end
+      return if TZInfo::Timezone.all_identifiers.include?(timezone)
+
+      errors.add(:timezone, "is not a valid IANA timezone")
     end
   end
 end

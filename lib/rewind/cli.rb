@@ -31,7 +31,8 @@ module Rewind
         say_header("User created")
         say_kv("username", user.username)
         say_kv("password", password)
-        say "\nShare the password with the user. They will be forced to change it on first login."
+        say "\nShare the password with the user. They will be forced " \
+            "to change it on first login."
       else
         say "Could not create user:"
         user.errors.each {|field, errs| say "  #{field}: #{errs.join(', ')}" }
@@ -96,7 +97,8 @@ module Rewind
         return
       end
 
-      say "USERNAME             NAME                 CREATED              LAST LOGIN          "
+      say "USERNAME             NAME                 " \
+          "CREATED              LAST LOGIN          "
       rows.each do |u|
         say format(
           "%-20s %-20s %-20s %-20s",
@@ -158,12 +160,14 @@ module Rewind
       if options[:migrate] || ENV["REWIND_AUTO_MIGRATE"] == "1"
         Rewind::Migrator.migrate!
       elsif Rewind::Migrator.pending?
-        abort "Pending migrations detected. Run `rewind migrate` or pass --migrate."
+        abort "Pending migrations detected. " \
+              "Run `rewind migrate` or pass --migrate."
       end
       Rewind.config.port = options[:port] if options[:port]
       Rewind.config.host = options[:host] if options[:host]
       app = Rewind.application
-      display_host = %w[0.0.0.0 ::].include?(Rewind.config.host) ? "localhost" : Rewind.config.host
+      wildcard = %w[0.0.0.0 ::].include?(Rewind.config.host)
+      display_host = wildcard ? "localhost" : Rewind.config.host
       say "Rewind listening on http://#{display_host}:#{Rewind.config.port}/"
 
       require "puma"

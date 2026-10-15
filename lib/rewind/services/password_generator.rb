@@ -14,7 +14,8 @@ module Rewind
       ].freeze
 
       def self.call
-        "#{ADJECTIVES.sample}-#{NOUNS.sample}-#{SecureRandom.random_number(10_000).to_s.rjust(4, "0")}"
+        number = SecureRandom.random_number(10_000).to_s.rjust(4, "0")
+        "#{ADJECTIVES.sample}-#{NOUNS.sample}-#{number}"
       end
     end
   end

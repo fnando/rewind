@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "./lib/rewind/version"
+require_relative "lib/rewind/version"
 
 Gem::Specification.new do |spec|
   spec.name    = "rewind-app"

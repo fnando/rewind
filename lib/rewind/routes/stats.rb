@@ -5,7 +5,11 @@ module Rewind
     get "/stats" do
       @media_type = params[:type] || "all"
       @period = params[:period] || "year"
-      @from, @to = Services::Stats.resolve_period(@period, params[:from], params[:to])
+      @from, @to = Services::Stats.resolve_period(
+        @period,
+        params[:from],
+        params[:to]
+      )
 
       @stats = Services::Stats.new(
         user: current_user,

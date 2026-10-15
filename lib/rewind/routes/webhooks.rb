@@ -21,37 +21,39 @@ module Rewind
         when "jellyfin" then Services::Webhooks::Jellyfin
         end
 
-      result = handler.call(integration: integration, payload: payload, headers: request.env)
+      result = handler.call(integration: integration, payload: payload,
+                            headers: request.env)
       integration.update(last_event_at: Time.now)
 
       case result
       when Play
-        Rewind.logger.info("[webhook/#{kind}] recorded play #{result.id} (item=#{result.item_id})")
+        Rewind.logger.info(
+          "[webhook/#{kind}] recorded play #{result.id} " \
+          "(item=#{result.item_id})"
+        )
         status 201
         content_type :json
         {status: "recorded", play_id: result.id}.to_json
       when Symbol
-        Rewind.logger.info("[webhook/#{kind}] skipped: #{result} payload=#{payload.to_json}")
+        Rewind.logger.info(
+          "[webhook/#{kind}] skipped: #{result} payload=#{payload.to_json}"
+        )
         status 204
       else
         status 204
       end
-    rescue Services::Webhooks::Jellyfin::Error, Services::TMDB::Error => e
-      Rewind.logger.warn("[webhook/#{params[:kind]}] #{e.message}")
+    rescue Services::Webhooks::Jellyfin::Error, Services::TMDB::Error => error
+      Rewind.logger.warn("[webhook/#{params[:kind]}] #{error.message}")
       status 422
       content_type :json
-      {error: e.message}.to_json
+      {error: error.message}.to_json
     end
 
-    private
-
-    def parse_webhook_body
+    private def parse_webhook_body
       body = request.body.read
-      return nil if body.nil? || body.empty?
+      return if body.nil? || body.empty?
 
       case request.media_type
-      when "application/json", nil, ""
-        JSON.parse(body)
       when "application/x-www-form-urlencoded"
         parsed = Rack::Utils.parse_nested_query(body)
         if parsed.key?("payload")

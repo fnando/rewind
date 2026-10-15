@@ -8,11 +8,15 @@ module Rewind
 
     get "/plays" do
       @type = params[:type]
-      scope = Play.for_user(current_user).order(Sequel.desc(:played_at)).eager(:item)
+      scope = Play.for_user(current_user)
+                  .order(Sequel.desc(:played_at))
+                  .eager(:item)
       scope = scope.for_media_type(@type) if @type && @type != "all"
       @plays = scope.limit(200).all
       tz = TZInfo::Timezone.get(current_user.timezone || "UTC")
-      @plays_by_day = @plays.group_by {|p| tz.to_local(p.played_at.utc).to_date }
+      @plays_by_day = @plays.group_by do |p|
+        tz.to_local(p.played_at.utc).to_date
+      end
       @user_items_by_item = load_user_items_for(@plays)
       @shows_by_tmdb = load_shows_for(@plays)
       erb :"plays/index"
@@ -25,7 +29,11 @@ module Rewind
 
       played_at =
         begin
-          params[:played_at] && !params[:played_at].empty? ? Time.parse(params[:played_at]) : Time.now
+          if params[:played_at] && !params[:played_at].empty?
+            Time.parse(params[:played_at])
+          else
+            Time.now
+          end
         rescue ArgumentError
           Time.now
         end
