@@ -3,10 +3,22 @@
 module Rewind
   class Application < Sinatra::Base
     get "/settings" do
-      @integrations = current_user.integrations_dataset.order(:created_at).all
-      @revealed_token = session.delete(:revealed_token)
-      @revealed_token_id = session.delete(:revealed_token_id)
+      @instances = Webhook.where(type: "jellyfin", enabled: true)
+                          .order(:url).all
+      @integrations = current_user.integrations_dataset
+                                  .eager(:webhook).order(:created_at).all
       erb :"settings/index"
+    end
+
+    # Lazily fetched by the add-integration form once a username is typed, so a
+    # page load never blocks on a (possibly unreachable) Jellyfin instance.
+    get "/settings/jellyfin-users" do
+      webhook = Webhook.where(id: params[:webhook_id].to_i, type: "jellyfin",
+                              enabled: true).first
+      halt 404 unless webhook
+
+      content_type :json
+      Services::Jellyfin.public_users(webhook.url).to_json
     end
 
     post "/settings/rating-style" do
@@ -83,28 +95,23 @@ module Rewind
     end
 
     post "/settings/integrations" do
-      kind = params[:kind].to_s
-      kind = "jellyfin" unless Integration::KINDS.include?(kind)
+      webhook = Webhook.where(id: params[:webhook_id].to_i, enabled: true).first
+      unless webhook
+        session[:flash_error] = "Pick a Jellyfin server to connect."
+        redirect "/settings"
+      end
 
-      instance_url = params[:instance_url].to_s.strip
-      instance_url = nil if instance_url.empty?
-      instance_url = instance_url.sub(%r{/+$}, "") if instance_url
+      external_user_id = params[:external_user_id].to_s.strip
+      if Integration.where(webhook_id: webhook.id,
+                           external_user_id:).any?
+        session[:flash_error] = "That Jellyfin user is already linked."
+        redirect "/settings"
+      end
 
       integration = Integration.new(
         user_id: current_user.id,
-        kind: kind,
-        label: if params[:label].to_s.strip.empty?
-                 "#{kind.capitalize} server"
-               else
-                 params[:label]
-               end,
-        instance_url: instance_url,
-        external_user_id: if params[:external_user_id].to_s.strip.empty?
-                            nil
-                          else
-                            params[:external_user_id].strip
-                          end,
-        token: Integration.generate_token
+        webhook_id: webhook.id,
+        external_user_id: external_user_id.empty? ? nil : external_user_id
       )
 
       unless integration.valid?
@@ -113,17 +120,6 @@ module Rewind
       end
 
       integration.save
-      session[:revealed_token] = integration.plain_token
-      session[:revealed_token_id] = integration.id
-      redirect "/settings"
-    end
-
-    post "/settings/integrations/:id/rotate" do
-      integration = current_user.integrations_dataset
-                                .where(id: params[:id].to_i).first
-      halt 404 unless integration
-      session[:revealed_token] = integration.rotate_token!
-      session[:revealed_token_id] = integration.id
       redirect "/settings"
     end
 

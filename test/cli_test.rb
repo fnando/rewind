@@ -51,4 +51,63 @@ class CLITest < Minitest::Test
 
     assert_includes out, "dan"
   end
+
+  def allowlist(url)
+    webhook = Rewind::Webhook.new(type: "jellyfin", url:)
+    webhook.token = Rewind::Webhook.generate_token
+    webhook.save
+    webhook
+  end
+
+  test "webhooks:new allowlists an instance and prints the webhook url" do
+    out, = capture do
+      Rewind::CLI.start(["webhooks:new", "--url", "https://jf.example.com/"])
+    end
+
+    assert_includes out, "Instance allowlisted"
+    assert_includes out, "/webhooks/jellyfin/"
+    webhook = Rewind::Webhook.where(url: "https://jf.example.com").first
+
+    assert webhook
+    assert webhook.enabled?
+  end
+
+  test "webhooks:list prints allowlisted instances" do
+    allowlist("https://room.example.com")
+    out, = capture { Rewind::CLI.start(["webhooks:list"]) }
+
+    assert_includes out, "room.example.com"
+  end
+
+  test "webhooks:update --no-enabled disables an instance" do
+    webhook = allowlist("https://off.example.com")
+    capture do
+      Rewind::CLI.start(
+        ["webhooks:update", "--url", "https://off.example.com", "--no-enabled"]
+      )
+    end
+
+    refute webhook.reload.enabled?
+  end
+
+  test "webhooks:rotate changes the token" do
+    webhook = allowlist("https://rot.example.com")
+    before = webhook.token_digest
+    capture do
+      Rewind::CLI.start(["webhooks:rotate", "--url", "https://rot.example.com"])
+    end
+
+    refute_equal before, webhook.reload.token_digest
+  end
+
+  test "webhooks:delete removes an instance" do
+    allowlist("https://del.example.com")
+    capture do
+      Rewind::CLI.start(
+        ["webhooks:delete", "--url", "https://del.example.com", "--yes"]
+      )
+    end
+
+    assert_nil Rewind::Webhook.where(url: "https://del.example.com").first
+  end
 end

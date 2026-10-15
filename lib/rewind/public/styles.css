@@ -982,25 +982,34 @@ select.input::-ms-expand { display: none; }
 .integration {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px;
+  gap: 8px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-2);
 }
 .integration__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .integration__head strong { font-size: 15px; }
-.integration .code-inline {
-  display: block;
-  padding: 10px 12px;
+.integration__meta { margin-left: auto; font-size: 12px; color: var(--muted); }
+.integration__row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.integration__uid {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.code-chip {
+  padding: 2px 7px;
   background: var(--code-bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
+  font-size: 12px;
+  color: var(--text);
   word-break: break-all;
 }
-.integration__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.integration__actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .integration__actions form { display: inline-flex; }
 
 .pill {

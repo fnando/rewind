@@ -1,31 +1,22 @@
 <li class="integration">
   <div class="integration__head">
-    <strong><%= h(integration.label) %></strong>
-    <span class="pill pill--<%= integration.kind %>"><%= h(integration.kind) %></span>
-    <% if integration.disabled? %><span class="pill pill--muted">disabled</span><% end %>
+    <strong><%= h(integration.webhook.url) %></strong>
+    <span class="pill pill--<%= integration.webhook.type %>"><%= h(integration.webhook.type) %></span>
+    <% if integration.disabled? %><span class="pill pill--muted">paused</span><% end %>
+    <% unless integration.webhook.enabled? %><span class="pill pill--muted">server off</span><% end %>
+    <span class="integration__meta">Last event: <%= integration.last_event_at ? integration.last_event_at.strftime("%Y-%m-%d %H:%M") : "never" %></span>
   </div>
-  <% if @revealed_token && @revealed_token_id == integration.id %>
-    <code class="code-inline"><%= h("#{request.base_url}/webhooks/#{integration.kind}/#{@revealed_token}") %></code>
-    <p class="field__hint">Copy this now — the token won't be shown again. Lost it? Use <strong>Rotate token</strong> to generate a new one.</p>
-  <% else %>
-    <code class="code-inline"><%= h("#{request.base_url}/webhooks/#{integration.kind}/") %>••••••••</code>
-  <% end %>
-  <p class="muted">
-    <% if integration.instance_url %><%= h(integration.instance_url) %> · <% end %>
-    Last event: <%= integration.last_event_at ? integration.last_event_at.strftime("%Y-%m-%d %H:%M") : "never" %>
-    <% if integration.external_user_id %> · filter: <%= h(integration.external_user_id) %><% end %>
-  </p>
-  <div class="integration__actions">
-    <form method="post" action="/settings/integrations/<%= integration.id %>/rotate">
-      <%= csrf_tag %><button class="btn btn--ghost btn--sm" type="submit">Rotate token</button>
-    </form>
-    <form method="post" action="/settings/integrations/<%= integration.id %>/toggle">
-      <%= csrf_tag %><button class="btn btn--ghost btn--sm" type="submit"><%= integration.disabled? ? "Enable" : "Disable" %></button>
-    </form>
-    <form method="post" action="/settings/integrations/<%= integration.id %>" onsubmit="return confirm('Delete this integration?');">
-      <%= csrf_tag %>
-      <input type="hidden" name="_method" value="delete">
-      <button class="btn btn--ghost btn--sm" type="submit">Delete</button>
-    </form>
+  <div class="integration__row">
+    <span class="integration__uid">User ID <code class="code-chip"><%= h(integration.external_user_id) %></code></span>
+    <div class="integration__actions">
+      <form method="post" action="/settings/integrations/<%= integration.id %>/toggle">
+        <%= csrf_tag %><button class="btn btn--ghost btn--sm" type="submit"><%= integration.disabled? ? "Resume" : "Pause" %></button>
+      </form>
+      <form method="post" action="/settings/integrations/<%= integration.id %>" onsubmit="return confirm('Delete this integration?');">
+        <%= csrf_tag %>
+        <input type="hidden" name="_method" value="delete">
+        <button class="btn btn--ghost btn--sm" type="submit">Delete</button>
+      </form>
+    </div>
   </div>
 </li>

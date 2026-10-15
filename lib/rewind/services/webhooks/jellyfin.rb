@@ -8,16 +8,17 @@ module Rewind
 
         WATCHED_THRESHOLD = 0.85
 
-        module_function def call(integration:, payload:, **)
+        module_function def call(webhook:, payload:, **)
           notification_type = payload["NotificationType"] || payload["Event"]
           return :ignored_event unless accept_event?(notification_type, payload)
 
-          external_user_id = payload["UserId"] || payload["userId"]
-          integration_uuid = normalize_uuid(integration.external_user_id)
-          if integration.external_user_id && external_user_id &&
-             normalize_uuid(external_user_id) != integration_uuid
-            return :user_mismatch
-          end
+          # The per-instance token in the webhook URL already identifies the
+          # instance; route the event to the user who claimed its UserId.
+          mapping = find_mapping(
+            webhook, payload["UserId"] || payload["userId"]
+          )
+          return :unknown_user unless mapping
+          return :disabled_user if mapping.disabled?
 
           item = resolve_item(payload)
           return :no_tmdb_id unless item
@@ -27,28 +28,40 @@ module Rewind
             parse_time(payload["UtcTimestamp"] ||
                        payload["PlaybackStopTime"]) || Time.now
 
-          existing = Play.where(integration_id: integration.id,
+          existing = Play.where(integration_id: mapping.id,
                                 source_event_id: event_id).first
           return existing if existing
 
           # Dedupe when the session id isn't a stable key (Jellyfin
           # sometimes sends it empty): don't record a second play for the
-          # same item from the same integration within one runtime window.
+          # same item from the same mapping within one runtime window.
           window_seconds = (payload["RunTimeTicks"].to_i / 10_000_000)
           window_seconds = 1800 if window_seconds < 1800
-          recent = Play.where(integration_id: integration.id, item_id: item.id)
+          recent = Play.where(integration_id: mapping.id, item_id: item.id)
                        .where { played_at > (Time.now - window_seconds) }
                        .first
           return recent if recent
 
+          mapping.update(last_event_at: Time.now)
           Play.create(
-            user_id: integration.user_id,
+            user_id: mapping.user_id,
             item_id: item.id,
-            integration_id: integration.id,
-            played_at: played_at,
+            integration_id: mapping.id,
+            played_at:,
             source: "jellyfin",
             source_event_id: event_id
           )
+        end
+
+        # Route an event to the user who claimed this Jellyfin user id on the
+        # given instance.
+        module_function def find_mapping(webhook, user_id)
+          return if user_id.to_s.strip.empty?
+
+          target = normalize_uuid(user_id)
+          webhook.integrations_dataset.all.find do |mapping|
+            normalize_uuid(mapping.external_user_id) == target
+          end
         end
 
         module_function def accept_event?(notification_type, payload)

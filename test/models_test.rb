@@ -32,66 +32,89 @@ class UserModelTest < Minitest::Test
   end
 end
 
-class IntegrationModelTest < Minitest::Test
+class WebhookModelTest < Minitest::Test
+  def build_webhook(token: Rewind::Webhook.generate_token, **attrs)
+    webhook = Rewind::Webhook.new(
+      {type: "jellyfin", url: "https://jf.test"}.merge(attrs)
+    )
+    webhook.token = token
+    webhook
+  end
+
   test "generate_token produces unique strings" do
-    tokens = Array.new(5) { Rewind::Integration.generate_token }
+    tokens = Array.new(5) { Rewind::Webhook.generate_token }
 
     assert_equal tokens.uniq.size, tokens.size
   end
 
-  test "rejects unknown kind" do
-    user = create_user
-    integration = Rewind::Integration.new(
-      user_id: user.id,
-      kind: "zorg",
-      label: "x",
-      external_user_id: "u",
-      token: "t"
-    )
-
-    refute integration.valid?
+  test "rejects unknown type" do
+    refute build_webhook(type: "zorg").valid?
   end
 
-  test "requires external_user_id for jellyfin" do
-    user = create_user
-    integration = Rewind::Integration.new(
-      user_id: user.id, kind: "jellyfin", label: "L", token: "t"
-    )
-
-    refute integration.valid?
-    assert_includes integration.errors[:external_user_id],
-                    "is required for Jellyfin integrations"
+  test "normalizes the url by stripping trailing slashes" do
+    assert_equal "https://jf.test", build_webhook(url: "https://jf.test/").url
   end
 
   test "stores the token hashed, never in plaintext" do
-    user = create_user
-    token = Rewind::Integration.generate_token
-    integration = Rewind::Integration.create(
-      user_id: user.id, kind: "jellyfin", label: "L",
-      external_user_id: "jf-1", token: token
-    )
+    token = Rewind::Webhook.generate_token
+    webhook = build_webhook(token:)
+    webhook.save
 
-    reloaded = Rewind::Integration[integration.id]
+    reloaded = Rewind::Webhook[webhook.id]
 
-    assert_equal Rewind::Integration.digest_token(token), reloaded.token_digest
+    assert_equal Rewind::Webhook.digest_token(token), reloaded.token_digest
     refute_equal token, reloaded.token_digest
     assert_nil reloaded.token
   end
 
   test "rotate_token! returns a new plaintext token and changes the digest" do
-    user = create_user
-    integration = Rewind::Integration.create(
-      user_id: user.id, kind: "jellyfin", label: "L",
-      external_user_id: "jf-1", token: Rewind::Integration.generate_token
+    webhook = build_webhook
+    webhook.save
+    before = webhook.token_digest
+
+    new_token = webhook.rotate_token!
+
+    assert_equal new_token, webhook.plain_token
+    refute_equal before, webhook.token_digest
+    assert_equal Rewind::Webhook.digest_token(new_token), webhook.token_digest
+  end
+end
+
+class IntegrationModelTest < Minitest::Test
+  def create_webhook
+    webhook = Rewind::Webhook.new(
+      type: "jellyfin", url: "https://jf-#{SecureRandom.hex(3)}.test"
     )
-    before = integration.token_digest
+    webhook.token = Rewind::Webhook.generate_token
+    webhook.save
+    webhook
+  end
 
-    new_token = integration.rotate_token!
+  test "requires a webhook" do
+    integration = Rewind::Integration.new(
+      user_id: create_user.id, external_user_id: "u"
+    )
 
-    assert_equal new_token, integration.plain_token
-    refute_equal before, integration.token_digest
-    assert_equal Rewind::Integration.digest_token(new_token),
-                 integration.token_digest
+    refute integration.valid?
+    assert_includes integration.errors[:webhook_id], "is required"
+  end
+
+  test "requires an external_user_id" do
+    integration = Rewind::Integration.new(
+      user_id: create_user.id, webhook_id: create_webhook.id
+    )
+
+    refute integration.valid?
+    assert_includes integration.errors[:external_user_id], "is required"
+  end
+
+  test "is valid with user, webhook and external_user_id" do
+    integration = Rewind::Integration.new(
+      user_id: create_user.id, webhook_id: create_webhook.id,
+      external_user_id: "jf-1"
+    )
+
+    assert integration.valid?
   end
 end
 

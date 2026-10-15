@@ -1,4 +1,5 @@
 {
+  "ServerUrl": "https://jellyfin.test",
   "NotificationType": "PlaybackStop",
   "Id": "abc-movie-002",
   "UtcTimestamp": "2026-10-14T22:40:00.000Z",

@@ -4,14 +4,22 @@ module Rewind
   class Application < Sinatra::Base
     post "/webhooks/:kind/:token" do
       kind = params[:kind]
-      halt 404 unless Integration::KINDS.include?(kind)
+      halt 404 unless Webhook::TYPES.include?(kind)
 
-      integration = Integration.where(
-        kind: kind,
-        token_digest: Integration.digest_token(params[:token])
+      webhook = Webhook.where(
+        type: kind,
+        token_digest: Webhook.digest_token(params[:token])
       ).first
-      halt 404 unless integration
-      halt 403 if integration.disabled?
+      unless webhook
+        Rewind.logger.info("[webhook/#{kind}] rejected: unknown token")
+        halt 404
+      end
+      unless webhook.enabled?
+        Rewind.logger.info(
+          "[webhook/#{kind}] rejected: instance disabled (#{webhook.url})"
+        )
+        halt 403
+      end
 
       payload = parse_webhook_body
       halt 400, "invalid payload" unless payload
@@ -21,9 +29,8 @@ module Rewind
         when "jellyfin" then Services::Webhooks::Jellyfin
         end
 
-      result = handler.call(integration: integration, payload: payload,
-                            headers: request.env)
-      integration.update(last_event_at: Time.now)
+      result = handler.call(webhook:, payload:)
+      webhook.update(last_event_at: Time.now)
 
       case result
       when Play

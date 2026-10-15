@@ -121,6 +121,136 @@ module Rewind
     end
   end
 
+  class WebhooksCLI < Thor
+    class_option :env, type: :string,
+                       desc: "Path to a dotenv file to load before executing"
+
+    def self.exit_on_failure?
+      true
+    end
+
+    desc "new", "Allowlist a media server instance and print its webhook URL"
+    option :url, type: :string, required: true
+    option :type, type: :string, default: "jellyfin"
+    def new
+      boot!
+      token = Rewind::Webhook.generate_token
+      webhook = Rewind::Webhook.new(type: options[:type], url: options[:url])
+      webhook.token = token
+
+      if webhook.valid?
+        webhook.save
+        say_header("Instance allowlisted")
+        say_kv("type", webhook.type)
+        say_kv("url", webhook.url)
+        say_kv("webhook", webhook_url(webhook, token))
+        say "\nPaste that webhook URL into Jellyfin and include " \
+            "\"ServerUrl\": \"{{ServerUrl}}\"\nin the template."
+      else
+        say "Could not allowlist instance:"
+        webhook.errors.each do |field, errs|
+          say "  #{field}: #{errs.join(', ')}"
+        end
+        exit 1
+      end
+    end
+
+    LIST_FORMAT = "%-10s %-40s %-8s %-18s %s"
+
+    desc "list", "List allowlisted instances"
+    def list
+      boot!
+      rows = Rewind::Webhook.order(:type, :url).all
+      if rows.empty?
+        say "No instances yet. Run: rewind webhooks:new --url URL"
+        return
+      end
+
+      say format(LIST_FORMAT, "TYPE", "URL", "ENABLED", "LAST EVENT", "USERS")
+      rows.each do |webhook|
+        say format(
+          LIST_FORMAT,
+          webhook.type,
+          webhook.url,
+          webhook.enabled? ? "yes" : "no",
+          webhook.last_event_at&.strftime("%Y-%m-%d %H:%M") || "-",
+          webhook.integrations_dataset.count
+        )
+      end
+    end
+
+    desc "update", "Update an allowlisted instance"
+    option :url, type: :string, required: true
+    option :enabled, type: :boolean,
+                     desc: "Accept (--enabled) or reject (--no-enabled) events"
+    def update
+      boot!
+      webhook = find_instance(options[:url])
+      webhook.set(enabled: options[:enabled]) if options.key?(:enabled)
+      webhook.save
+      say_header("Instance updated")
+      say_kv("url", webhook.url)
+      say_kv("enabled", webhook.enabled? ? "yes" : "no")
+    end
+
+    desc "rotate", "Regenerate an instance's webhook token"
+    option :url, type: :string, required: true
+    def rotate
+      boot!
+      webhook = find_instance(options[:url])
+      token = webhook.rotate_token!
+      say_header("Token rotated")
+      say_kv("webhook", webhook_url(webhook, token))
+      say "\nThe previous webhook URL no longer works."
+    end
+
+    desc "delete", "Remove an allowlisted instance and its user mappings"
+    option :url, type: :string, required: true
+    option :yes, type: :boolean, default: false
+    def delete
+      boot!
+      webhook = find_instance(options[:url])
+      unless options[:yes]
+        print "Delete #{webhook.url} and all its user mappings? [y/N] "
+        answer = $stdin.gets.to_s.strip.downcase
+        abort("Aborted.") unless %w[y yes].include?(answer)
+      end
+
+      webhook.destroy
+      say "Deleted #{webhook.url}."
+    end
+
+    no_commands do
+      def boot!
+        Rewind::CLI.load_env!(options[:env])
+        Rewind::CLI.boot_db!
+      end
+
+      def find_instance(url)
+        normalized = Rewind::Webhook.normalize_url(url)
+        webhook = Rewind::Webhook.where(url: normalized).first
+        abort("Instance not found: #{url}") unless webhook
+        webhook
+      end
+
+      # Build the public webhook URL from the first allowed host, falling back
+      # to the bare path when no hosts are configured.
+      def webhook_url(webhook, token)
+        path = "/webhooks/#{webhook.type}/#{token}"
+        host = Rewind.config.allowed_hosts.first
+        host ? "https://#{host}#{path}" : path
+      end
+
+      def say_header(text)
+        say "\n== #{text} =="
+      end
+
+      def say_kv(k, v)
+        say format("  %-10s %s", "#{k}:", v)
+      end
+    end
+  end
+
   class CLI < Thor
     check_unknown_options!
 
@@ -228,6 +358,10 @@ module Rewind
 
     desc "users SUBCOMMAND", "Manage users (new, update, delete, list)"
     subcommand "users", UsersCLI
+
+    desc "webhooks SUBCOMMAND",
+         "Allowlist media servers (new, list, update, rotate, delete)"
+    subcommand "webhooks", WebhooksCLI
 
     def self.start(given_args = ARGV, config = {})
       # Allow colon form: users:new -> users new

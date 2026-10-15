@@ -3,14 +3,19 @@
 require "test_helper"
 
 class WebhooksTest < Minitest::Test
+  SERVER_URL = "https://jellyfin.test"
+
   def setup
+    @token = Rewind::Webhook.generate_token
+    @webhook = Rewind::Webhook.new(type: "jellyfin", url: SERVER_URL)
+    @webhook.token = @token
+    @webhook.save
+
     @user = create_user
     @integration = Rewind::Integration.create(
       user_id: @user.id,
-      kind: "jellyfin",
-      label: "Living room",
-      external_user_id: "jf-user-1",
-      token: Rewind::Integration.generate_token
+      webhook_id: @webhook.id,
+      external_user_id: "jf-user-1"
     )
   end
 
@@ -18,8 +23,8 @@ class WebhooksTest < Minitest::Test
     File.read(File.join(__dir__, "fixtures/jellyfin/#{name}.json"))
   end
 
-  def webhook_url(integration = @integration)
-    "/webhooks/jellyfin/#{integration.token}"
+  def webhook_url(token = @token)
+    "/webhooks/jellyfin/#{token}"
   end
 
   test "returns 404 for unknown token" do
@@ -78,7 +83,7 @@ class WebhooksTest < Minitest::Test
     assert_equal 2, play.item.episode_number
   end
 
-  test "ignores event when external_user_id does not match" do
+  test "ignores event when no user has claimed the Jellyfin id" do
     @integration.update(external_user_id: "someone-else")
     stub_tmdb_movie(27_205)
     post webhook_url, fixture("playback_stop_movie"),
@@ -88,24 +93,28 @@ class WebhooksTest < Minitest::Test
     assert_equal 0, Rewind::Play.count
   end
 
-  test "accepts event when external_user_id matches" do
-    @integration.update(external_user_id: "jf-user-1")
+  test "routes to the user who claimed the Jellyfin id" do
     stub_tmdb_movie(27_205)
     post webhook_url, fixture("playback_stop_movie"),
          "CONTENT_TYPE" => "application/json"
 
     assert_equal 201, last_response.status
+    assert_equal @user.id, Rewind::Play.last.user_id
   end
 
-  test "two integrations scope idempotency separately" do
-    other = Rewind::Integration.create(
-      user_id: @user.id, kind: "jellyfin", label: "Bedroom",
-      external_user_id: "jf-user-1", token: Rewind::Integration.generate_token
-    )
+  test "two instances scope idempotency separately" do
+    other_token = Rewind::Webhook.generate_token
+    other_webhook = Rewind::Webhook.new(type: "jellyfin",
+                                        url: "https://bedroom.test")
+    other_webhook.token = other_token
+    other_webhook.save
+    Rewind::Integration.create(user_id: @user.id, webhook_id: other_webhook.id,
+                               external_user_id: "jf-user-1")
+
     stub_tmdb_movie(27_205)
-    post webhook_url(@integration), fixture("playback_stop_movie"),
+    post webhook_url, fixture("playback_stop_movie"),
          "CONTENT_TYPE" => "application/json"
-    post webhook_url(other), fixture("playback_stop_movie"),
+    post webhook_url(other_token), fixture("playback_stop_movie"),
          "CONTENT_TYPE" => "application/json"
 
     assert_equal 2, Rewind::Play.count
@@ -171,8 +180,18 @@ class WebhooksTest < Minitest::Test
     assert_equal 0, Rewind::Play.count
   end
 
-  test "disabled integration returns 403" do
+  test "paused mapping does not record a play" do
     @integration.update(disabled_at: Time.now)
+    stub_tmdb_movie(27_205)
+    post webhook_url, fixture("playback_stop_movie"),
+         "CONTENT_TYPE" => "application/json"
+
+    assert_equal 204, last_response.status
+    assert_equal 0, Rewind::Play.count
+  end
+
+  test "disabled instance returns 403" do
+    @webhook.update(enabled: false)
     post webhook_url, fixture("playback_stop_movie"),
          "CONTENT_TYPE" => "application/json"
 

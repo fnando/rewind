@@ -85,42 +85,103 @@
 
     <details class="disclosure">
       <summary>Add integration</summary>
-      <form method="post" action="/settings/integrations" class="panel__body">
-        <%= csrf_tag %>
-        <div class="field">
-          <label for="kind">Server</label>
-          <select class="input" id="kind" name="kind">
-            <option value="jellyfin">Jellyfin</option>
-          </select>
+      <% if @instances.any? %>
+        <form method="post" action="/settings/integrations" class="panel__body">
+          <%= csrf_tag %>
+          <div class="field">
+            <label for="webhook_id">Jellyfin server</label>
+            <select class="input" id="webhook_id" name="webhook_id">
+              <option></option>
+
+              <% @instances.each do |instance| %>
+                <option value="<%= instance.id %>"><%= h(instance.url) %></option>
+              <% end %>
+            </select>
+            <span class="field__hint">Allowlisted by your server operator.</span>
+          </div>
+          <div class="field" id="jf-user-picker">
+            <label for="jf-user-search">Jellyfin user</label>
+            <input class="input" id="jf-user-search" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" list="jf-users" placeholder="Start typing your username…" required>
+            <input type="hidden" name="external_user_id" id="external_user_id">
+            <datalist id="jf-users"></datalist>
+            <span class="field__hint">Start typing to pick a user, or paste an ID. Users hidden from the login screen aren't listed — open your Jellyfin profile and copy the <code>userId</code> from the page URL.</span>
+          </div>
+          <button class="btn btn--primary" type="submit">Create integration</button>
+        </form>
+        <script>
+          (function () {
+            var picker = document.getElementById("jf-user-picker");
+            if (!picker) return;
+            var select = document.getElementById("webhook_id");
+            var search = document.getElementById("jf-user-search");
+            var hidden = document.getElementById("external_user_id");
+            var list = document.getElementById("jf-users");
+            var cache = {}; // webhook_id -> promise resolving to [{id, name}]
+
+            function load(webhookId) {
+              if (!cache[webhookId]) {
+                cache[webhookId] = fetch(
+                  "/settings/jellyfin-users?webhook_id=" + encodeURIComponent(webhookId)
+                ).then(function (r) { return r.ok ? r.json() : []; })
+                 .catch(function () { return []; });
+              }
+              return cache[webhookId];
+            }
+
+            function fill(users) {
+              list.innerHTML = "";
+              users.forEach(function (u) {
+                var opt = document.createElement("option");
+                opt.value = u.name;
+                list.appendChild(opt);
+              });
+            }
+
+            function resolve(users) {
+              var text = search.value.trim();
+              var match = users.find(function (u) {
+                return u.name.toLowerCase() === text.toLowerCase();
+              });
+              // Fall back to the raw text so hidden/admin IDs can be pasted.
+              hidden.value = match ? match.id : text;
+            }
+
+            search.addEventListener("input", function () {
+              var webhookId = select.value;
+              hidden.value = search.value.trim(); // keep manual IDs working
+              if (!webhookId || search.value.trim().length < 2) return;
+
+              load(webhookId).then(function (users) {
+                fill(users);
+                resolve(users);
+              });
+            });
+
+            select.addEventListener("change", function () {
+              search.value = "";
+              hidden.value = "";
+              fill([]);
+            });
+          })();
+        </script>
+      <% else %>
+        <div class="panel__body">
+          <p class="muted">No Jellyfin servers are allowlisted yet. Ask your server operator to run <code>rewind webhooks:new --url …</code>.</p>
         </div>
-        <div class="field">
-          <label for="label">Label</label>
-          <input class="input" id="label" name="label" type="text" placeholder="Living room Jellyfin" required>
-        </div>
-        <div class="field">
-          <label for="instance_url">Instance URL</label>
-          <input class="input" id="instance_url" name="instance_url" type="url" placeholder="https://jellyfin.example.com">
-          <span class="field__hint">Where your Jellyfin lives. Used for display and future features.</span>
-        </div>
-        <div class="field">
-          <label for="external_user_id">Jellyfin user ID</label>
-          <input class="input" id="external_user_id" name="external_user_id" type="text" placeholder="e.g. 0c29eba6-04e4-4d6a-9baa-43cd468d25b4" required>
-          <span class="field__hint">Jellyfin → Dashboard → Users → your user: copy the <code>userId</code> from the URL.</span>
-        </div>
-        <button class="btn btn--primary" type="submit">Create integration</button>
-      </form>
+      <% end %>
     </details>
   </section>
 
   <section class="panel">
     <h2 class="panel__title">Jellyfin webhook template</h2>
     <div class="panel__body">
-      <p class="muted">Enable the <strong>Playback Start</strong>, <strong>Playback Progress</strong> and <strong>Playback Stop</strong> notifications and paste this template. A play is recorded the first time your position reaches 85% of the runtime (or when the item completes).</p>
+      <p class="muted">For the server operator: point Jellyfin's webhook at the URL from <code>rewind webhooks:new</code>, enable the <strong>Playback Start</strong>, <strong>Playback Progress</strong> and <strong>Playback Stop</strong> notifications, and paste this template. A play is recorded the first time a position reaches 85% of the runtime (or when the item completes).</p>
       <pre class="code-block">{
   "NotificationType": "{{NotificationType}}",
   "Id": "{{Id}}",
   "UtcTimestamp": "{{UtcTimestamp}}",
   "ItemType": "{{ItemType}}",
+  "ServerUrl": "{{ServerUrl}}",
   "UserId": "{{UserId}}",
   "PlaySessionId": "{{PlaySessionId}}",
   "PlayedToCompletion": "{{PlayedToCompletion}}",
