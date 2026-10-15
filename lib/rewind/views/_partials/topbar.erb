@@ -9,5 +9,8 @@
     <a href="/search"<%= ' aria-current="page"' if nav_current?("/search") %>>Search</a>
     <a href="/settings"<%= ' aria-current="page"' if nav_current?("/settings") %>>Settings</a>
   </nav>
-  <a class="avatar" href="/settings" aria-label="Settings (signed in as <%= h(current_user.username) %>)"><%= h(avatar_letter(current_user)) %></a>
+  <a class="avatar" href="/settings" aria-label="Settings (signed in as <%= h(current_user.username) %>)">
+    <% url = avatar_url(current_user) %>
+    <% if url %><img src="<%= url %>" alt=""><% else %><%= h(avatar_letter(current_user)) %><% end %>
+  </a>
 </header>

@@ -16,6 +16,30 @@
   </section>
 
   <section class="panel">
+    <h2 class="panel__title">Avatar</h2>
+    <div class="panel__body avatar-row">
+      <% url = avatar_url(current_user) %>
+      <span class="avatar avatar--lg">
+        <% if url %><img src="<%= url %>" alt=""><% else %><%= h(avatar_letter(current_user)) %><% end %>
+      </span>
+      <div class="avatar-row__actions">
+        <form method="post" action="/settings/avatar" enctype="multipart/form-data">
+          <%= csrf_tag %>
+          <input class="file-input" id="avatar-file" type="file" name="avatar" accept="image/*" required>
+          <label class="btn btn--secondary" for="avatar-file">Choose image…</label>
+          <button class="btn btn--primary" type="submit">Upload</button>
+        </form>
+        <% if url %>
+          <form method="post" action="/settings/avatar/delete">
+            <%= csrf_tag %>
+            <button class="btn btn--secondary" type="submit">Remove</button>
+          </form>
+        <% end %>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
     <h2 class="panel__title">Timezone</h2>
     <form method="post" action="/settings/timezone" class="panel__body panel__body--inline">
       <%= csrf_tag %>

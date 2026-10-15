@@ -10,6 +10,7 @@ require_relative "helpers/rating_helper"
 require_relative "services/password_generator"
 require_relative "services/tmdb"
 require_relative "services/stats"
+require_relative "services/avatar"
 require_relative "services/webhooks/jellyfin"
 
 module Rewind

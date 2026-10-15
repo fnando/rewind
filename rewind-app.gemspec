@@ -40,6 +40,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "erubi"
   spec.add_dependency "httpx"
   spec.add_dependency "irb"
+  spec.add_dependency "mini_magick"
   spec.add_dependency "puma"
   spec.add_dependency "rack"
   spec.add_dependency "rackup"

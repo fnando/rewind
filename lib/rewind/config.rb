@@ -19,6 +19,14 @@ module Rewind
       File.join(data_dir, "rewind.sqlite3")
     end
 
+    def avatars_dir
+      File.join(data_dir, "avatars")
+    end
+
+    def avatar_path(user_id)
+      File.join(avatars_dir, "#{user_id}.jpg")
+    end
+
     def session_secret_path
       File.join(data_dir, ".session_secret")
     end

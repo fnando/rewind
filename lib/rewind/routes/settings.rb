@@ -15,6 +15,32 @@ module Rewind
       redirect "/settings"
     end
 
+    post "/settings/avatar" do
+      begin
+        Services::Avatar.write(current_user, params[:avatar])
+      rescue Services::Avatar::Error => e
+        session[:flash_error] = e.message
+      end
+      redirect "/settings"
+    end
+
+    post "/settings/avatar/delete" do
+      Services::Avatar.delete(current_user)
+      redirect "/settings"
+    end
+
+    get "/avatars/:user_id" do
+      user = User[params[:user_id].to_i]
+      halt 404 unless user
+
+      path = Services::Avatar.path_for(user)
+      halt 404 unless path
+
+      cache_control :public, max_age: 86_400
+      content_type "image/jpeg"
+      send_file(path)
+    end
+
     post "/settings/timezone" do
       tz = params[:timezone].to_s
       if TZInfo::Timezone.all_identifiers.include?(tz)

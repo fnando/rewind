@@ -37,6 +37,13 @@ module Rewind
         (user.name || user.username).to_s[0, 1].upcase
       end
 
+      def avatar_url(user)
+        return nil unless Rewind::Services::Avatar.path_for(user)
+
+        mtime = File.mtime(Rewind.config.avatar_path(user.id)).to_i
+        "/avatars/#{user.id}?v=#{mtime}"
+      end
+
       def poster_url(item, size: "w185")
         return "/poster-placeholder.svg" if item.nil? || item.poster_path.to_s.empty?
 
