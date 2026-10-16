@@ -184,6 +184,30 @@ Trigger a playback past 85% and refresh History — the play should appear.
   its own webhook URL and its own idempotency scope, so two instances with
   colliding internal item ids won't fight.
 
+## Importing from Trakt
+
+Migrating from [Trakt]? Request a data export (trakt.tv → _Settings_ → _Data_)
+and you'll get a `.zip` of JSON files. Import your history into an existing
+Rewind user with:
+
+```bash
+rewind import:trakt --archive trakt-export.zip --username you
+```
+
+This imports:
+
+- **Watchings** from `watched-history.json` (movies and episodes), each as a
+  play attributed to the user.
+- **Ratings** from `ratings-{movies,shows,episodes}.json`. Trakt's 1–10 scale is
+  mapped to Rewind's 1–5.
+- **Reviews** from `comments-{movies,shows,episodes}.json`.
+
+Items are resolved through TMDB using the tmdb ids in the export, so
+`TMDB_API_KEY` must be set (see [Configuration](#configuration)). Season-level
+ratings/comments, lists, and private notes are not imported. The import is safe
+to re-run: watchings are de-duplicated by their Trakt history id, so you can
+re-import an updated export without creating duplicate plays.
+
 ## Running under your own stack
 
 For Docker, systemd, or a custom Rack app, write a `config.ru`:

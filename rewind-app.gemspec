@@ -44,6 +44,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "puma"
   spec.add_dependency "rack"
   spec.add_dependency "rackup"
+  spec.add_dependency "rubyzip"
   spec.add_dependency "sequel"
   spec.add_dependency "sinatra"
   spec.add_dependency "sinatra-contrib"

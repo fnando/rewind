@@ -6,7 +6,7 @@ module Rewind
     many_to_one :item
     many_to_one :integration
 
-    SOURCES = %w[manual jellyfin].freeze
+    SOURCES = %w[manual jellyfin trakt].freeze
 
     dataset_module do
       def for_user(user)

@@ -251,6 +251,52 @@ module Rewind
     end
   end
 
+  class ImportCLI < Thor
+    class_option :env, type: :string,
+                       desc: "Path to a dotenv file to load before executing"
+
+    def self.exit_on_failure?
+      true
+    end
+
+    desc "trakt", "Import watchings, ratings, and reviews from a Trakt export"
+    option :archive, type: :string, required: true,
+                     desc: "Path to the Trakt data export .zip"
+    option :username, type: :string, required: true,
+                      desc: "User the imported data belongs to"
+    def trakt
+      Rewind::CLI.load_env!(options[:env])
+      Rewind::CLI.boot_db!
+      require_relative "services/importers/trakt"
+
+      archive = options[:archive]
+      abort("Archive not found: #{archive}") unless File.file?(archive)
+      user = Rewind::User.where(username: options[:username]).first
+      abort("User not found: #{options[:username]}") unless user
+
+      stats = Rewind::Services::Importers::Trakt.new(
+        user:, archive:, out: $stdout
+      ).call
+
+      say_header("Import complete")
+      say_kv("plays created", stats[:plays_created])
+      say_kv("plays skipped", stats[:plays_skipped])
+      say_kv("ratings set", stats[:ratings_set])
+      say_kv("reviews set", stats[:reviews_set])
+      say_kv("entries skipped", stats[:skipped])
+    end
+
+    no_commands do
+      def say_header(text)
+        say "\n== #{text} =="
+      end
+
+      def say_kv(k, v)
+        say format("  %-18s %s", "#{k}:", v)
+      end
+    end
+  end
+
   class CLI < Thor
     check_unknown_options!
 
@@ -362,6 +408,9 @@ module Rewind
     desc "webhooks SUBCOMMAND",
          "Allowlist media servers (new, list, update, rotate, delete)"
     subcommand "webhooks", WebhooksCLI
+
+    desc "import SUBCOMMAND", "Import data from other services (trakt)"
+    subcommand "import", ImportCLI
 
     def self.start(given_args = ARGV, config = {})
       # Allow colon form: users:new -> users new
