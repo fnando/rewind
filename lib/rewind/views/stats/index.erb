@@ -25,7 +25,7 @@
       total_plays = genres.sum {|g| g[:count] }
       hero_pct = total_plays.positive? ? (hero_genre[:count].to_f / total_plays * 100).round : 0
       taste_subtitle = genres.size >= 2 ? "Mostly #{genres[0][:name].downcase}, with a soft spot for #{genres[1][:name].downcase}." : nil
-      genre_rows = genres[1..].to_a.map {|g| {name: g[:name], count: g[:count], poster_url: g[:sample] && poster_url(g[:sample], size: "w92")} }
+      genre_rows = genres[1..].to_a.map {|g| {name: g[:name], count: g[:count], count_label: pluralize(g[:count], "title"), poster_url: g[:sample] && poster_url(g[:sample], size: "w92")} }
       hero_poster = hero_genre[:sample] && poster_url(hero_genre[:sample], size: "w185")
     %>
     <%= erb :"_partials/stats/rank_list", locals: {
