@@ -41,16 +41,16 @@ class StatsTest < Minitest::Test
     assert_equal 1, totals[:rewatches]
   end
 
-  test "headline states hours of video scoped to the period" do
+  test "the hero reads as a sentence about screen time" do
     stats = Rewind::Services::Stats.new(user: @user, from: nil, to: nil,
                                         period: "all").to_h
 
-    assert_equal "6 hours of video all-time.",
+    assert_equal "6 hours in front of the screen, start to finish.",
                  stats[:headline][:hours_sentence]
     assert_equal 3, stats[:headline][:big_number]
   end
 
-  test "headline combines video and audio for a mixed view" do
+  test "the hero combines video and audio for a mixed view" do
     track = create_item(media_type: "track", external_id: "mbid:z",
                         title: "Long One", runtime: 90)
     Rewind::Play.create(user_id: @user.id, item_id: track.id,
@@ -58,8 +58,16 @@ class StatsTest < Minitest::Test
     stats = Rewind::Services::Stats.new(user: @user, from: nil, to: nil,
                                         period: "year").to_h
 
-    assert_match(/\A6 hours of video and \d+ of audio in \d{4}\.\z/,
-                 stats[:headline][:hours_sentence])
+    assert_equal "6 hours in front of the screen and 2 hours of music.",
+                 stats[:headline][:hours_sentence]
+  end
+
+  test "rhythm bucket tooltips label the bucket and break down hours" do
+    busiest = Rewind::Services::Stats.new(user: @user, from: nil, to: nil,
+                                          period: "all").to_h[:rhythm]
+                                     .max_by {|r| r[:total] }
+
+    assert_match(/\A.+ • \d+ hours? of video/, busiest[:tooltip])
   end
 
   test "top_genres sorts descending" do

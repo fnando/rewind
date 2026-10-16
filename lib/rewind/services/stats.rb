@@ -144,42 +144,59 @@ module Rewind
           big_number: total,
           period_label: period_label,
           hours: video + audio,
-          hours_sentence: humanize_time(video, audio),
+          # The hero reads like a sentence; the period lives in its eyebrow.
+          hours_sentence: humanize_hero(video, audio),
           unit: headline_unit(total)
         }
       end
 
-      # "40 hours of video and 21 of audio in 2026." — includes whichever media
-      # the active filter covers, scoped to the period.
-      private def humanize_time(video, audio)
-        parts = []
-        parts << [video.round, "video"] if video.round.positive?
-        parts << [audio.round, "audio"] if audio.round.positive?
-        return "No time logged yet." if parts.empty?
+      private def humanize_hero(video, audio)
+        if video.round.positive? && audio.round.positive?
+          "#{pluralize_hours(video.round)} in front of the screen " \
+            "and #{pluralize_hours(audio.round)} of music."
+        elsif audio.round.positive?
+          "#{pluralize_hours(audio.round)} of music, in your ears."
+        else
+          humanize_screen(video.round)
+        end
+      end
 
-        body =
-          if parts.size == 1
-            count, kind = parts.first
-            "#{pluralize_hours(count)} of #{kind}"
-          else
-            "#{pluralize_hours(parts[0][0])} of video " \
-              "and #{parts[1][0]} of audio"
-          end
-        "#{body} #{period_phrase}."
+      private def humanize_screen(total_hours)
+        return "No time logged yet." if total_hours.zero?
+
+        phrase = "#{pluralize_hours(total_hours)} in front of the screen"
+        days, hours_left = total_hours.divmod(24)
+        return "#{phrase}, start to finish." if days.zero?
+
+        parts = ["#{days} day#{'s' unless days == 1}"]
+        if hours_left.positive?
+          parts << "#{hours_left} hour#{'s' unless hours_left == 1}"
+        end
+        "#{phrase}. That's #{join_phrase(parts)} of stories, start to finish."
+      end
+
+      private def join_phrase(parts)
+        return parts.first if parts.size <= 1
+
+        "#{parts[0..-2].join(', ')} and #{parts.last}"
       end
 
       private def pluralize_hours(count)
         "#{count} #{count == 1 ? 'hour' : 'hours'}"
       end
 
-      private def period_phrase
-        case @period
-        when "all" then "all-time"
-        when "week" then "in the last 7 days"
-        when "month" then "in the last 30 days"
-        when "custom" then "in this range"
-        else "in #{Date.today.year}"
+      # "Oct 5 • 3 hours of video / 1 hour of audio" for a rhythm bucket.
+      private def rhythm_tooltip(label, video, audio)
+        parts = []
+        if video.round.positive?
+          parts << "#{pluralize_hours(video.round)} of video"
         end
+        if audio.round.positive?
+          parts << "#{pluralize_hours(audio.round)} of audio"
+        end
+        return label.to_s if parts.empty?
+
+        "#{label} • #{parts.join(' / ')}"
       end
 
       private def headline_unit(count)
@@ -311,7 +328,10 @@ module Rewind
 
           {
             label: label_fn.call(key), movies: data[:movies],
-            episodes: data[:episodes], tracks: data[:tracks], total: total
+            episodes: data[:episodes], tracks: data[:tracks], total: total,
+            tooltip: rhythm_tooltip(label_fn.call(key),
+                                    data[:movies] + data[:episodes],
+                                    data[:tracks])
           }
         end
 

@@ -26,7 +26,7 @@
           <% movies_pct = row[:movies] > 0 ? (row[:movies].to_f / max_total * 100).round(1) : 0 %>
           <% tv_pct = row[:episodes] > 0 ? (row[:episodes].to_f / max_total * 100).round(1) : 0 %>
           <% music_pct = row[:tracks] > 0 ? (row[:tracks].to_f / max_total * 100).round(1) : 0 %>
-          <li class="rhythm-chart__col" title="<%= h(row[:label]) %>: <%= row[:total].round %>h">
+          <li class="rhythm-chart__col" title="<%= h(row[:tooltip]) %>">
             <div class="rhythm-chart__stack">
               <% if row[:peak] && row[:total].positive? %>
                 <span class="rhythm-chart__peak">Peak</span>
