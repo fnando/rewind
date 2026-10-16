@@ -2,8 +2,12 @@
 
 ENV["RACK_ENV"] = "test"
 ENV["REWIND_SESSION_SECRET"] ||= "a" * 128
-ENV["REWIND_SALT"] ||= "test-salt"
 ENV["TMDB_API_KEY"] ||= "test-tmdb-key"
+
+require "base64"
+require "json"
+ENV["REWIND_KEYRING"] ||=
+  JSON.generate({"1" => Base64.strict_encode64("a" * 32)})
 
 require "simplecov"
 SimpleCov.start do
@@ -73,6 +77,19 @@ module Minitest
       user.must_change_password = attrs.fetch(:must_change_password, false)
       user.save
       user
+    end
+
+    def create_source(attrs = {})
+      token = attrs.delete(:access_token) || "token-#{SecureRandom.hex(4)}"
+      source = Rewind::Source.new({
+        user_id: attrs[:user_id],
+        type: "jellyfin",
+        url: "https://jf-#{SecureRandom.hex(3)}.test",
+        external_user_id: "jf-#{SecureRandom.hex(3)}"
+      }.merge(attrs))
+      source.credentials = {"access_token" => token}
+      source.save
+      source
     end
 
     def create_item(attrs = {})

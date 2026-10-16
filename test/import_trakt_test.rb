@@ -78,7 +78,7 @@ class ImportTraktTest < Minitest::Test
 
     assert_equal 1, stats[:plays_created]
     assert_equal "trakt", play.source
-    assert_nil play.integration_id
+    assert_nil play.source_id
     assert_equal "Inception", play.item.title
     assert_equal Time.parse("2026-10-14T05:49:00.000Z").to_i,
                  play.played_at.to_i

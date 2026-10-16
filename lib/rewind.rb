@@ -3,6 +3,7 @@
 require "thor"
 require "sequel"
 require "sqlite3"
+require "attr_keyring"
 require "bcrypt"
 require "json"
 require "securerandom"
@@ -49,7 +50,6 @@ module Rewind
     end
 
     def boot!
-      config.require_salt!
       db
       require_relative "rewind/models"
     end

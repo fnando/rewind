@@ -20,7 +20,12 @@ Prefix your message with one of the following:
   surface on the stats page (top artists/albums/tracks).
 - [Changed] Items are now identified by a prefixed `external_id` (`tmdb:…`,
   `mbid:…`) instead of a TMDB-specific `tmdb_id` column.
-- [Changed] Music plays are recorded only on a completed `PlaybackStop`, so the
-  several events Jellyfin emits per listen collapse into a single play.
-- [Fixed] The webhook replay-dedup window compared a shadowed local variable
-  instead of the `played_at` column, so it never actually scoped by time.
+- [Changed] Jellyfin ingestion moved from push webhooks to a background sync
+  thread that polls the Jellyfin API per user — capturing plays from every
+  client, not just ones that fire webhooks. Users connect their account with
+  their Jellyfin username/password (Settings → Connect Jellyfin); the resulting
+  access token is stored encrypted via `attr_keyring` (`REWIND_KEYRING`).
+- [Removed] The push-webhook endpoint, token model, and `webhooks:*` CLI, plus
+  the now-unused `REWIND_SALT`. Server connections are modeled as per-user
+  `sources` behind pluggable provider adapters (Jellyfin today; Plex/Spotify/
+  Apple Music later). Managed with `rewind sources:*`.

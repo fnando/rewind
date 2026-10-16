@@ -32,89 +32,46 @@ class UserModelTest < Minitest::Test
   end
 end
 
-class WebhookModelTest < Minitest::Test
-  def build_webhook(token: Rewind::Webhook.generate_token, **attrs)
-    webhook = Rewind::Webhook.new(
-      {type: "jellyfin", url: "https://jf.test"}.merge(attrs)
-    )
-    webhook.token = token
-    webhook
-  end
-
-  test "generate_token produces unique strings" do
-    tokens = Array.new(5) { Rewind::Webhook.generate_token }
-
-    assert_equal tokens.uniq.size, tokens.size
+class SourceModelTest < Minitest::Test
+  def build_source(**attrs)
+    source = Rewind::Source.new({
+      user_id: create_user.id, type: "jellyfin", url: "https://jf.test",
+      external_user_id: "jf-1"
+    }.merge(attrs))
+    source.credentials = {"access_token" => "secret-token"}
+    source
   end
 
   test "rejects unknown type" do
-    refute build_webhook(type: "zorg").valid?
+    refute build_source(type: "zorg").valid?
+  end
+
+  test "requires a url, external_user_id and credentials" do
+    source = Rewind::Source.new(user_id: create_user.id, type: "jellyfin")
+
+    refute source.valid?
+    assert_includes source.errors[:url], "is required"
+    assert_includes source.errors[:external_user_id], "is required"
+    assert_includes source.errors[:credentials], "is required"
   end
 
   test "normalizes the url by stripping trailing slashes" do
-    assert_equal "https://jf.test", build_webhook(url: "https://jf.test/").url
+    assert_equal "https://jf.test", build_source(url: "https://jf.test/").url
   end
 
-  test "stores the token hashed, never in plaintext" do
-    token = Rewind::Webhook.generate_token
-    webhook = build_webhook(token:)
-    webhook.save
-
-    reloaded = Rewind::Webhook[webhook.id]
-
-    assert_equal Rewind::Webhook.digest_token(token), reloaded.token_digest
-    refute_equal token, reloaded.token_digest
-    assert_nil reloaded.token
+  test "is valid with user, url, external_user_id and credentials" do
+    assert build_source.valid?
   end
 
-  test "rotate_token! returns a new plaintext token and changes the digest" do
-    webhook = build_webhook
-    webhook.save
-    before = webhook.token_digest
+  test "stores credentials encrypted, decrypting on read" do
+    source = build_source
+    source.save
 
-    new_token = webhook.rotate_token!
+    row = Rewind.db[:sources].where(id: source.id).first
 
-    assert_equal new_token, webhook.plain_token
-    refute_equal before, webhook.token_digest
-    assert_equal Rewind::Webhook.digest_token(new_token), webhook.token_digest
-  end
-end
-
-class IntegrationModelTest < Minitest::Test
-  def create_webhook
-    webhook = Rewind::Webhook.new(
-      type: "jellyfin", url: "https://jf-#{SecureRandom.hex(3)}.test"
-    )
-    webhook.token = Rewind::Webhook.generate_token
-    webhook.save
-    webhook
-  end
-
-  test "requires a webhook" do
-    integration = Rewind::Integration.new(
-      user_id: create_user.id, external_user_id: "u"
-    )
-
-    refute integration.valid?
-    assert_includes integration.errors[:webhook_id], "is required"
-  end
-
-  test "requires an external_user_id" do
-    integration = Rewind::Integration.new(
-      user_id: create_user.id, webhook_id: create_webhook.id
-    )
-
-    refute integration.valid?
-    assert_includes integration.errors[:external_user_id], "is required"
-  end
-
-  test "is valid with user, webhook and external_user_id" do
-    integration = Rewind::Integration.new(
-      user_id: create_user.id, webhook_id: create_webhook.id,
-      external_user_id: "jf-1"
-    )
-
-    assert integration.valid?
+    refute_includes row[:encrypted_credentials].to_s, "secret-token"
+    refute_nil row[:keyring_id]
+    assert_equal "secret-token", Rewind::Source[source.id].access_token
   end
 end
 

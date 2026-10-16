@@ -4,8 +4,10 @@ module Rewind
   class Play < Sequel::Model
     many_to_one :user
     many_to_one :item
-    many_to_one :integration
 
+    # NB: no `many_to_one :source` association — the `source` column already
+    # holds the play's origin kind ("manual"/"jellyfin"/"trakt"). The owning
+    # Source (connection) is referenced by the `source_id` column directly.
     SOURCES = %w[manual jellyfin trakt].freeze
 
     dataset_module do

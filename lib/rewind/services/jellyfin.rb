@@ -4,35 +4,38 @@ require "httpx"
 
 module Rewind
   module Services
-    # Thin read-only client for a Jellyfin instance. Only talks to the
-    # unauthenticated `/Users/Public` endpoint, used to suggest users when
-    # linking an account. Any failure (unreachable, timeout, bad JSON) yields an
-    # empty list — the picker is a convenience, never a hard dependency.
+    # Read/auth client for a Jellyfin instance.
+    #
+    # - `public_users` (unauthenticated) suggests users when linking an account.
+    # - `authenticate` exchanges username/password for a per-user access token.
+    # - `played_items` pages through a user's watched/listened history, newest
+    #   first, stopping once it reaches the sync cursor.
     class Jellyfin
-      TIMEOUT = 4
+      Error = Class.new(Rewind::Error)
+      AuthError = Class.new(Error)
+
+      TIMEOUT = 8
+      PAGE_SIZE = 100
+      PLAYED_TYPES = "Movie,Episode,Audio"
 
       def self.public_users(url)
         new(url).public_users
       end
 
-      def initialize(url)
-        @url = url.to_s.strip.sub(%r{/+\z}, "")
+      def initialize(url, token: nil, page_size: PAGE_SIZE)
+        @url = self.class.normalize_url(url)
+        @token = token
+        @page_size = page_size
+      end
+
+      def self.normalize_url(url)
+        url.to_s.strip.sub(%r{/+\z}, "")
       end
 
       def public_users
         return [] if @url.empty?
 
-        response = HTTPX
-                   .with(
-                     # System resolver (getaddrinfo) so instance URLs resolve
-                     # like the OS does — honouring mDNS and /etc/hosts.
-                     resolver_class: :system,
-                     timeout: {
-                       connect_timeout: TIMEOUT, operation_timeout: TIMEOUT
-                     },
-                     headers: {"Accept" => "application/json"}
-                   )
-                   .get("#{@url}/Users/Public")
+        response = http.get("#{@url}/Users/Public")
         return [] if response.is_a?(HTTPX::ErrorResponse)
         return [] unless response.status.between?(200, 299)
 
@@ -43,6 +46,113 @@ module Rewind
         end
       rescue StandardError
         []
+      end
+
+      # Exchange credentials for an access token + Jellyfin user id.
+      def authenticate(username:, password:)
+        response = http(auth: client_auth_header).post(
+          "#{@url}/Users/AuthenticateByName",
+          json: {Username: username, Pw: password}
+        )
+        if response.is_a?(HTTPX::ErrorResponse) ||
+           !response.status.between?(200, 299)
+          raise AuthError, "Jellyfin authentication failed"
+        end
+
+        data = JSON.parse(response.body.to_s)
+        {access_token: data["AccessToken"], user_id: data.dig("User", "Id")}
+      end
+
+      # Every played Movie/Episode/Audio for a user, newest first, newer than
+      # `since` (a LastPlayedDate string cursor; nil = full history).
+      def played_items(user_id:, since: nil)
+        cutoff = parse_time(since)
+        collected = []
+        start = 0
+
+        loop do
+          page = get_items(user_id, start)
+          items = Array(page["Items"])
+          break if items.empty?
+
+          items.each do |item|
+            played = parse_time(item.dig("UserData", "LastPlayedDate"))
+            return collected if cutoff && played && played <= cutoff
+
+            collected << item
+          end
+
+          start += items.size
+          break if start >= page["TotalRecordCount"].to_i
+          break if items.size < @page_size
+        end
+
+        collected
+      end
+
+      # A single item's ProviderIds (used to resolve an episode's *series* TMDB
+      # id, which the episode itself doesn't carry). Empty hash on failure.
+      def provider_ids(user_id:, item_id:)
+        response = get("#{@url}/Users/#{user_id}/Items/#{item_id}",
+                       Fields: "ProviderIds")
+        JSON.parse(response.body.to_s)["ProviderIds"] || {}
+      rescue Error
+        {}
+      end
+
+      private def get_items(user_id, start_index)
+        response = get(
+          "#{@url}/Users/#{user_id}/Items",
+          IncludeItemTypes: PLAYED_TYPES,
+          Recursive: true,
+          Filters: "IsPlayed",
+          SortBy: "DatePlayed",
+          SortOrder: "Descending",
+          Fields: "ProviderIds,ParentIndexNumber,IndexNumber,SeriesId",
+          Limit: @page_size,
+          StartIndex: start_index
+        )
+        JSON.parse(response.body.to_s)
+      end
+
+      private def get(url, params = {})
+        response = http(auth: token_auth_header).get(url, params: params)
+        if response.is_a?(HTTPX::ErrorResponse) ||
+           !response.status.between?(200, 299)
+          status = response.respond_to?(:status) ? response.status : "error"
+          raise AuthError, "Jellyfin request unauthorized" if status == 401
+
+          raise Error, "Jellyfin request failed: #{status}"
+        end
+
+        response
+      end
+
+      private def http(auth: nil)
+        headers = {"Accept" => "application/json"}
+        headers["Authorization"] = auth if auth
+        HTTPX.with(
+          resolver_class: :system,
+          timeout: {connect_timeout: TIMEOUT, operation_timeout: TIMEOUT},
+          headers: headers
+        )
+      end
+
+      private def client_auth_header
+        device = %[Device="Rewind", DeviceId="rewind"]
+        %[MediaBrowser Client="Rewind", #{device}, Version="#{Rewind::VERSION}"]
+      end
+
+      private def token_auth_header
+        %[MediaBrowser Token="#{@token}"]
+      end
+
+      private def parse_time(value)
+        return if value.nil? || value.to_s.strip.empty?
+
+        Time.parse(value.to_s)
+      rescue ArgumentError
+        nil
       end
     end
   end

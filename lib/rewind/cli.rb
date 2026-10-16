@@ -121,7 +121,7 @@ module Rewind
     end
   end
 
-  class WebhooksCLI < Thor
+  class SourcesCLI < Thor
     class_option :env, type: :string,
                        desc: "Path to a dotenv file to load before executing"
 
@@ -129,99 +129,58 @@ module Rewind
       true
     end
 
-    desc "new", "Allowlist a media server instance and print its webhook URL"
-    option :url, type: :string, required: true
-    option :type, type: :string, default: "jellyfin"
-    def new
-      boot!
-      token = Rewind::Webhook.generate_token
-      webhook = Rewind::Webhook.new(type: options[:type], url: options[:url])
-      webhook.token = token
+    LIST_FORMAT = "%-5s %-10s %-40s %-8s %-18s"
 
-      if webhook.valid?
-        webhook.save
-        say_header("Instance allowlisted")
-        say_kv("type", webhook.type)
-        say_kv("url", webhook.url)
-        say_kv("webhook", webhook_url(webhook, token))
-        if webhook.type == "jellyfin"
-          say "\nIn Jellyfin, point the webhook at the URL above, enable the " \
-              "Playback Start,\nPlayback Progress and Playback Stop " \
-              "notifications, and paste this template:\n\n"
-          say Rewind::Webhook::JELLYFIN_TEMPLATE
-        end
-      else
-        say "Could not allowlist instance:"
-        webhook.errors.each do |field, errs|
-          say "  #{field}: #{errs.join(', ')}"
-        end
-        exit 1
-      end
-    end
-
-    LIST_FORMAT = "%-10s %-40s %-8s %-18s %s"
-
-    desc "list", "List allowlisted instances"
+    desc "list", "List connected sync sources"
     def list
       boot!
-      rows = Rewind::Webhook.order(:type, :url).all
+      rows = Rewind::Source.order(:user_id, :type, :url).all
       if rows.empty?
-        say "No instances yet. Run: rewind webhooks:new --url URL"
+        say "No sources connected. Users connect Jellyfin from Settings."
         return
       end
 
-      say format(LIST_FORMAT, "TYPE", "URL", "ENABLED", "LAST EVENT", "USERS")
-      rows.each do |webhook|
+      say format(LIST_FORMAT, "ID", "TYPE", "URL", "ENABLED", "LAST SYNC")
+      rows.each do |source|
         say format(
           LIST_FORMAT,
-          webhook.type,
-          webhook.url,
-          webhook.enabled? ? "yes" : "no",
-          webhook.last_event_at&.strftime("%Y-%m-%d %H:%M") || "-",
-          webhook.integrations_dataset.count
+          source.id,
+          source.type,
+          source.url,
+          source.enabled? ? "yes" : "no",
+          source.last_synced_at&.strftime("%Y-%m-%d %H:%M") || "-"
         )
       end
     end
 
-    desc "update", "Update an allowlisted instance"
-    option :url, type: :string, required: true
-    option :enabled, type: :boolean,
-                     desc: "Accept (--enabled) or reject (--no-enabled) events"
-    def update
+    desc "enable", "Enable a source by id"
+    option :id, type: :numeric, required: true
+    def enable
       boot!
-      webhook = find_instance(options[:url])
-      webhook.set(enabled: options[:enabled]) if options.key?(:enabled)
-      webhook.save
-      say_header("Instance updated")
-      say_kv("url", webhook.url)
-      say_kv("enabled", webhook.enabled? ? "yes" : "no")
+      set_enabled(options[:id], true)
     end
 
-    desc "rotate", "Regenerate an instance's webhook token"
-    option :url, type: :string, required: true
-    def rotate
+    desc "disable", "Disable a source by id"
+    option :id, type: :numeric, required: true
+    def disable
       boot!
-      webhook = find_instance(options[:url])
-      token = webhook.rotate_token!
-      say_header("Token rotated")
-      say_kv("webhook", webhook_url(webhook, token))
-      say "\nThe previous webhook URL no longer works."
+      set_enabled(options[:id], false)
     end
 
-    desc "delete", "Remove an allowlisted instance and its user mappings"
-    option :url, type: :string, required: true
+    desc "delete", "Delete a source by id"
+    option :id, type: :numeric, required: true
     option :yes, type: :boolean, default: false
     def delete
       boot!
-      webhook = find_instance(options[:url])
+      source = find_source(options[:id])
       unless options[:yes]
-        print "Delete #{webhook.url} and all its user mappings? [y/N] "
+        print "Delete source #{source.id} (#{source.url})? [y/N] "
         answer = $stdin.gets.to_s.strip.downcase
         abort("Aborted.") unless %w[y yes].include?(answer)
       end
 
-      webhook.destroy
-      say "Deleted #{webhook.url}."
+      source.destroy
+      say "Deleted source #{source.id}."
     end
 
     no_commands do
@@ -230,27 +189,16 @@ module Rewind
         Rewind::CLI.boot_db!
       end
 
-      def find_instance(url)
-        normalized = Rewind::Webhook.normalize_url(url)
-        webhook = Rewind::Webhook.where(url: normalized).first
-        abort("Instance not found: #{url}") unless webhook
-        webhook
+      def find_source(id)
+        source = Rewind::Source[id.to_i]
+        abort("Source not found: #{id}") unless source
+        source
       end
 
-      # Build the public webhook URL from the first allowed host, falling back
-      # to the bare path when no hosts are configured.
-      def webhook_url(webhook, token)
-        path = "/webhooks/#{webhook.type}/#{token}"
-        host = Rewind.config.allowed_hosts.first
-        host ? "https://#{host}#{path}" : path
-      end
-
-      def say_header(text)
-        say "\n== #{text} =="
-      end
-
-      def say_kv(k, v)
-        say format("  %-10s %s", "#{k}:", v)
+      def set_enabled(id, value)
+        source = find_source(id)
+        source.update(enabled: value)
+        say "Source #{source.id} #{value ? 'enabled' : 'disabled'}."
       end
     end
   end
@@ -332,7 +280,7 @@ module Rewind
     option :migrate, type: :boolean, default: false,
                      desc: "Run pending migrations before booting"
     option :verbose, type: :boolean, default: false, aliases: "-v",
-                     desc: "Log every recorded and skipped webhook event"
+                     desc: "Log sync activity at info level"
     def run_server
       CLI.load_env!(options[:env])
       Rewind.logger.level = Logger::INFO if options[:verbose]
@@ -346,6 +294,7 @@ module Rewind
       Rewind.config.port = options[:port] if options[:port]
       Rewind.config.host = options[:host] if options[:host]
       app = Rewind.application
+      Rewind::Services::Sync.start_thread
       wildcard = %w[0.0.0.0 ::].include?(Rewind.config.host)
       display_host = wildcard ? "localhost" : Rewind.config.host
       say "Rewind listening on http://#{display_host}:#{Rewind.config.port}/"
@@ -409,9 +358,9 @@ module Rewind
     desc "users SUBCOMMAND", "Manage users (new, update, delete, list)"
     subcommand "users", UsersCLI
 
-    desc "webhooks SUBCOMMAND",
-         "Allowlist media servers (new, list, update, rotate, delete)"
-    subcommand "webhooks", WebhooksCLI
+    desc "sources SUBCOMMAND",
+         "Manage sync sources (list, enable, disable, delete)"
+    subcommand "sources", SourcesCLI
 
     desc "import SUBCOMMAND", "Import data from other services (trakt)"
     subcommand "import", ImportCLI

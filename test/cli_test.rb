@@ -52,62 +52,47 @@ class CLITest < Minitest::Test
     assert_includes out, "dan"
   end
 
-  def allowlist(url)
-    webhook = Rewind::Webhook.new(type: "jellyfin", url:)
-    webhook.token = Rewind::Webhook.generate_token
-    webhook.save
-    webhook
+  def create_source(url)
+    user = Rewind::User.new(username: "u#{SecureRandom.hex(3)}")
+    user.password = "a-secure-password-123"
+    user.save
+    source = Rewind::Source.new(user_id: user.id, type: "jellyfin", url:,
+                                external_user_id: "jf-1")
+    source.credentials = {"access_token" => "tok"}
+    source.save
+    source
   end
 
-  test "webhooks:new allowlists an instance and prints the webhook url" do
-    out, = capture do
-      Rewind::CLI.start(["webhooks:new", "--url", "https://jf.example.com/"])
-    end
-
-    assert_includes out, "Instance allowlisted"
-    assert_includes out, "/webhooks/jellyfin/"
-    webhook = Rewind::Webhook.where(url: "https://jf.example.com").first
-
-    assert webhook
-    assert webhook.enabled?
-  end
-
-  test "webhooks:list prints allowlisted instances" do
-    allowlist("https://room.example.com")
-    out, = capture { Rewind::CLI.start(["webhooks:list"]) }
+  test "sources:list prints connected sources" do
+    create_source("https://room.example.com")
+    out, = capture { Rewind::CLI.start(["sources:list"]) }
 
     assert_includes out, "room.example.com"
   end
 
-  test "webhooks:update --no-enabled disables an instance" do
-    webhook = allowlist("https://off.example.com")
+  test "sources:disable disables a source" do
+    source = create_source("https://off.example.com")
     capture do
-      Rewind::CLI.start(
-        ["webhooks:update", "--url", "https://off.example.com", "--no-enabled"]
-      )
+      Rewind::CLI.start(["sources:disable", "--id", source.id.to_s])
     end
 
-    refute webhook.reload.enabled?
+    refute source.refresh.enabled?
   end
 
-  test "webhooks:rotate changes the token" do
-    webhook = allowlist("https://rot.example.com")
-    before = webhook.token_digest
-    capture do
-      Rewind::CLI.start(["webhooks:rotate", "--url", "https://rot.example.com"])
-    end
+  test "sources:enable re-enables a source" do
+    source = create_source("https://on.example.com")
+    source.update(enabled: false)
+    capture { Rewind::CLI.start(["sources:enable", "--id", source.id.to_s]) }
 
-    refute_equal before, webhook.reload.token_digest
+    assert source.refresh.enabled?
   end
 
-  test "webhooks:delete removes an instance" do
-    allowlist("https://del.example.com")
+  test "sources:delete removes a source" do
+    source = create_source("https://del.example.com")
     capture do
-      Rewind::CLI.start(
-        ["webhooks:delete", "--url", "https://del.example.com", "--yes"]
-      )
+      Rewind::CLI.start(["sources:delete", "--id", source.id.to_s, "--yes"])
     end
 
-    assert_nil Rewind::Webhook.where(url: "https://del.example.com").first
+    assert_nil Rewind::Source[source.id]
   end
 end

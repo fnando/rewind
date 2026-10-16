@@ -3,15 +3,16 @@
 module Rewind
   class Config
     attr_accessor :data_dir, :tmdb_api_key, :fanart_api_key,
-                  :session_secret, :host, :port,
-                  :salt, :allowed_hosts, :puma_plugins
+                  :session_secret, :host, :port, :keyring, :sync_interval,
+                  :allowed_hosts, :puma_plugins
 
     def initialize
       @data_dir = ENV["REWIND_DATA_DIR"] || File.join(Dir.pwd, "data")
       @tmdb_api_key = ENV.fetch("TMDB_API_KEY", nil)
       @fanart_api_key = ENV.fetch("FANART_API_KEY", nil)
       @session_secret = ENV.fetch("REWIND_SESSION_SECRET", nil)
-      @salt = ENV.fetch("REWIND_SALT", nil)
+      @keyring = parse_keyring(ENV.fetch("REWIND_KEYRING", nil))
+      @sync_interval = (ENV["REWIND_SYNC_INTERVAL"] || 60).to_i
       @host = ENV["REWIND_HOST"] || "0.0.0.0"
       @port = (ENV["REWIND_PORT"] || 55_455).to_i
       @allowed_hosts =
@@ -20,6 +21,24 @@ module Rewind
       @puma_plugins =
         (ENV["REWIND_PUMA_PLUGINS"] || "")
         .split(",").map(&:strip).reject(&:empty?)
+    end
+
+    # The attr_keyring keyring ({id => base64 key}) used to encrypt source
+    # credentials. Required before a source can be saved.
+    def require_keyring!
+      return unless keyring.empty?
+
+      raise Rewind::Error,
+            "REWIND_KEYRING must be set (JSON of encryption keys) to store " \
+            "source credentials"
+    end
+
+    private def parse_keyring(value)
+      return {} if value.to_s.strip.empty?
+
+      JSON.parse(value)
+    rescue JSON::ParserError
+      {}
     end
 
     def db_path
@@ -53,13 +72,6 @@ module Rewind
       end
     end
 
-    def require_salt!
-      return unless salt.to_s.empty?
-
-      raise Rewind::Error,
-            "REWIND_SALT must be set (used to hash integration webhook tokens)"
-    end
-
     def migrations_dir
       File.join(Rewind.root, "lib", "rewind", "db", "migrations")
     end
@@ -85,7 +97,8 @@ module Rewind
         port: port,
         tmdb_api_key: redact ? redact_value(tmdb_api_key) : tmdb_api_key,
         session_secret: redact ? redact_value(session_secret) : session_secret,
-        salt: redact ? redact_value(salt) : salt
+        keyring: keyring.empty? ? "(unset)" : "[#{keyring.size} key(s)]",
+        sync_interval: sync_interval
       }
     end
 

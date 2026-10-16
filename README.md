@@ -6,10 +6,11 @@
 [![MIT License](https://img.shields.io/:License-MIT-blue.svg)](https://tldrlegal.com/license/mit-license)
 
 A self-hosted media tracker — a lightweight alternative to Trakt / Letterboxd.
-Log movies, TV episodes, and music manually, or let [Jellyfin] push playback
-events to it via webhook. Movie and TV metadata comes from [TMDB]; music is
-enriched via [MusicBrainz] (with cover art from the [Cover Art Archive] and
-artist photos from [fanart.tv]). Stores everything in a single SQLite file.
+Log movies, TV episodes, and music manually, or connect your [Jellyfin] account
+and Rewind syncs your play history automatically in the background. Movie and TV
+metadata comes from [TMDB]; music is enriched via [MusicBrainz] (with cover art
+from the [Cover Art Archive] and artist photos from [fanart.tv]). Stores
+everything in a single SQLite file.
 
 [Jellyfin]: https://jellyfin.org
 [TMDB]: https://www.themoviedb.org
@@ -22,10 +23,10 @@ Highlights:
   1–5 or thumbs).
 - All user management lives in the CLI — no self-serve registration, no admin
   UI, no in-app admin role. Privileged ops require shell access.
-- Pluggable integrations: each user can register many Jellyfin instances with
-  their own webhook URL.
-- Watch is logged automatically once a playback crosses 85%, or on completion.
-- Session-aware deduplication so one playback never records multiple plays.
+- Connect a Jellyfin account (username/password) and a background thread polls
+  its play history — capturing plays from **every** client, not just the ones
+  that fire webhooks. Access tokens are stored encrypted at rest.
+- Incremental, idempotent sync: each source tracks a cursor and dedupes plays.
 - Dark/light theme follows the OS via `prefers-color-scheme`.
 
 ## Install
@@ -75,7 +76,8 @@ a `.env` file and pass `--env PATH` to any CLI command.
 | `REWIND_PORT`           | `55455`                   | Port the server binds to.                                                                             |
 | `REWIND_ALLOWED_HOSTS`  | _(empty)_                 | Comma-separated hostnames allowed by Sinatra's host authorization.                                    |
 | `REWIND_SESSION_SECRET` | auto-generated            | Rack session cookie secret. Generated into `$REWIND_DATA_DIR/.session_secret` on first run.           |
-| `REWIND_SALT`           | _(required)_              | Secret used to hash integration webhook tokens. Must stay stable, or existing webhooks stop matching. |
+| `REWIND_KEYRING`        | _(required for sources)_  | JSON keyring used to encrypt connected sources' access tokens, e.g. `{"1":"<base64 32-byte key>"}`.    |
+| `REWIND_SYNC_INTERVAL`  | `60`                      | Seconds between background sync passes.                                                                |
 | `REWIND_AUTO_MIGRATE`   | _(unset)_                 | When `1`, boot runs pending migrations automatically.                                                 |
 | `REWIND_PUMA_PLUGINS`   | _(empty)_                 | Comma-separated extra Puma plugins to load on top of the built-in `tmp_restart`.                      |
 | `TMDB_API_KEY`          | _(required for metadata)_ | Your TMDB bearer token.                                                                               |
@@ -83,21 +85,23 @@ a `.env` file and pass `--env PATH` to any CLI command.
 
 [fanart.tv]: https://fanart.tv/get-an-api-key/
 
-`REWIND_SALT` is required. Generate one with:
+`REWIND_KEYRING` is required before anyone connects a source — it encrypts the
+Jellyfin access tokens Rewind stores. Generate a key and wrap it in a keyring:
 
 ```bash
-dd if=/dev/urandom bs=32 count=1 2>/dev/null | openssl base64 -A
+echo "{\"1\":\"$(dd if=/dev/urandom bs=32 count=1 2>/dev/null | openssl base64 -A)\"}"
 ```
 
-Set it once and keep it stable — webhook tokens are stored only as HMAC-SHA256
-digests of this salt, so changing it invalidates every existing webhook URL.
+Keep the key stable (losing it makes existing tokens undecryptable — users just
+reconnect). To rotate, add a new id (`"2": …`) and keep the old key around so
+existing rows can be re-encrypted on save.
 
 Example `.env`:
 
 ```
 REWIND_DATA_DIR=/var/lib/rewind
 REWIND_ALLOWED_HOSTS=rewind.example.com,localhost
-REWIND_SALT=<salt here>
+REWIND_KEYRING={"1":"<base64 key>"}
 TMDB_API_KEY=eyJ…
 ```
 
@@ -128,68 +132,47 @@ rewind users:list
 
 Any CLI command accepts `--env PATH` to load a dotenv file first.
 
+Operators can inspect/cleanup connected sources (users connect them from
+Settings, so there's no `new`):
+
+```bash
+rewind sources:list
+rewind sources:disable --id N
+rewind sources:enable  --id N
+rewind sources:delete  --id N [--yes]
+```
+
 ## Jellyfin integration
 
-Rewind receives playback events from Jellyfin's official
-[Webhook plugin](https://github.com/jellyfin/jellyfin-plugin-webhook). Each
-rewind user can register many Jellyfin instances; each gets its own webhook URL
-that can be revoked at any time.
+Rewind polls the Jellyfin API on a schedule and records every play newer than
+the last sync — so plays from **any** client are captured, including apps that
+never fire webhooks. (`REWIND_KEYRING` must be set so the access token can be
+stored encrypted.)
 
-### 1. In Rewind
+1. Sign in → **Settings** → **Connect Jellyfin**.
+2. Enter your **Jellyfin URL**, **username**, and **password**. Rewind signs in
+   once via Jellyfin's `AuthenticateByName`, keeps the returned access token
+   (encrypted — your password is never stored), and records your Jellyfin user
+   id so it only ever reads your own history.
+3. Within one `REWIND_SYNC_INTERVAL` the background thread backfills your whole
+   played history, then keeps it up to date. History and Stats fill in as items
+   resolve via TMDB / MusicBrainz.
 
-- Sign in → **Settings** → **Integrations** → _Add integration_.
-- Fill in:
-  - **Label**: friendly name (e.g. _Living room_).
-  - **Instance URL**: your Jellyfin URL (used for display).
-  - **Jellyfin user ID**: optional. If your Jellyfin has multiple users, paste
-    yours so events from other users are ignored. Find it under Jellyfin →
-    Dashboard → Users → your user → URL contains `userId=…`.
-- Copy the generated webhook URL.
-
-### 2. In Jellyfin
-
-- Install the Webhook plugin:
-  1. Dashboard → Plugins → **Manage Repositories**. If the official repository
-     isn't listed, add `https://repo.jellyfin.org/files/plugin/manifest.json`.
-  2. Restart Jellyfin.
-  3. Dashboard → Plugins → find **Webhook** in the list and enable it.
-- Dashboard → Plugins → **Webhook** → **Add Generic Destination**.
-- Fields:
-  - **Webhook URL**: paste the one from Rewind.
-  - **Notification Type**: tick **all of these**:
-    - **Playback Start**
-    - **Playback Progress** (so a watch is recorded at ≥85% even if the user
-      doesn't finish).
-    - **Playback Stop** (so natural completion is recorded; combined with
-      Progress, Rewind collapses them into a single play per session).
-  - **Item Types**: enable **Movies**, **Episodes**, and **Audio** (for music).
-  - **User filter**: pick your user (recommended even if you set the user id in
-    Rewind — belt and suspenders).
-  - **Template**: paste the one shown on Rewind's Settings page. It includes the
-    TMDB/IMDB provider ids, play session id, and position/runtime so Rewind can:
-    - Record a watch when position reaches ≥85% of runtime.
-    - Collapse all the progress + stop events of a single viewing into one play.
-    - Fall back to TMDB's `/find?external_source=imdb_id` when the item only has
-      an IMDB id in Jellyfin.
-- Save.
-
-Trigger a playback past 85% and refresh History — the play should appear.
+Pause or disconnect a source any time from **Settings**. The access token is
+scoped to your Jellyfin user, so Rewind can only read your own plays.
 
 ### Troubleshooting
 
-- **Server receives events but nothing is recorded.** Check the server log for
-  lines like `[webhook/jellyfin] skipped: ignored_event payload=…`. Common
-  reasons:
-  - `user_mismatch` — the integration's "Jellyfin user ID" doesn't match the one
-    in the payload.
-  - `unresolved_item` — the item couldn't be resolved: a movie/episode with
-    neither TMDB nor IMDB ids, or an audio track with no title. Re-identify it
-    in Jellyfin.
-- **Host rejected.** Add the hostname Jellyfin uses to reach Rewind to
-  `REWIND_ALLOWED_HOSTS`.
-- **Multiple instances.** Add one integration per Jellyfin install; each gets
-  its own webhook URL and its own idempotency scope, so two instances with
-  colliding internal item ids won't fight.
+- **Nothing syncs.** Confirm `REWIND_KEYRING` is set and the source is enabled
+  (`rewind sources:list`). A revoked/expired token auto-disables the source —
+  reconnect from Settings.
+- **An item isn't recorded.** It couldn't be resolved: a movie/episode with
+  neither a TMDB nor IMDB id, or an audio track with no title. Re-identify it in
+  Jellyfin so it carries provider ids.
+- **Only official clients counted before.** Webhooks only fired for official
+  Jellyfin clients; polling the API captures every client the server knows
+  about. (A client that plays fully offline and never tells the server still
+  can't be seen.)
 
 ## Importing from Trakt
 

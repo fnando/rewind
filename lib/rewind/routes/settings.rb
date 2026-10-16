@@ -3,22 +3,8 @@
 module Rewind
   class Application < Sinatra::Base
     get "/settings" do
-      @instances = Webhook.where(type: "jellyfin", enabled: true)
-                          .order(:url).all
-      @integrations = current_user.integrations_dataset
-                                  .eager(:webhook).order(:created_at).all
+      @sources = current_user.sources_dataset.order(:created_at).all
       erb :"settings/index"
-    end
-
-    # Lazily fetched by the add-integration form once a username is typed, so a
-    # page load never blocks on a (possibly unreachable) Jellyfin instance.
-    get "/settings/jellyfin-users" do
-      webhook = Webhook.where(id: params[:webhook_id].to_i, type: "jellyfin",
-                              enabled: true).first
-      halt 404 unless webhook
-
-      content_type :json
-      Services::Jellyfin.public_users(webhook.url).to_json
     end
 
     post "/settings/rating-style" do
@@ -94,48 +80,58 @@ module Rewind
       redirect "/settings"
     end
 
-    post "/settings/integrations" do
-      webhook = Webhook.where(id: params[:webhook_id].to_i, enabled: true).first
-      unless webhook
-        session[:flash_error] = "Pick a Jellyfin server to connect."
+    # Connect a Jellyfin account: sign in with username/password to get a
+    # per-user access token (stored encrypted), then let the poller sync it.
+    post "/settings/sources" do
+      url = params[:url].to_s.strip
+      username = params[:username].to_s.strip
+      password = params[:password].to_s
+
+      if url.empty? || username.empty?
+        session[:flash_error] = "Enter your Jellyfin URL and username."
         redirect "/settings"
       end
 
-      external_user_id = params[:external_user_id].to_s.strip
-      if Integration.where(webhook_id: webhook.id,
-                           external_user_id:).any?
-        session[:flash_error] = "That Jellyfin user is already linked."
+      begin
+        auth = Services::Jellyfin.new(url).authenticate(
+          username:, password:
+        )
+      rescue Services::Jellyfin::AuthError, Services::Jellyfin::Error
+        session[:flash_error] =
+          "Could not sign in to Jellyfin. Check the URL and credentials."
         redirect "/settings"
       end
 
-      integration = Integration.new(
-        user_id: current_user.id,
-        webhook_id: webhook.id,
-        external_user_id: external_user_id.empty? ? nil : external_user_id
+      source = Source.new(
+        user_id: current_user.id, type: "jellyfin",
+        url:, external_user_id: auth[:user_id]
       )
+      source.credentials = {"access_token" => auth[:access_token]}
 
-      unless integration.valid?
-        session[:flash_error] = integration.errors.full_messages.join(". ")
-        redirect "/settings"
+      begin
+        if source.valid?
+          source.save
+        else
+          session[:flash_error] = source.errors.full_messages.join(". ")
+        end
+      rescue Sequel::UniqueConstraintViolation
+        session[:flash_error] = "That Jellyfin account is already connected."
       end
 
-      integration.save
       redirect "/settings"
     end
 
-    post "/settings/integrations/:id/toggle" do
-      integration = current_user.integrations_dataset
-                                .where(id: params[:id].to_i).first
-      halt 404 unless integration
-      integration.update(disabled_at: integration.disabled? ? nil : Time.now)
+    post "/settings/sources/:id/toggle" do
+      source = current_user.sources_dataset.where(id: params[:id].to_i).first
+      halt 404 unless source
+      source.update(enabled: !source.enabled?)
       redirect "/settings"
     end
 
-    delete "/settings/integrations/:id" do
-      integration = current_user.integrations_dataset
-                                .where(id: params[:id].to_i).first
-      halt 404 unless integration
-      integration.destroy
+    delete "/settings/sources/:id" do
+      source = current_user.sources_dataset.where(id: params[:id].to_i).first
+      halt 404 unless source
+      source.destroy
       redirect "/settings"
     end
   end

@@ -12,9 +12,10 @@ require_relative "services/tmdb"
 require_relative "services/fanart"
 require_relative "services/musicbrainz"
 require_relative "services/jellyfin"
+require_relative "services/sources/jellyfin"
+require_relative "services/sync"
 require_relative "services/stats"
 require_relative "services/avatar"
-require_relative "services/webhooks/jellyfin"
 
 module Rewind
   class Application < Sinatra::Base
@@ -38,28 +39,15 @@ module Rewind
         httponly: true,
         expire_after: 60 * 60 * 24 * 30
 
-    class ProtectionWithExcludes
-      PROTECTIONS = %i[
-        authenticity_token form_token json_csrf remote_referrer
-        http_origin
-      ].freeze
-
-      def initialize(app)
-        @app = app
-        @protected = Rack::Protection.new(app,
-                                          use: PROTECTIONS,
-                                          except: %i[session_hijacking],
-                                          allow_empty_referrer: true)
-      end
-
-      def call(env)
-        return @app.call(env) if env["PATH_INFO"].to_s.start_with?("/webhooks/")
-
-        @protected.call(env)
-      end
+    unless ENV["RACK_ENV"] == "test"
+      use Rack::Protection,
+          use: %i[
+            authenticity_token form_token json_csrf remote_referrer
+            http_origin
+          ],
+          except: %i[session_hijacking],
+          allow_empty_referrer: true
     end
-
-    use ProtectionWithExcludes unless ENV["RACK_ENV"] == "test"
 
     helpers Helpers::ViewHelper
     helpers Helpers::RatingHelper
@@ -72,8 +60,6 @@ module Rewind
 
     before do
       path = request.path_info
-      next if path.start_with?("/webhooks/")
-
       public_paths = ["/login", "/logout"]
       next if public_paths.include?(path)
       next if path.start_with?("/assets", "/public")
@@ -86,7 +72,6 @@ module Rewind
 
       allowed = %w[/logout /settings/password]
       next if allowed.include?(request.path_info)
-      next if request.path_info.start_with?("/webhooks/")
 
       halt redirect "/settings/password"
     end
@@ -109,6 +94,5 @@ module Rewind
     require_relative "routes/plays"
     require_relative "routes/settings"
     require_relative "routes/stats"
-    require_relative "routes/webhooks"
   end
 end

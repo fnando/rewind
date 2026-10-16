@@ -1,0 +1,21 @@
+<li class="integration">
+  <div class="integration__head">
+    <strong><%= h(source.url) %></strong>
+    <span class="pill pill--<%= source.type %>"><%= h(source.type) %></span>
+    <% unless source.enabled? %><span class="pill pill--muted">paused</span><% end %>
+    <span class="integration__meta">Last sync: <%= source.last_synced_at ? source.last_synced_at.strftime("%Y-%m-%d %H:%M") : "never" %></span>
+  </div>
+  <div class="integration__row">
+    <span class="integration__uid">User ID <code class="code-chip"><%= h(source.external_user_id) %></code></span>
+    <div class="integration__actions">
+      <form method="post" action="/settings/sources/<%= source.id %>/toggle">
+        <%= csrf_tag %><button class="btn btn--ghost btn--sm" type="submit"><%= source.enabled? ? "Pause" : "Resume" %></button>
+      </form>
+      <form method="post" action="/settings/sources/<%= source.id %>" onsubmit="return confirm('Disconnect this source?');">
+        <%= csrf_tag %>
+        <input type="hidden" name="_method" value="delete">
+        <button class="btn btn--ghost btn--sm" type="submit">Disconnect</button>
+      </form>
+    </div>
+  </div>
+</li>

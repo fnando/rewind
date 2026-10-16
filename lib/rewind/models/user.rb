@@ -5,7 +5,7 @@ require "bcrypt"
 module Rewind
   class User < Sequel::Model
     one_to_many :plays
-    one_to_many :integrations
+    one_to_many :sources
     one_to_many :user_items
 
     RATING_STYLES = %w[stars thumbs].freeze
