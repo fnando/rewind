@@ -54,6 +54,7 @@ module Rewind
           parent_external_id: album.external_id,
           title: data["title"],
           runtime: ms_to_minutes(data["length"]),
+          poster_path: album.poster_path,
           metadata: track_metadata(artist, album, length_ms: data["length"],
                                                   genres: genres_from(data))
         }
@@ -71,6 +72,7 @@ module Rewind
             parent_external_id: album_item.external_id,
             title: title,
             runtime: ms_to_minutes(length_ms),
+            poster_path: album_item.poster_path,
             metadata: track_metadata(artist_item, album_item,
                                      length_ms: length_ms, genres: [])
           }

@@ -22,6 +22,7 @@ class MusicBrainzServiceTest < Minitest::Test
     assert_equal "Black Sabbath", track.artist
     assert_equal "Paranoid", track.album
     assert_equal 4, track.runtime
+    assert_includes track.poster_path, "coverartarchive.org/release-group/rg-1"
 
     album = Rewind::Item.where(external_id: "mbid:rg:rg-1").first
 

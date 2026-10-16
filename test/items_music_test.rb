@@ -49,6 +49,27 @@ class ItemsMusicTest < Minitest::Test
     assert_includes last_response.body, "/items/#{@album.id}"
   end
 
+  test "history shows the track with artist and album" do
+    get "/plays"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "Karma Police"
+    assert_includes last_response.body, "Radiohead"
+    assert_includes last_response.body, "OK Computer"
+  end
+
+  test "history has a music filter that lists only tracks" do
+    movie = create_item(media_type: "movie", title: "Heat")
+    Rewind::Play.create(user_id: @user.id, item_id: movie.id,
+                        played_at: Time.now, source: "manual")
+
+    get "/plays?type=track"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "Karma Police"
+    refute_includes last_response.body, "Heat"
+  end
+
   test "stats page renders with the music filter" do
     get "/stats?type=music"
 

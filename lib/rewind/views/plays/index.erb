@@ -7,6 +7,7 @@
         <a href="/plays"<%= ' aria-current="page"' if @type.nil? || @type == "all" %>>All</a>
         <a href="/plays?type=movie"<%= ' aria-current="page"' if @type == "movie" %>>Movies</a>
         <a href="/plays?type=episode"<%= ' aria-current="page"' if @type == "episode" %>>TV</a>
+        <a href="/plays?type=track"<%= ' aria-current="page"' if @type == "track" %>>Music</a>
       </nav>
     </div>
     <a class="btn btn--primary" href="/search">
