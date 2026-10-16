@@ -163,6 +163,18 @@ button { font: inherit; color: inherit; }
   border-bottom: 1px solid var(--topbar-border);
 }
 
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px var(--gutter);
+  color: var(--muted);
+  font-size: 13px;
+}
+.footer a { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); text-decoration: none; }
+.footer a:hover { color: var(--text); }
+
 .brand {
   flex: none;
   display: flex;
