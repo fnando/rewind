@@ -5,9 +5,34 @@ module Rewind
   # (shared by every user on that instance) and the server's URL, which incoming
   # payloads are matched against.
   class Webhook < Sequel::Model
+    plugin :validation_helpers
+
     one_to_many :integrations
 
     TYPES = %w[jellyfin].freeze
+
+    # Jellyfin webhook payload template. Pasted into Jellyfin's webhook
+    # notification so incoming payloads carry the fields Rewind expects.
+    JELLYFIN_TEMPLATE = <<~JSON
+      {
+        "NotificationType": "{{NotificationType}}",
+        "Id": "{{Id}}",
+        "UtcTimestamp": "{{UtcTimestamp}}",
+        "ItemType": "{{ItemType}}",
+        "ServerUrl": "{{ServerUrl}}",
+        "UserId": "{{UserId}}",
+        "PlaySessionId": "{{PlaySessionId}}",
+        "PlayedToCompletion": "{{PlayedToCompletion}}",
+        "PlaybackPositionTicks": "{{PlaybackPositionTicks}}",
+        "RunTimeTicks": "{{RunTimeTicks}}",
+        "Provider_tmdb": "{{Provider_tmdb}}",
+        "Provider_imdb": "{{Provider_imdb}}",
+        "SeriesProvider_tmdb": "{{SeriesProvider_tmdb}}",
+        "SeriesProvider_imdb": "{{SeriesProvider_imdb}}",
+        "SeasonNumber": "{{SeasonNumber00}}",
+        "EpisodeNumber": "{{EpisodeNumber00}}"
+      }
+    JSON
 
     # Plaintext token, only present right after generate/rotate. Never
     # persisted; only the HMAC digest is stored, so a database leak exposes no
@@ -60,6 +85,7 @@ module Rewind
       errors.add(:type, "must be jellyfin") unless TYPES.include?(type)
       errors.add(:url, "is required") if url.to_s.strip.empty?
       errors.add(:token, "is required") if token_digest.to_s.strip.empty?
+      validates_unique(%i[type url], message: "is already allowlisted")
     end
   end
 end

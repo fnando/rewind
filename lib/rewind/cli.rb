@@ -144,8 +144,12 @@ module Rewind
         say_kv("type", webhook.type)
         say_kv("url", webhook.url)
         say_kv("webhook", webhook_url(webhook, token))
-        say "\nPaste that webhook URL into Jellyfin and include " \
-            "\"ServerUrl\": \"{{ServerUrl}}\"\nin the template."
+        if webhook.type == "jellyfin"
+          say "\nIn Jellyfin, point the webhook at the URL above, enable the " \
+              "Playback Start,\nPlayback Progress and Playback Stop " \
+              "notifications, and paste this template:\n\n"
+          say Rewind::Webhook::JELLYFIN_TEMPLATE
+        end
       else
         say "Could not allowlist instance:"
         webhook.errors.each do |field, errs|
