@@ -37,8 +37,10 @@ module Rewind
       return {} if value.to_s.strip.empty?
 
       JSON.parse(value)
-    rescue JSON::ParserError
-      {}
+    rescue JSON::ParserError => error
+      raise Rewind::Error,
+            "REWIND_KEYRING is not valid JSON — expected " \
+            "{\"1\":\"<base64 32-byte key>\"} (#{error.message})"
     end
 
     def db_path
