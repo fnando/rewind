@@ -32,23 +32,23 @@ module Rewind
                                 source_event_id: event_id).first
           return existing if existing
 
-          # Dedupe when the session id isn't a stable key (Jellyfin
-          # sometimes sends it empty): don't record a second play for the
-          # same item from the same mapping within one runtime window. Films
-          # get a 30-minute floor; tracks use their real (short) length so a
-          # legitimate song replay still records.
-          window_seconds = payload["RunTimeTicks"].to_i / 10_000_000
-          if item.media_type != "track" && window_seconds < 1800
-            window_seconds = 1800
+          # Video emits several events per watch (progress, stop, user-data),
+          # so collapse them: don't record a second play of the same item from
+          # the same mapping within one runtime window (30-minute floor). Music
+          # needs none of this — it only records on a completed stop, one event
+          # per listen.
+          unless item.media_type == "track"
+            window_seconds = payload["RunTimeTicks"].to_i / 10_000_000
+            window_seconds = 1800 if window_seconds < 1800
+            # NB: use Sequel[:played_at] (not a bare `played_at`) so the column
+            # is compared — the local `played_at` above would otherwise shadow
+            # it.
+            cutoff = Time.now - window_seconds
+            recent = Play.where(integration_id: mapping.id, item_id: item.id)
+                         .where(Sequel[:played_at] > cutoff)
+                         .first
+            return recent if recent
           end
-          window_seconds = 30 if window_seconds < 1
-          # NB: use Sequel[:played_at] (not a bare `played_at`) so the column is
-          # compared — the local `played_at` above would otherwise shadow it.
-          cutoff = Time.now - window_seconds
-          recent = Play.where(integration_id: mapping.id, item_id: item.id)
-                       .where(Sequel[:played_at] > cutoff)
-                       .first
-          return recent if recent
 
           mapping.update(last_event_at: Time.now)
           Play.create(
@@ -73,6 +73,17 @@ module Rewind
         end
 
         module_function def accept_event?(notification_type, payload)
+          # Jellyfin carries no play-session id and emits several events per
+          # play (progress, stop, user-data-saved). For music that would record
+          # the same listen many times, so a track only counts on a completed
+          # PlaybackStop — one event per listen, so replays still count once
+          # each. Video keeps the progress/threshold fallbacks, which matter for
+          # long runtimes that may never send a clean stop.
+          if payload["ItemType"] == "Audio"
+            return stop_event?(notification_type) &&
+                   truthy?(payload["PlayedToCompletion"])
+          end
+
           case notification_type
           when "PlaybackStop", "playback.stop"
             truthy?(payload["PlayedToCompletion"]) ||
@@ -84,6 +95,10 @@ module Rewind
           else
             false
           end
+        end
+
+        module_function def stop_event?(notification_type)
+          ["PlaybackStop", "playback.stop"].include?(notification_type)
         end
 
         module_function def reached_watched_threshold?(payload)

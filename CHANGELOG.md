@@ -20,5 +20,7 @@ Prefix your message with one of the following:
   surface on the stats page (top artists/albums/tracks).
 - [Changed] Items are now identified by a prefixed `external_id` (`tmdb:…`,
   `mbid:…`) instead of a TMDB-specific `tmdb_id` column.
+- [Changed] Music plays are recorded only on a completed `PlaybackStop`, so the
+  several events Jellyfin emits per listen collapse into a single play.
 - [Fixed] The webhook replay-dedup window compared a shadowed local variable
   instead of the `played_at` column, so it never actually scoped by time.

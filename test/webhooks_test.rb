@@ -226,22 +226,42 @@ class WebhooksTest < Minitest::Test
     assert_equal 0, Rewind::Play.count
   end
 
-  test "a track replay after its (short) length is not deduped" do
+  test "each completed listen of a track records its own play" do
     stub_mb_recording("rec-111", title: "Paranoid")
 
     first = JSON.parse(fixture("playback_stop_audio"))
-    first["Id"] = "play-a"
-    first["UtcTimestamp"] = (Time.now - 300).utc.iso8601
+    first["UtcTimestamp"] = (Time.now - 5).utc.iso8601
     post webhook_url, first.to_json, "CONTENT_TYPE" => "application/json"
 
     second = JSON.parse(fixture("playback_stop_audio"))
-    second["Id"] = "play-b"
     second["UtcTimestamp"] = Time.now.utc.iso8601
     post webhook_url, second.to_json, "CONTENT_TYPE" => "application/json"
 
-    # RunTimeTicks is 240s, so two listens 300s apart are distinct plays —
-    # the old 30-minute floor would have wrongly dropped the second.
+    # A track only records on a completed stop (one event per listen), so two
+    # completions are two plays — even back to back, no window merges them.
     assert_equal 2, Rewind::Play.count
+  end
+
+  test "a track progress event does not record a play" do
+    stub_mb_recording("rec-111")
+    payload = JSON.parse(fixture("playback_stop_audio"))
+    payload["NotificationType"] = "PlaybackProgress"
+    payload["PlaybackPositionTicks"] = payload["RunTimeTicks"]
+    payload.delete("PlayedToCompletion")
+    post webhook_url, payload.to_json, "CONTENT_TYPE" => "application/json"
+
+    assert_equal 204, last_response.status
+    assert_equal 0, Rewind::Play.count
+  end
+
+  test "an incomplete track stop does not record a play" do
+    stub_mb_recording("rec-111")
+    payload = JSON.parse(fixture("playback_stop_audio"))
+    payload["PlayedToCompletion"] = false
+    post webhook_url, payload.to_json, "CONTENT_TYPE" => "application/json"
+
+    assert_equal 204, last_response.status
+    assert_equal 0, Rewind::Play.count
   end
 
   test "disabled instance returns 403" do
