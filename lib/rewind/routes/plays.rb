@@ -19,6 +19,7 @@ module Rewind
       end
       @user_items_by_item = load_user_items_for(@plays)
       @shows_by_tmdb = load_shows_for(@plays)
+      @music_parents = load_music_parents_for(@plays)
       erb :"plays/index"
     end
 

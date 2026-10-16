@@ -12,8 +12,14 @@
       <span class="play-card__detail">S<%= play.item.season_number %> · E<%= play.item.episode_number %> — <a href="/items/<%= play.item.id %>"><%= h(play.item.title) %></a></span>
     <% elsif play.item.media_type == "track" %>
       <a class="play-card__title" href="/items/<%= play.item.id %>"><%= h(play.item.title) %></a>
+      <% artist_item = @music_parents && @music_parents[play.item.metadata["artist_external_id"]] %>
+      <% album_item = @music_parents && @music_parents[play.item.metadata["album_external_id"]] %>
       <% if play.item.artist || play.item.album %>
-        <span class="play-card__detail"><%= h([play.item.artist, play.item.album].compact.join(" · ")) %></span>
+        <span class="play-card__detail">
+          <% if play.item.artist %><%= item_link(artist_item, play.item.artist) %><% end %>
+          <% if play.item.artist && play.item.album %> · <% end %>
+          <% if play.item.album %><%= item_link(album_item, play.item.album) %><% end %>
+        </span>
       <% end %>
     <% else %>
       <a class="play-card__title" href="/items/<%= play.item.id %>"><%= h(play.item.title) %></a>

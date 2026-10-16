@@ -49,13 +49,16 @@ class ItemsMusicTest < Minitest::Test
     assert_includes last_response.body, "/items/#{@album.id}"
   end
 
-  test "history shows the track with artist and album" do
+  test "history shows the track with links to its artist and album" do
     get "/plays"
 
     assert_equal 200, last_response.status
     assert_includes last_response.body, "Karma Police"
     assert_includes last_response.body, "Radiohead"
     assert_includes last_response.body, "OK Computer"
+    # artist and album names link to their item pages
+    assert_includes last_response.body, %[href="/items/#{@artist.id}"]
+    assert_includes last_response.body, %[href="/items/#{@album.id}"]
   end
 
   test "history has a music filter that lists only tracks" do

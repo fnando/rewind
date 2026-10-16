@@ -162,6 +162,30 @@ module Rewind
         end
       end
 
+      # A link to an item's page, styled to read like body text. Falls back to
+      # plain escaped text when the target item is missing.
+      def item_link(item, text)
+        return h(text) unless item
+
+        %[<a class="content-link" href="/items/#{item.id}">#{h(text)}</a>]
+      end
+
+      def load_music_parents_for(plays)
+        ids = plays.flat_map do |p|
+          next [] unless p.item.media_type == "track"
+
+          [
+            p.item.metadata["artist_external_id"],
+            p.item.metadata["album_external_id"]
+          ]
+        end.compact.uniq
+        return {} if ids.empty?
+
+        Item.where(external_id: ids).all.each_with_object({}) do |item, hash|
+          hash[item.external_id] = item
+        end
+      end
+
       def load_shows_for(plays)
         parent_ids = plays.filter_map do |p|
           p.item.media_type == "episode" ? p.item.parent_external_id : nil

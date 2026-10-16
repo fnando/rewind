@@ -144,6 +144,10 @@ h1, h2, p { margin: 0; }
 a { color: var(--link); }
 a:hover { color: var(--link-hover); }
 
+/* Links inside content (card rows, rank lists) read like text, not accents. */
+.content-link { color: inherit; text-decoration: none; }
+.content-link:hover { text-decoration: underline; }
+
 button { font: inherit; color: inherit; }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

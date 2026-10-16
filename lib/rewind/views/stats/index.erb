@@ -86,12 +86,12 @@
   <% if artists.any? %>
     <%
       hero_artist = artists.first
-      artist_rows = artists[1..].to_a.map {|a| {name: a[:name], count: a[:count], count_label: pluralize(a[:count], "play"), poster_url: poster_url(a[:item], size: "w185")} }
+      artist_rows = artists[1..].to_a.map {|a| {name_html: item_link(a[:item], a[:name]), count: a[:count], count_label: pluralize(a[:count], "play"), poster_url: poster_url(a[:item], size: "w185")} }
     %>
     <%= erb :"_partials/stats/rank_list", locals: {
       title: "On heavy rotation",
       subtitle: "The artists you kept coming back to.",
-      hero: {name: hero_artist[:name], meta: pluralize(hero_artist[:count], "play"), poster_url: poster_url(hero_artist[:item], size: "w185")},
+      hero: {name_html: item_link(hero_artist[:item], hero_artist[:name]), meta: pluralize(hero_artist[:count], "play"), poster_url: poster_url(hero_artist[:item], size: "w185")},
       rows: artist_rows,
       footer_note: nil,
       variant: "artists",
@@ -103,12 +103,12 @@
   <% if albums.any? %>
     <%
       hero_album = albums.first
-      album_rows = albums[1..].to_a.map {|a| {name: a[:name], count: a[:count], count_label: pluralize(a[:count], "play"), poster_url: poster_url(a[:item], size: "w185")} }
+      album_rows = albums[1..].to_a.map {|a| {name_html: item_link(a[:item], a[:name]), count: a[:count], count_label: pluralize(a[:count], "play"), poster_url: poster_url(a[:item], size: "w185")} }
     %>
     <%= erb :"_partials/stats/rank_list", locals: {
       title: "Albums on repeat",
       subtitle: "The records that soundtracked your days.",
-      hero: {name: hero_album[:name], meta: pluralize(hero_album[:count], "play"), poster_url: poster_url(hero_album[:item], size: "w185")},
+      hero: {name_html: item_link(hero_album[:item], hero_album[:name]), meta: pluralize(hero_album[:count], "play"), poster_url: poster_url(hero_album[:item], size: "w185")},
       rows: album_rows,
       footer_note: nil,
       variant: "albums",
@@ -120,12 +120,12 @@
   <% if tracks.any? %>
     <%
       hero_track = tracks.first
-      track_rows = tracks[1..].to_a.map {|t| {name: t[:item].display_title, count: t[:count], count_label: pluralize(t[:count], "play"), poster_url: poster_url(t[:album], size: "w185")} }
+      track_rows = tracks[1..].to_a.map {|t| {name_html: item_link(t[:item], t[:item].display_title), count: t[:count], count_label: pluralize(t[:count], "play"), poster_url: poster_url(t[:album] || t[:item], size: "w185")} }
     %>
     <%= erb :"_partials/stats/rank_list", locals: {
       title: "Songs you couldn't skip",
       subtitle: "The tracks you played the most.",
-      hero: {name: hero_track[:item].display_title, meta: pluralize(hero_track[:count], "play"), poster_url: poster_url(hero_track[:album], size: "w185")},
+      hero: {name_html: item_link(hero_track[:item], hero_track[:item].display_title), meta: pluralize(hero_track[:count], "play"), poster_url: poster_url(hero_track[:album] || hero_track[:item], size: "w185")},
       rows: track_rows,
       footer_note: nil,
       variant: "tracks",
