@@ -80,7 +80,6 @@ a `.env` file and pass `--env PATH` to any CLI command.
 | `REWIND_PUMA_PLUGINS`   | _(empty)_                 | Comma-separated extra Puma plugins to load on top of the built-in `tmp_restart`.                      |
 | `TMDB_API_KEY`          | _(required for metadata)_ | Your TMDB bearer token.                                                                               |
 | `FANART_API_KEY`        | _(optional)_              | [fanart.tv] project key, used for artist photos. Without it, artists fall back to a placeholder.      |
-| `REWIND_MUSICBRAINZ_UA` | _(sensible default)_      | User-Agent sent to MusicBrainz. Set a contact URL if you run at any volume (their policy asks for one). |
 
 [fanart.tv]: https://fanart.tv/get-an-api-key/
 

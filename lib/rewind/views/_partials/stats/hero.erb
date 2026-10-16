@@ -9,7 +9,7 @@
     <span class="hero-stat__eyebrow">Your <%= h(head[:period_label]) %> so far</span>
     <div class="hero-stat__count">
       <span class="hero-stat__big"><%= head[:big_number] %></span>
-      <span class="hero-stat__suffix"><%= head[:big_number] == 1 ? "thing" : "things" %> watched</span>
+      <span class="hero-stat__suffix"><%= h(head[:unit]) %></span>
     </div>
     <p class="hero-stat__sentence"><%= h(head[:hours_sentence]) %></p>
   </div>

@@ -33,9 +33,11 @@ module Rewind
         "EpisodeNumber": "{{EpisodeNumber00}}",
         "Name": "{{Name}}",
         "Album": "{{Album}}",
-        "AlbumArtist": "{{Artist}}",
-        "Provider_MusicBrainzTrack": "{{Provider_MusicBrainzTrack}}",
-        "Provider_MusicBrainzAlbum": "{{Provider_MusicBrainzAlbum}}"
+        "Artist": "{{Artist}}",
+        "Provider_MusicBrainzRecording": "{{Provider_musicbrainzrecording}}",
+        "Provider_MusicBrainzReleaseGroup": "{{Provider_musicbrainzreleasegroup}}",
+        "Provider_MusicBrainzAlbumArtist": "{{Provider_musicbrainzalbumartist}}",
+        "Provider_MusicBrainzArtist": "{{Provider_musicbrainzartist}}"
       }
     JSON
 

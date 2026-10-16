@@ -191,7 +191,6 @@ class WebhooksTest < Minitest::Test
   end
 
   test "records a play for a completed track" do
-    stub_mb_recording("rec-111", title: "Paranoid")
     post webhook_url, fixture("playback_stop_audio"),
          "CONTENT_TYPE" => "application/json"
 
@@ -200,12 +199,17 @@ class WebhooksTest < Minitest::Test
 
     assert_equal "jellyfin", play.source
     assert_equal "track", play.item.media_type
+    assert_equal "mbid:rec-111", play.item.external_id
     assert_equal "Paranoid", play.item.title
     assert_equal "Black Sabbath", play.item.artist
+
+    # the album-artist id becomes the artist item's identity
+    album = Rewind::Item.where(external_id: play.item.parent_external_id).first
+
+    assert_equal "mbid:artist:artist-1", album.parent_external_id
   end
 
   test "records an id-less track through the synthetic chain" do
-    stub_mb_search_empty
     post webhook_url, fixture("playback_stop_audio_no_mbid"),
          "CONTENT_TYPE" => "application/json"
 
@@ -227,8 +231,6 @@ class WebhooksTest < Minitest::Test
   end
 
   test "each completed listen of a track records its own play" do
-    stub_mb_recording("rec-111", title: "Paranoid")
-
     first = JSON.parse(fixture("playback_stop_audio"))
     first["UtcTimestamp"] = (Time.now - 5).utc.iso8601
     post webhook_url, first.to_json, "CONTENT_TYPE" => "application/json"
@@ -243,7 +245,6 @@ class WebhooksTest < Minitest::Test
   end
 
   test "a track progress event does not record a play" do
-    stub_mb_recording("rec-111")
     payload = JSON.parse(fixture("playback_stop_audio"))
     payload["NotificationType"] = "PlaybackProgress"
     payload["PlaybackPositionTicks"] = payload["RunTimeTicks"]
@@ -255,7 +256,6 @@ class WebhooksTest < Minitest::Test
   end
 
   test "an incomplete track stop does not record a play" do
-    stub_mb_recording("rec-111")
     payload = JSON.parse(fixture("playback_stop_audio"))
     payload["PlayedToCompletion"] = false
     post webhook_url, payload.to_json, "CONTENT_TYPE" => "application/json"

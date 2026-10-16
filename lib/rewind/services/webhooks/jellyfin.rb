@@ -146,15 +146,17 @@ module Rewind
           title = presence(payload["Name"])
           return unless title
 
-          artist = presence(payload["AlbumArtist"]) ||
-                   presence(Array(payload["Artists"]).first) ||
-                   presence(payload["Artist"])
-          mbid = presence(payload["Provider_MusicBrainzTrack"])
-          length_ms = payload["RunTimeTicks"].to_i / 10_000
-
           MusicBrainz.new.resolve(
-            artist: artist, album: presence(payload["Album"]),
-            title: title, mbid: mbid, length_ms: length_ms
+            title: title,
+            artist: presence(payload["Artist"]),
+            album: presence(payload["Album"]),
+            recording_mbid: presence(payload["Provider_MusicBrainzRecording"]),
+            release_group_mbid:
+              presence(payload["Provider_MusicBrainzReleaseGroup"]),
+            artist_mbid:
+              presence(payload["Provider_MusicBrainzAlbumArtist"]) ||
+              presence(payload["Provider_MusicBrainzArtist"]),
+            length_ms: payload["RunTimeTicks"].to_i / 10_000
           )
         end
 

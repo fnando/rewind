@@ -179,6 +179,21 @@ class StatsTest < Minitest::Test
     assert_equal 2, totals[:tracks_count]
   end
 
+  test "music headline uses listens, not things watched" do
+    seed_music
+    stats = Rewind::Services::Stats.new(user: @user, media_type: "music",
+                                        from: nil, to: nil, period: "all").to_h
+
+    assert_equal "listens", stats[:headline][:unit]
+  end
+
+  test "non-music headline uses things watched" do
+    stats = Rewind::Services::Stats.new(user: @user, from: nil, to: nil,
+                                        period: "all").to_h
+
+    assert_equal "things watched", stats[:headline][:unit]
+  end
+
   test "music filter returns only track plays" do
     seed_music
     stats = Rewind::Services::Stats.new(user: @user, media_type: "music",

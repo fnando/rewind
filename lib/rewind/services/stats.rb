@@ -139,8 +139,17 @@ module Rewind
           big_number: total,
           period_label: period_label,
           hours: hours,
-          hours_sentence: sentence
+          hours_sentence: sentence,
+          unit: headline_unit(total)
         }
+      end
+
+      private def headline_unit(count)
+        if @media_type == "music"
+          count == 1 ? "listen" : "listens"
+        else
+          count == 1 ? "thing watched" : "things watched"
+        end
       end
 
       private def humanize_listening(hours)
