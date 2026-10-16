@@ -41,13 +41,25 @@ class StatsTest < Minitest::Test
     assert_equal 1, totals[:rewatches]
   end
 
-  test "headline formats days + hours sentence" do
+  test "headline states hours of video scoped to the period" do
     stats = Rewind::Services::Stats.new(user: @user, from: nil, to: nil,
                                         period: "all").to_h
 
-    assert_match(/\A\d+ hours in front of the screen/,
-                 stats[:headline][:hours_sentence])
+    assert_equal "6 hours of video all-time.",
+                 stats[:headline][:hours_sentence]
     assert_equal 3, stats[:headline][:big_number]
+  end
+
+  test "headline combines video and audio for a mixed view" do
+    track = create_item(media_type: "track", external_id: "mbid:z",
+                        title: "Long One", runtime: 90)
+    Rewind::Play.create(user_id: @user.id, item_id: track.id,
+                        played_at: Time.now, source: "jellyfin")
+    stats = Rewind::Services::Stats.new(user: @user, from: nil, to: nil,
+                                        period: "year").to_h
+
+    assert_match(/\A6 hours of video and \d+ of audio in \d{4}\.\z/,
+                 stats[:headline][:hours_sentence])
   end
 
   test "top_genres sorts descending" do
@@ -187,11 +199,31 @@ class StatsTest < Minitest::Test
     assert_equal "listens", stats[:headline][:unit]
   end
 
-  test "non-music headline uses things watched" do
+  test "the all view headline uses the neutral things played" do
     stats = Rewind::Services::Stats.new(user: @user, from: nil, to: nil,
                                         period: "all").to_h
 
+    assert_equal "things played", stats[:headline][:unit]
+  end
+
+  test "the movies view headline uses things watched" do
+    stats = Rewind::Services::Stats.new(user: @user, media_type: "movie",
+                                        from: nil, to: nil, period: "all").to_h
+
     assert_equal "things watched", stats[:headline][:unit]
+  end
+
+  test "the repeats card wording adapts to the media type" do
+    movie = Rewind::Services::Stats.new(user: @user, media_type: "movie",
+                                        from: nil, to: nil, period: "all").to_h
+    music = Rewind::Services::Stats.new(user: @user, media_type: "music",
+                                        from: nil, to: nil, period: "all").to_h
+    all = Rewind::Services::Stats.new(user: @user, from: nil, to: nil,
+                                      period: "all").to_h
+
+    assert_includes movie[:cards][:rewatch_label], "worth seeing twice"
+    assert_includes music[:cards][:rewatch_label], "worth a second listen"
+    assert_includes all[:cards][:rewatch_label], "worth going back to"
   end
 
   test "music filter returns only track plays" do

@@ -107,11 +107,11 @@ module Rewind
         unique_titles =
           unique_movies.size + unique_shows.size + unique_tracks.size
 
-        # Screen time excludes music so the "in front of the screen" copy stays
-        # honest; listening time is tracked separately.
-        screen_hours =
-          (movies + episodes).sum {|p| (p.item.runtime || 0).to_i } / 60.0
-        listening_hours = tracks.sum {|p| (p.item.runtime || 0).to_i } / 60.0
+        # Hours per media type. Screen time (movies + episodes) stays separate
+        # from listening time so copy and charts can weigh each honestly.
+        movie_hours = hours_for(movies)
+        episode_hours = hours_for(episodes)
+        listening_hours = hours_for(tracks)
 
         pair_counts = Hash.new(0)
         plays.each {|p| pair_counts[[p.user_id, p.item_id]] += 1 }
@@ -123,72 +123,89 @@ module Rewind
           movies_count: movies.size,
           episodes_count: episodes.size,
           tracks_count: tracks.size,
-          hours_watched: screen_hours.round(1),
+          movies_hours: movie_hours.round(1),
+          episodes_hours: episode_hours.round(1),
+          hours_watched: (movie_hours + episode_hours).round(1),
           listening_hours: listening_hours.round(1),
           rewatches: rewatches
         }
       end
 
+      private def hours_for(plays)
+        plays.sum {|p| (p.item.runtime || 0).to_i } / 60.0
+      end
+
       private def compute_headline(plays)
         total = plays.size
         totals = compute_totals(plays)
-        music = @media_type == "music"
-        hours = music ? totals[:listening_hours] : totals[:hours_watched]
-        sentence = music ? humanize_listening(hours) : humanize_hours(hours)
+        video = totals[:hours_watched]
+        audio = totals[:listening_hours]
         {
           big_number: total,
           period_label: period_label,
-          hours: hours,
-          hours_sentence: sentence,
+          hours: video + audio,
+          hours_sentence: humanize_time(video, audio),
           unit: headline_unit(total)
         }
       end
 
-      private def headline_unit(count)
-        if @media_type == "music"
-          count == 1 ? "listen" : "listens"
-        else
-          count == 1 ? "thing watched" : "things watched"
-        end
-      end
-
-      private def humanize_listening(hours)
-        return "No listening logged yet." if hours.zero?
-
-        total = hours.round
-        return "Less than an hour of music so far." if total.zero?
-
-        "#{total} #{total == 1 ? 'hour' : 'hours'} of music, in your ears."
-      end
-
-      private def humanize_hours(hours)
-        return "No time logged yet." if hours.zero?
-
-        # Shave 10% off to account for credits / intros / skipped bits.
-        total_hours = (hours * 0.9).round
-        return "No time logged yet." if total_hours.zero?
-
-        years, rem = total_hours.divmod(365 * 24)
-        days, hours_left = rem.divmod(24)
-        suffix = "s" unless total_hours == 1
-        hour_phrase =
-          "#{total_hours} hour#{suffix} in front of the screen"
-        return "#{hour_phrase}, start to finish." if years.zero? && days.zero?
-
+      # "40 hours of video and 21 of audio in 2026." — includes whichever media
+      # the active filter covers, scoped to the period.
+      private def humanize_time(video, audio)
         parts = []
-        parts << "#{years} year#{'s' unless years == 1}" if years.positive?
-        parts << "#{days} day#{'s' unless days == 1}" if days.positive?
-        if hours_left.positive? && years.zero?
-          parts << "#{hours_left} hour#{'s' unless hours_left == 1}"
-        end
-        "#{hour_phrase}. That's #{join_phrase(parts)} of stories, " \
-          "start to finish."
+        parts << [video.round, "video"] if video.round.positive?
+        parts << [audio.round, "audio"] if audio.round.positive?
+        return "No time logged yet." if parts.empty?
+
+        body =
+          if parts.size == 1
+            count, kind = parts.first
+            "#{pluralize_hours(count)} of #{kind}"
+          else
+            "#{pluralize_hours(parts[0][0])} of video " \
+              "and #{parts[1][0]} of audio"
+          end
+        "#{body} #{period_phrase}."
       end
 
-      private def join_phrase(parts)
-        return parts.first if parts.size <= 1
+      private def pluralize_hours(count)
+        "#{count} #{count == 1 ? 'hour' : 'hours'}"
+      end
 
-        "#{parts[0..-2].join(', ')} and #{parts.last}"
+      private def period_phrase
+        case @period
+        when "all" then "all-time"
+        when "week" then "in the last 7 days"
+        when "month" then "in the last 30 days"
+        when "custom" then "in this range"
+        else "in #{Date.today.year}"
+        end
+      end
+
+      private def headline_unit(count)
+        case @media_type
+        when "music"
+          count == 1 ? "listen" : "listens"
+        when "movie", "tv"
+          count == 1 ? "thing watched" : "things watched"
+        else # mixed (all): neutral wording that fits watching and listening
+          count == 1 ? "thing played" : "things played"
+        end
+      end
+
+      # The repeats card's wording ("3 replays, worth a second listen"), keyed
+      # to the active media type so music isn't labelled "rewatches".
+      private def rewatch_label(count)
+        noun, note =
+          case @media_type
+          when "music"
+            [count == 1 ? "replay" : "replays", "worth a second listen"]
+          when "movie", "tv"
+            [count == 1 ? "rewatch" : "rewatches", "worth seeing twice"]
+          else
+            [count == 1 ? "repeat" : "repeats", "worth going back to"]
+          end
+        "#{noun}, #{note}"
       end
 
       private def compute_cards(plays)
@@ -205,8 +222,9 @@ module Rewind
         {
           different_titles: totals[:unique_titles],
           rewatches: totals[:rewatches],
+          rewatch_label: rewatch_label(totals[:rewatches]),
           busiest: busiest && {
-            label: busiest[:label], count: busiest[:total],
+            label: busiest[:label], hours: busiest[:total].round,
             context: busiest_context
           },
           average_per_week: avg
@@ -265,6 +283,8 @@ module Rewind
                      external_id: episode.parent_external_id).first
       end
 
+      # Rhythm buckets by hours spent (not play counts) so a month of movies
+      # outweighs a month of short songs — matching the hero donut.
       private def compute_rhythm(plays)
         return [] if plays.empty?
 
@@ -273,19 +293,20 @@ module Rewind
 
         plays.each do |play|
           key = bucket_fn.call(play.played_at)
-          counts[key] ||= {movies: 0, episodes: 0, tracks: 0}
+          counts[key] ||= {movies: 0.0, episodes: 0.0, tracks: 0.0}
+          hours = (play.item.runtime || 0).to_i / 60.0
 
           case play.item.media_type
-          when "episode" then counts[key][:episodes] += 1
-          when "track" then counts[key][:tracks] += 1
-          else counts[key][:movies] += 1
+          when "episode" then counts[key][:episodes] += hours
+          when "track" then counts[key][:tracks] += hours
+          else counts[key][:movies] += hours
           end
         end
 
         keys = all_keys_fn ? all_keys_fn.call : counts.keys.sort
 
         rows = keys.map do |key|
-          data = counts[key] || {movies: 0, episodes: 0, tracks: 0}
+          data = counts[key] || {movies: 0.0, episodes: 0.0, tracks: 0.0}
           total = data[:movies] + data[:episodes] + data[:tracks]
 
           {

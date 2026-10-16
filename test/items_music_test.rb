@@ -79,4 +79,16 @@ class ItemsMusicTest < Minitest::Test
     assert_equal 200, last_response.status
     assert_includes last_response.body, "Radiohead"
   end
+
+  test "stats all view renders a time-weighted donut with a music segment" do
+    movie = create_item(media_type: "movie", title: "Heat", runtime: 170)
+    Rewind::Play.create(user_id: @user.id, item_id: movie.id,
+                        played_at: Time.now, source: "manual")
+
+    get "/stats"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "donut__seg--music"
+    assert_includes last_response.body, "1 track"
+  end
 end

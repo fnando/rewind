@@ -1081,6 +1081,7 @@ select.input::-ms-expand { display: none; }
 .donut__seg { fill: none; stroke-width: 6; stroke-linecap: butt; }
 .donut__seg--movies { stroke: var(--chart-movies); }
 .donut__seg--tv { stroke: var(--chart-tv); }
+.donut__seg--music { stroke: var(--chart-music); }
 .donut-legend {
   list-style: none;
   margin: 0;
@@ -1095,6 +1096,7 @@ select.input::-ms-expand { display: none; }
 .donut-legend__swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .donut-legend__swatch--movies { background: var(--chart-movies); }
 .donut-legend__swatch--tv { background: var(--chart-tv); }
+.donut-legend__swatch--music { background: var(--chart-music); }
 .donut-legend__count { color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .donut-legend__pct { color: var(--muted); text-align: right; }
 

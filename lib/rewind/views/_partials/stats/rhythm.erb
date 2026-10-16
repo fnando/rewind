@@ -6,13 +6,13 @@
     <div>
       <h2>Your rhythm</h2>
       <% if busiest && busiest[:total].positive? %>
-        <p class="muted"><%= h(busiest[:label]) %> was your busiest month, with <%= pluralize(busiest[:total], "play") %>.</p>
+        <p class="muted"><%= h(busiest[:label]) %> was your busiest month, with <%= pluralize(busiest[:total].round, "hour") %>.</p>
       <% end %>
     </div>
     <ul class="chart-legend">
       <li><span class="chart-legend__swatch chart-legend__swatch--movies"></span>Movies</li>
       <li><span class="chart-legend__swatch chart-legend__swatch--tv"></span>TV</li>
-      <% if rhythm.any? {|r| r[:tracks].to_i.positive? } %>
+      <% if rhythm.any? {|r| r[:tracks].positive? } %>
         <li><span class="chart-legend__swatch chart-legend__swatch--music"></span>Music</li>
       <% end %>
     </ul>
@@ -25,8 +25,8 @@
         <% rhythm.each do |row| %>
           <% movies_pct = row[:movies] > 0 ? (row[:movies].to_f / max_total * 100).round(1) : 0 %>
           <% tv_pct = row[:episodes] > 0 ? (row[:episodes].to_f / max_total * 100).round(1) : 0 %>
-          <% music_pct = row[:tracks].to_i > 0 ? (row[:tracks].to_f / max_total * 100).round(1) : 0 %>
-          <li class="rhythm-chart__col" title="<%= h(row[:label]) %>: <%= pluralize(row[:total], "play") %>">
+          <% music_pct = row[:tracks] > 0 ? (row[:tracks].to_f / max_total * 100).round(1) : 0 %>
+          <li class="rhythm-chart__col" title="<%= h(row[:label]) %>: <%= row[:total].round %>h">
             <div class="rhythm-chart__stack">
               <% if row[:peak] && row[:total].positive? %>
                 <span class="rhythm-chart__peak">Peak</span>
