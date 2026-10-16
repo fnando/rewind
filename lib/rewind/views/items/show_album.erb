@@ -1,0 +1,45 @@
+<% @page_title = @item.title %>
+<main class="page page--title">
+  <section class="title-hero">
+    <img class="title-hero__poster" src="<%= poster_url(@item, size: "w342") %>" alt="">
+    <div class="title-hero__info">
+      <div class="title-hero__heading">
+        <span class="eyebrow">Album</span>
+        <h1><%= h(@item.title) %></h1>
+        <span class="title-meta">
+          <% if @artist %>
+            <a href="/items/<%= @artist.id %>"><%= h(@item.metadata["artist"]) %></a>
+          <% elsif @item.metadata["artist"] %>
+            <%= h(@item.metadata["artist"]) %>
+          <% end %>
+          <% if @item.genres.any? %> · <%= h(@item.genres.join(", ")) %><% end %>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="tracks-h">
+    <h2 id="tracks-h">Tracks</h2>
+    <% if @tracks.empty? %>
+      <p class="muted">No tracks tracked from this album yet.</p>
+    <% else %>
+      <ul class="watch-list">
+        <% @tracks.each do |track| %>
+          <% count = @play_counts[track.id].to_i %>
+          <li class="watch-row">
+            <div class="watch-row__when">
+              <strong><a href="/items/<%= track.id %>"><%= h(track.title) %></a></strong>
+              <span>
+                <% if count.positive? %>
+                  Played <%= pluralize(count, "time") %>
+                <% else %>
+                  Not played yet
+                <% end %>
+              </span>
+            </div>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </section>
+</main>

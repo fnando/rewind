@@ -123,7 +123,8 @@ class ImportTraktTest < Minitest::Test
 
     import(archive)
 
-    item = Rewind::Item.where(tmdb_id: MOVIE_TMDB, media_type: "movie").first
+    item = Rewind::Item.where(external_id: "tmdb:#{MOVIE_TMDB}",
+                              media_type: "movie").first
     ui = Rewind::UserItem.where(user_id: @user.id, item_id: item.id).first
 
     assert_equal 4, ui.rating
@@ -147,7 +148,8 @@ class ImportTraktTest < Minitest::Test
 
     import(archive)
 
-    item = Rewind::Item.where(tmdb_id: SHOW_TMDB, media_type: "tv").first
+    item = Rewind::Item.where(external_id: "tmdb:#{SHOW_TMDB}",
+                              media_type: "tv").first
     ui = Rewind::UserItem.where(user_id: @user.id, item_id: item.id).first
 
     assert_equal "So much fun!", ui.review
@@ -179,7 +181,8 @@ class ImportTraktTest < Minitest::Test
 
     import(archive)
 
-    item = Rewind::Item.where(tmdb_id: SHOW_TMDB, media_type: "tv").first
+    item = Rewind::Item.where(external_id: "tmdb:#{SHOW_TMDB}",
+                              media_type: "tv").first
     rows = Rewind::UserItem.where(user_id: @user.id, item_id: item.id).all
 
     assert_equal 1, rows.length

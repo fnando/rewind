@@ -59,11 +59,11 @@ module Rewind
       end
 
       def poster_url(item, size: "w185")
-        if item.nil? || item.poster_path.to_s.empty?
-          return "/poster-placeholder.svg"
-        end
+        path = item&.poster_path.to_s
+        return "/poster-placeholder.svg" if path.empty?
+        return path if path.start_with?("http://", "https://")
 
-        "https://image.tmdb.org/t/p/#{size}#{item.poster_path}"
+        "https://image.tmdb.org/t/p/#{size}#{path}"
       end
 
       def still_url(path, size: "w300")
@@ -115,6 +115,7 @@ module Rewind
         case type
         when "movie" then "Movies"
         when "episode", "tv" then "TV"
+        when "track", "album", "artist" then "Music"
         else "All"
         end
       end
@@ -163,13 +164,13 @@ module Rewind
 
       def load_shows_for(plays)
         parent_ids = plays.filter_map do |p|
-          p.item.media_type == "episode" ? p.item.parent_tmdb_id : nil
+          p.item.media_type == "episode" ? p.item.parent_external_id : nil
         end.uniq
         return {} if parent_ids.empty?
 
-        Item.where(media_type: "tv",
-                   tmdb_id: parent_ids).all.each_with_object({}) do |show, h|
-          h[show.tmdb_id] = show
+        Item.where(media_type: "tv", external_id: parent_ids)
+            .all.each_with_object({}) do |show, h|
+          h[show.external_id] = show
         end
       end
 

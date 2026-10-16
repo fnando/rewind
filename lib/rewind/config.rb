@@ -2,12 +2,17 @@
 
 module Rewind
   class Config
-    attr_accessor :data_dir, :tmdb_api_key, :session_secret, :host, :port,
+    attr_accessor :data_dir, :tmdb_api_key, :fanart_api_key,
+                  :musicbrainz_user_agent, :session_secret, :host, :port,
                   :salt, :allowed_hosts, :puma_plugins
 
     def initialize
       @data_dir = ENV["REWIND_DATA_DIR"] || File.join(Dir.pwd, "data")
       @tmdb_api_key = ENV.fetch("TMDB_API_KEY", nil)
+      @fanart_api_key = ENV.fetch("FANART_API_KEY", nil)
+      @musicbrainz_user_agent =
+        ENV["REWIND_MUSICBRAINZ_UA"] ||
+        "Rewind (https://github.com/fnando/rewind)"
       @session_secret = ENV.fetch("REWIND_SESSION_SECRET", nil)
       @salt = ENV.fetch("REWIND_SALT", nil)
       @host = ENV["REWIND_HOST"] || "0.0.0.0"

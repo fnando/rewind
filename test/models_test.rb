@@ -118,6 +118,39 @@ class IntegrationModelTest < Minitest::Test
   end
 end
 
+class ItemModelTest < Minitest::Test
+  test "tmdb_id and parent_tmdb_id are derived from external_id" do
+    item = create_item(media_type: "episode", external_id: "tmdb:42",
+                       parent_external_id: "tmdb:7")
+
+    assert_equal 42, item.tmdb_id
+    assert_equal 7, item.parent_tmdb_id
+  end
+
+  test "mbid is derived only for mbid external_id" do
+    track = create_item(media_type: "track", external_id: "mbid:abc-123",
+                        title: "Song")
+
+    assert_equal "abc-123", track.mbid
+    assert_nil create_item(external_id: "tmdb:99").mbid
+  end
+
+  test "track display_title joins artist and title" do
+    track = create_item(
+      media_type: "track", external_id: "mbid:abc", title: "Song",
+      metadata_json: {"artist" => "Artist"}.to_json
+    )
+
+    assert_equal "Artist — Song", track.display_title
+  end
+
+  test "track and album and artist are valid media types" do
+    %w[track album artist].each do |type|
+      assert_includes Rewind::Item::MEDIA_TYPES, type
+    end
+  end
+end
+
 class PlayModelTest < Minitest::Test
   test "invalid source is rejected" do
     user = create_user

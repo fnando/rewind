@@ -116,14 +116,15 @@ module Rewind
       @user_item = UserItem.where(user_id: current_user.id,
                                   item_id: @item.id).first
 
-      if @item.media_type == "episode"
+      case @item.media_type
+      when "episode"
         @plays = Play.where(user_id: current_user.id, item_id: @item.id)
                      .order(Sequel.desc(:played_at))
                      .all
         @show = Item.where(media_type: "tv",
-                           tmdb_id: @item.parent_tmdb_id).first
+                           external_id: @item.parent_external_id).first
         erb :"items/show_episode"
-      elsif @item.media_type == "tv"
+      when "tv"
         seasons = Array(@item.metadata["seasons"]).reject do |s|
           s["season_number"].to_i.zero?
         end
@@ -147,7 +148,8 @@ module Rewind
                              .join(:items, id: :item_id)
                              .where(
                                Sequel[:items][:media_type] => "episode",
-                               Sequel[:items][:parent_tmdb_id] => @item.tmdb_id,
+                               Sequel[:items][:parent_external_id] =>
+                                 @item.external_id,
                                Sequel[:items][:season_number] => @current_season
                              )
                              .select_all(:plays)
@@ -186,13 +188,43 @@ module Rewind
               .join(:items, id: :item_id)
               .where(
                 Sequel[:items][:media_type] => "episode",
-                Sequel[:items][:parent_tmdb_id] => @item.tmdb_id
+                Sequel[:items][:parent_external_id] => @item.external_id
               )
               .select(Sequel[:plays][:item_id])
               .distinct
               .count
         @total_episodes = seasons.sum {|s| s["episode_count"].to_i }
         erb :"items/show_tv"
+      when "track"
+        @plays = Play.where(user_id: current_user.id, item_id: @item.id)
+                     .order(Sequel.desc(:played_at))
+                     .all
+        @album = Item.where(
+          external_id: @item.metadata["album_external_id"]
+        ).first
+        @artist = Item.where(
+          external_id: @item.metadata["artist_external_id"]
+        ).first
+        erb :"items/show_track"
+      when "album"
+        @artist = Item.where(external_id: @item.parent_external_id).first
+        @tracks = Item.where(media_type: "track",
+                             parent_external_id: @item.external_id)
+                      .order(:title).all
+        track_ids = @tracks.map(&:id)
+        @play_counts =
+          if track_ids.empty?
+            {}
+          else
+            Play.where(user_id: current_user.id, item_id: track_ids)
+                .group_and_count(:item_id).to_hash(:item_id, :count)
+          end
+        erb :"items/show_album"
+      when "artist"
+        @albums = Item.where(media_type: "album",
+                             parent_external_id: @item.external_id)
+                      .order(:title).all
+        erb :"items/show_artist"
       else
         @plays = Play.where(user_id: current_user.id, item_id: @item.id)
                      .order(Sequel.desc(:played_at))

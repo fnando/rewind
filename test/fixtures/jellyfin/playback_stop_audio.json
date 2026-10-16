@@ -1,0 +1,14 @@
+{
+  "ServerUrl": "https://jellyfin.test",
+  "NotificationType": "PlaybackStop",
+  "Id": "abc-audio-001",
+  "UtcTimestamp": "2026-10-14T21:05:00.000Z",
+  "ItemType": "Audio",
+  "PlayedToCompletion": true,
+  "UserId": "jf-user-1",
+  "RunTimeTicks": 2400000000,
+  "Provider_MusicBrainzTrack": "rec-111",
+  "AlbumArtist": "Black Sabbath",
+  "Album": "Paranoid",
+  "Name": "Paranoid"
+}

@@ -62,7 +62,10 @@ module Rewind
           top_shows: compute_top_shows(plays),
           top_movies: compute_top_movies(plays),
           top_cast: compute_top_cast(plays),
-          top_directors: compute_top_directors(plays)
+          top_directors: compute_top_directors(plays),
+          top_artists: compute_top_artists(plays),
+          top_albums: compute_top_albums(plays),
+          top_tracks: compute_top_tracks(plays)
         }
       end
 
@@ -80,6 +83,7 @@ module Rewind
 
         scope = scope.for_media_type("movie") if @media_type == "movie"
         scope = scope.for_media_type("episode") if @media_type == "tv"
+        scope = scope.for_media_type("track") if @media_type == "music"
         scope.all
       end
 
@@ -95,12 +99,19 @@ module Rewind
       private def compute_totals(plays)
         movies = plays.select {|p| p.item.media_type == "movie" }
         episodes = plays.select {|p| p.item.media_type == "episode" }
+        tracks = plays.select {|p| p.item.media_type == "track" }
 
-        unique_movies = movies.map {|p| p.item.tmdb_id }.uniq
-        unique_shows = episodes.map {|p| p.item.parent_tmdb_id }.uniq
-        unique_titles = unique_movies.size + unique_shows.size
+        unique_movies = movies.map {|p| p.item.external_id }.uniq
+        unique_shows = episodes.map {|p| p.item.parent_external_id }.uniq
+        unique_tracks = tracks.map {|p| p.item.external_id }.uniq
+        unique_titles =
+          unique_movies.size + unique_shows.size + unique_tracks.size
 
-        hours = plays.sum {|p| (p.item.runtime || 0).to_i } / 60.0
+        # Screen time excludes music so the "in front of the screen" copy stays
+        # honest; listening time is tracked separately.
+        screen_hours =
+          (movies + episodes).sum {|p| (p.item.runtime || 0).to_i } / 60.0
+        listening_hours = tracks.sum {|p| (p.item.runtime || 0).to_i } / 60.0
 
         pair_counts = Hash.new(0)
         plays.each {|p| pair_counts[[p.user_id, p.item_id]] += 1 }
@@ -111,20 +122,34 @@ module Rewind
           unique_titles: unique_titles,
           movies_count: movies.size,
           episodes_count: episodes.size,
-          hours_watched: hours.round(1),
+          tracks_count: tracks.size,
+          hours_watched: screen_hours.round(1),
+          listening_hours: listening_hours.round(1),
           rewatches: rewatches
         }
       end
 
       private def compute_headline(plays)
         total = plays.size
-        hours = compute_totals(plays)[:hours_watched]
+        totals = compute_totals(plays)
+        music = @media_type == "music"
+        hours = music ? totals[:listening_hours] : totals[:hours_watched]
+        sentence = music ? humanize_listening(hours) : humanize_hours(hours)
         {
           big_number: total,
           period_label: period_label,
           hours: hours,
-          hours_sentence: humanize_hours(hours)
+          hours_sentence: sentence
         }
+      end
+
+      private def humanize_listening(hours)
+        return "No listening logged yet." if hours.zero?
+
+        total = hours.round
+        return "Less than an hour of music so far." if total.zero?
+
+        "#{total} #{total == 1 ? 'hour' : 'hours'} of music, in your ears."
       end
 
       private def humanize_hours(hours)
@@ -226,8 +251,9 @@ module Rewind
 
       private def show_for(episode)
         @show_cache ||= {}
-        @show_cache[episode.parent_tmdb_id] ||=
-          Item.where(media_type: "tv", tmdb_id: episode.parent_tmdb_id).first
+        @show_cache[episode.parent_external_id] ||=
+          Item.where(media_type: "tv",
+                     external_id: episode.parent_external_id).first
       end
 
       private def compute_rhythm(plays)
@@ -238,24 +264,24 @@ module Rewind
 
         plays.each do |play|
           key = bucket_fn.call(play.played_at)
-          counts[key] ||= {movies: 0, episodes: 0}
+          counts[key] ||= {movies: 0, episodes: 0, tracks: 0}
 
-          if play.item.media_type == "episode"
-            counts[key][:episodes] += 1
-          else
-            counts[key][:movies] += 1
+          case play.item.media_type
+          when "episode" then counts[key][:episodes] += 1
+          when "track" then counts[key][:tracks] += 1
+          else counts[key][:movies] += 1
           end
         end
 
         keys = all_keys_fn ? all_keys_fn.call : counts.keys.sort
 
         rows = keys.map do |key|
-          data = counts[key] || {movies: 0, episodes: 0}
-          total = data[:movies] + data[:episodes]
+          data = counts[key] || {movies: 0, episodes: 0, tracks: 0}
+          total = data[:movies] + data[:episodes] + data[:tracks]
 
           {
             label: label_fn.call(key), movies: data[:movies],
-            episodes: data[:episodes], total: total
+            episodes: data[:episodes], tracks: data[:tracks], total: total
           }
         end
 
@@ -322,6 +348,7 @@ module Rewind
         end
         scope = scope.for_media_type("movie") if @media_type == "movie"
         scope = scope.for_media_type("episode") if @media_type == "tv"
+        scope = scope.for_media_type("track") if @media_type == "music"
 
         counts = Hash.new(0)
         scope.select_map(:played_at).each do |t|
@@ -382,17 +409,17 @@ module Rewind
       private def compute_top_shows(plays)
         plays
           .select {|p| p.item.media_type == "episode" }
-          .group_by {|p| p.item.parent_tmdb_id }
-          .map {|parent_tmdb, ps| show_row(parent_tmdb, ps) }
+          .group_by {|p| p.item.parent_external_id }
+          .map {|parent_external, ps| show_row(parent_external, ps) }
           .sort_by {|row| -row[:episode_count] }
           .first(10)
       end
 
-      private def show_row(parent_tmdb, ps)
+      private def show_row(parent_external, ps)
         sample = ps.first.item
         {
-          parent_tmdb_id: parent_tmdb,
-          name: sample.metadata["series_name"] || "Show #{parent_tmdb}",
+          parent_external_id: parent_external,
+          name: sample.metadata["series_name"] || "Show #{parent_external}",
           episode_count: ps.size,
           unique_episodes: ps.map(&:item_id).uniq.size
         }
@@ -412,6 +439,77 @@ module Rewind
           .sort_by {|_, c| -c }
           .first(10)
           .map {|id, c| {item: items[id], count: c} }
+      end
+
+      private def track_plays(plays)
+        plays.select {|p| p.item.media_type == "track" }
+      end
+
+      private def compute_top_artists(plays)
+        counts = Hash.new(0)
+        track_plays(plays).each do |p|
+          id = p.item.metadata["artist_external_id"]
+          counts[id] += 1 if id
+        end
+        rank_music(counts)
+      end
+
+      private def compute_top_albums(plays)
+        counts = Hash.new(0)
+        track_plays(plays).each do |p|
+          id = p.item.metadata["album_external_id"]
+          counts[id] += 1 if id
+        end
+        rank_music(counts)
+      end
+
+      private def compute_top_tracks(plays)
+        tracks = track_plays(plays)
+        return [] if tracks.empty?
+
+        counts = Hash.new(0)
+        items = {}
+        tracks.each do |p|
+          counts[p.item_id] += 1
+          items[p.item_id] = p.item
+        end
+
+        albums = music_items_by_external_id(
+          items.values.map {|i| i.metadata["album_external_id"] }
+        )
+
+        counts.sort_by {|_, c| -c }.first(10).map do |id, count|
+          track = items[id]
+          {
+            item: track, count: count,
+            album: albums[track.metadata["album_external_id"]]
+          }
+        end
+      end
+
+      # Resolve a {external_id => play_count} hash into ranked rows carrying the
+      # artist/album Item (for its name and artwork), mirroring top_shows.
+      private def rank_music(counts)
+        return [] if counts.empty?
+
+        items = music_items_by_external_id(counts.keys)
+
+        counts.sort_by {|_, c| -c }.first(10).map do |external_id, count|
+          item = items[external_id]
+          {
+            external_id: external_id, count: count, item: item,
+            name: item&.title || "Unknown"
+          }
+        end
+      end
+
+      private def music_items_by_external_id(external_ids)
+        ids = external_ids.compact.uniq
+        return {} if ids.empty?
+
+        Item.where(external_id: ids).all.each_with_object({}) do |item, hash|
+          hash[item.external_id] = item
+        end
       end
 
       private def compute_top_cast(plays)
@@ -483,7 +581,7 @@ module Rewind
         episode = item.media_type == "episode"
         key = [
           item.media_type,
-          episode ? item.parent_tmdb_id : item.tmdb_id
+          episode ? item.parent_external_id : item.external_id
         ]
 
         cache[key] ||= if episode

@@ -37,7 +37,7 @@ module Rewind
 
           {
             media_type: "tv",
-            tmdb_id: data["id"],
+            external_id: "tmdb:#{data['id']}",
             title: data["name"] || data["original_name"],
             overview: data["overview"],
             release_date: data["first_air_date"],
@@ -103,13 +103,13 @@ module Rewind
           if media_type == "episode"
             Rewind::Item.where(
               media_type: "episode",
-              parent_tmdb_id: tmdb_lookup[:show_id],
+              parent_external_id: "tmdb:#{tmdb_lookup[:show_id]}",
               season_number: tmdb_lookup[:season],
               episode_number: tmdb_lookup[:ep]
             ).first
           else
             Rewind::Item.where(media_type: media_type,
-                               tmdb_id: cache_key.to_i).first
+                               external_id: "tmdb:#{cache_key}").first
           end
 
         cache_cutoff = Time.now - (CACHE_TTL_DAYS * 86_400)
@@ -131,7 +131,7 @@ module Rewind
       private def build_movie_attrs(data)
         {
           media_type: "movie",
-          tmdb_id: data["id"],
+          external_id: "tmdb:#{data['id']}",
           title: data["title"] || data["original_title"],
           overview: data["overview"],
           release_date: data["release_date"],
@@ -147,8 +147,8 @@ module Rewind
       private def build_episode_attrs(data, show, show_id, season, ep)
         {
           media_type: "episode",
-          tmdb_id: data["id"],
-          parent_tmdb_id: show_id,
+          external_id: "tmdb:#{data['id']}",
+          parent_external_id: "tmdb:#{show_id}",
           season_number: season,
           episode_number: ep,
           title: data["name"],

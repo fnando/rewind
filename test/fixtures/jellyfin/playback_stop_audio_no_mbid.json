@@ -1,0 +1,13 @@
+{
+  "ServerUrl": "https://jellyfin.test",
+  "NotificationType": "PlaybackStop",
+  "Id": "abc-audio-002",
+  "UtcTimestamp": "2026-10-14T21:40:00.000Z",
+  "ItemType": "Audio",
+  "PlayedToCompletion": true,
+  "UserId": "jf-user-1",
+  "RunTimeTicks": 2400000000,
+  "AlbumArtist": "Unsigned Band",
+  "Album": "Demos",
+  "Name": "Bedroom Take"
+}

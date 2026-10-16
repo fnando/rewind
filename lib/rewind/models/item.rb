@@ -4,7 +4,7 @@ module Rewind
   class Item < Sequel::Model
     one_to_many :plays
 
-    MEDIA_TYPES = %w[movie episode tv].freeze
+    MEDIA_TYPES = %w[movie episode tv track album artist].freeze
 
     def metadata
       return {} if metadata_json.nil? || metadata_json.empty?
@@ -17,6 +17,20 @@ module Rewind
       self.metadata_json = hash.nil? ? nil : JSON.generate(hash)
     end
 
+    # The numeric TMDB id lives inside external_id ("tmdb:603"); expose it for
+    # the TMDB API call sites that still pass a bare id.
+    def tmdb_id
+      id_from(external_id)
+    end
+
+    def parent_tmdb_id
+      id_from(parent_external_id)
+    end
+
+    def mbid
+      external_id.to_s.start_with?("mbid:") ? external_id.sub("mbid:", "") : nil
+    end
+
     def genres
       Array(metadata["genres"]).filter_map {|g| g.is_a?(Hash) ? g["name"] : g }
     end
@@ -25,15 +39,30 @@ module Rewind
       metadata["credits"] || {}
     end
 
+    def artist
+      metadata["artist"]
+    end
+
+    def album
+      metadata["album"]
+    end
+
     def display_title
-      if media_type == "episode"
+      case media_type
+      when "episode"
         parent = metadata["series_name"]
         season = season_number.to_s.rjust(2, "0")
         episode = episode_number.to_s.rjust(2, "0")
         "#{parent} S#{season}E#{episode} · #{title}"
+      when "track"
+        artist ? "#{artist} — #{title}" : title
       else
         title
       end
+    end
+
+    private def id_from(value)
+      value.to_s.start_with?("tmdb:") ? value.sub("tmdb:", "").to_i : nil
     end
   end
 end

@@ -49,7 +49,8 @@ module Rewind
       else
         status 204
       end
-    rescue Services::Webhooks::Jellyfin::Error, Services::TMDB::Error => error
+    rescue Services::Webhooks::Jellyfin::Error, Services::TMDB::Error,
+           Services::MusicBrainz::Error => error
       Rewind.logger.warn("[webhook/#{params[:kind]}] #{error.message}")
       status 422
       content_type :json

@@ -1,0 +1,35 @@
+<% @page_title = @item.title %>
+<main class="page page--title">
+  <section class="title-hero">
+    <img class="title-hero__poster" src="<%= poster_url(@item, size: "w342") %>" alt="">
+    <div class="title-hero__info">
+      <div class="title-hero__heading">
+        <span class="eyebrow">Artist</span>
+        <h1><%= h(@item.title) %></h1>
+        <span class="title-meta">
+          <%= pluralize(@albums.size, "album") %>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="albums-h">
+    <h2 id="albums-h">Albums</h2>
+    <% if @albums.empty? %>
+      <p class="muted">No albums tracked for this artist yet.</p>
+    <% else %>
+      <ul class="search-grid">
+        <% @albums.each do |album| %>
+          <li class="search-card">
+            <a href="/items/<%= album.id %>">
+              <img class="search-card__poster" src="<%= poster_url(album, size: "w185") %>" alt="">
+            </a>
+            <div class="search-card__body">
+              <a href="/items/<%= album.id %>"><%= h(album.title) %></a>
+            </div>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </section>
+</main>

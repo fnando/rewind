@@ -78,7 +78,7 @@ class StatsTest < Minitest::Test
   end
 
   test "respects media_type filter" do
-    tv_item = create_item(media_type: "episode", parent_tmdb_id: 1,
+    tv_item = create_item(media_type: "episode", parent_external_id: "tmdb:1",
                           season_number: 1, episode_number: 1,
                           title: "Ep", runtime: 30)
     Rewind::Play.create(user_id: @user.id, item_id: tv_item.id,
@@ -118,7 +118,7 @@ class StatsTest < Minitest::Test
 
   test "top_shows groups episode plays by parent" do
     tv_item = create_item(
-      media_type: "episode", parent_tmdb_id: 99,
+      media_type: "episode", parent_external_id: "tmdb:99",
       season_number: 1, episode_number: 1,
       title: "Pilot", runtime: 42,
       metadata_json: {"series_name" => "Lost"}.to_json
@@ -132,5 +132,59 @@ class StatsTest < Minitest::Test
 
     assert_equal "Lost", row[:name]
     assert_equal 1, row[:episode_count]
+  end
+
+  def seed_music
+    @artist = create_item(media_type: "artist",
+                          external_id: "mbid:artist:a1", title: "Radiohead")
+    @album = create_item(
+      media_type: "album", external_id: "mbid:rg:r1", title: "OK Computer",
+      parent_external_id: "mbid:artist:a1", poster_path: "https://art/r1.jpg"
+    )
+    @track = create_item(
+      media_type: "track", external_id: "mbid:t1", title: "Karma Police",
+      parent_external_id: "mbid:rg:r1", runtime: 4,
+      metadata_json: {
+        "artist" => "Radiohead", "artist_external_id" => "mbid:artist:a1",
+        "album" => "OK Computer", "album_external_id" => "mbid:rg:r1"
+      }.to_json
+    )
+    2.times do |n|
+      Rewind::Play.create(user_id: @user.id, item_id: @track.id,
+                          played_at: Time.now - (n * 3600), source: "jellyfin")
+    end
+  end
+
+  test "top_artists, top_albums and top_tracks rank music plays" do
+    seed_music
+    stats = Rewind::Services::Stats.new(user: @user, media_type: "music",
+                                        from: nil, to: nil, period: "all").to_h
+
+    assert_equal "Radiohead", stats[:top_artists].first[:name]
+    assert_equal 2, stats[:top_artists].first[:count]
+    assert_equal "OK Computer", stats[:top_albums].first[:name]
+    assert_equal "Karma Police", stats[:top_tracks].first[:item].title
+    assert_equal @album.id, stats[:top_tracks].first[:album].id
+  end
+
+  test "track runtime does not count as screen time" do
+    seed_music
+    stats = Rewind::Services::Stats.new(user: @user, from: nil, to: nil,
+                                        period: "all").to_h
+    totals = stats[:totals]
+
+    # The three movie plays from setup are 5.5h; the tracks add listening only.
+    assert_in_delta 5.5, totals[:hours_watched], 0.1
+    assert_operator totals[:listening_hours], :>, 0
+    assert_equal 2, totals[:tracks_count]
+  end
+
+  test "music filter returns only track plays" do
+    seed_music
+    stats = Rewind::Services::Stats.new(user: @user, media_type: "music",
+                                        from: nil, to: nil, period: "all").to_h
+
+    assert_equal 2, stats[:totals][:plays]
+    assert_empty stats[:top_movies]
   end
 end

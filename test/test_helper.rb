@@ -78,7 +78,7 @@ module Minitest
     def create_item(attrs = {})
       defaults = {
         media_type: "movie",
-        tmdb_id: SecureRandom.random_number(10_000_000),
+        external_id: "tmdb:#{SecureRandom.random_number(10_000_000)}",
         title: "Test Movie",
         runtime: 120,
         fetched_at: Time.now,

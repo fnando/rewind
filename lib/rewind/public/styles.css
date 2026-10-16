@@ -51,6 +51,7 @@
 
   --chart-movies: #1F5FD1;
   --chart-tv: #E57C2E;
+  --chart-music: #2E9E6B;
   --tint-blue-bg: #E8EFFC;
   --tint-orange-bg: #FCECD9;
   --tint-mint-bg: #DAF1E4;
@@ -107,6 +108,7 @@
 
     --chart-movies: #6A9BFF;
     --chart-tv: #F0A35E;
+    --chart-music: #5CC79A;
     --tint-blue-bg: #253656;
     --tint-orange-bg: #4A3220;
     --tint-mint-bg: #1F3A2C;
@@ -1130,6 +1132,7 @@ select.input::-ms-expand { display: none; }
 .chart-legend__swatch { width: 10px; height: 10px; border-radius: 2px; }
 .chart-legend__swatch--movies { background: var(--chart-movies); }
 .chart-legend__swatch--tv { background: var(--chart-tv); }
+.chart-legend__swatch--music { background: var(--chart-music); }
 
 .rhythm-chart {
   list-style: none;
@@ -1146,6 +1149,7 @@ select.input::-ms-expand { display: none; }
 .rhythm-chart__seg { display: block; width: 100%; }
 .rhythm-chart__seg--movies { background: var(--chart-movies); border-radius: 4px 4px 0 0; }
 .rhythm-chart__seg--tv { background: var(--chart-tv); border-radius: 4px 4px 0 0; }
+.rhythm-chart__seg--music { background: var(--chart-music); border-radius: 4px 4px 0 0; }
 .rhythm-chart__stack .rhythm-chart__seg--tv + .rhythm-chart__seg--movies { border-radius: 4px 4px 0 0; }
 .rhythm-chart__stack .rhythm-chart__seg--movies:not(:last-child) { border-radius: 0 0 4px 4px; }
 .rhythm-chart__peak {

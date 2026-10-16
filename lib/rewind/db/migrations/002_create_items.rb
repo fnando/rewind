@@ -5,8 +5,8 @@ Sequel.migration do
     create_table(:items) do
       primary_key :id
       String :media_type, null: false
-      Integer :tmdb_id, null: false
-      Integer :parent_tmdb_id
+      String :external_id, null: false
+      String :parent_external_id
       Integer :season_number
       Integer :episode_number
       String :title, null: false
@@ -19,8 +19,8 @@ Sequel.migration do
       DateTime :created_at, null: false
       DateTime :updated_at, null: false
 
-      unique %i[media_type tmdb_id]
-      index :parent_tmdb_id
+      unique %i[media_type external_id]
+      index :parent_external_id
     end
   end
 end

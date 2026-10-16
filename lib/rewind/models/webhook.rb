@@ -30,7 +30,12 @@ module Rewind
         "SeriesProvider_tmdb": "{{SeriesProvider_tmdb}}",
         "SeriesProvider_imdb": "{{SeriesProvider_imdb}}",
         "SeasonNumber": "{{SeasonNumber00}}",
-        "EpisodeNumber": "{{EpisodeNumber00}}"
+        "EpisodeNumber": "{{EpisodeNumber00}}",
+        "Name": "{{Name}}",
+        "Album": "{{Album}}",
+        "AlbumArtist": "{{Artist}}",
+        "Provider_MusicBrainzTrack": "{{Provider_MusicBrainzTrack}}",
+        "Provider_MusicBrainzAlbum": "{{Provider_MusicBrainzAlbum}}"
       }
     JSON
 

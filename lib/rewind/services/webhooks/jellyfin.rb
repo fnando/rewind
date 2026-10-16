@@ -21,7 +21,7 @@ module Rewind
           return :disabled_user if mapping.disabled?
 
           item = resolve_item(payload)
-          return :no_tmdb_id unless item
+          return :unresolved_item unless item
 
           event_id = build_event_id(payload, notification_type)
           played_at =
@@ -34,11 +34,19 @@ module Rewind
 
           # Dedupe when the session id isn't a stable key (Jellyfin
           # sometimes sends it empty): don't record a second play for the
-          # same item from the same mapping within one runtime window.
-          window_seconds = (payload["RunTimeTicks"].to_i / 10_000_000)
-          window_seconds = 1800 if window_seconds < 1800
+          # same item from the same mapping within one runtime window. Films
+          # get a 30-minute floor; tracks use their real (short) length so a
+          # legitimate song replay still records.
+          window_seconds = payload["RunTimeTicks"].to_i / 10_000_000
+          if item.media_type != "track" && window_seconds < 1800
+            window_seconds = 1800
+          end
+          window_seconds = 30 if window_seconds < 1
+          # NB: use Sequel[:played_at] (not a bare `played_at`) so the column is
+          # compared — the local `played_at` above would otherwise shadow it.
+          cutoff = Time.now - window_seconds
           recent = Play.where(integration_id: mapping.id, item_id: item.id)
-                       .where { played_at > (Time.now - window_seconds) }
+                       .where(Sequel[:played_at] > cutoff)
                        .first
           return recent if recent
 
@@ -114,7 +122,30 @@ module Rewind
             return unless series_tmdb && season && episode
 
             TMDB.new.episode(series_tmdb, season, episode)
+          when "Audio"
+            resolve_audio(payload)
           end
+        end
+
+        module_function def resolve_audio(payload)
+          title = presence(payload["Name"])
+          return unless title
+
+          artist = presence(payload["AlbumArtist"]) ||
+                   presence(Array(payload["Artists"]).first) ||
+                   presence(payload["Artist"])
+          mbid = presence(payload["Provider_MusicBrainzTrack"])
+          length_ms = payload["RunTimeTicks"].to_i / 10_000
+
+          MusicBrainz.new.resolve(
+            artist: artist, album: presence(payload["Album"]),
+            title: title, mbid: mbid, length_ms: length_ms
+          )
+        end
+
+        module_function def presence(value)
+          str = value.to_s.strip
+          str.empty? ? nil : str
         end
 
         module_function def tmdb_id_from(payload, key)

@@ -2,7 +2,7 @@
   <img class="play-card__poster" src="<%= poster_url(play.item) %>" alt="">
   <div class="play-card__body">
     <% if play.item.media_type == "episode" %>
-      <% show = @shows_by_tmdb && @shows_by_tmdb[play.item.parent_tmdb_id] %>
+      <% show = @shows_by_tmdb && @shows_by_tmdb[play.item.parent_external_id] %>
       <% series_name = play.item.metadata["series_name"] || show&.title || play.item.title %>
       <% if show %>
         <a class="play-card__title" href="/items/<%= show.id %>"><%= h(series_name) %></a>

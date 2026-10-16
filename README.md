@@ -5,13 +5,16 @@
 [![Gem](https://img.shields.io/gem/dt/rewind-app.svg)](https://rubygems.org/gems/rewind-app)
 [![MIT License](https://img.shields.io/:License-MIT-blue.svg)](https://tldrlegal.com/license/mit-license)
 
-A self-hosted media watching tracker — a lightweight alternative to Trakt /
-Letterboxd. Log movies and TV episodes manually, or let [Jellyfin] push playback
-events to it via webhook. All metadata comes from [TMDB]. Stores everything in a
-single SQLite file.
+A self-hosted media tracker — a lightweight alternative to Trakt / Letterboxd.
+Log movies, TV episodes, and music manually, or let [Jellyfin] push playback
+events to it via webhook. Movie and TV metadata comes from [TMDB]; music is
+enriched via [MusicBrainz] (with cover art from the [Cover Art Archive] and
+artist photos from [fanart.tv]). Stores everything in a single SQLite file.
 
 [Jellyfin]: https://jellyfin.org
 [TMDB]: https://www.themoviedb.org
+[MusicBrainz]: https://musicbrainz.org
+[Cover Art Archive]: https://coverartarchive.org
 
 Highlights:
 
@@ -76,6 +79,10 @@ a `.env` file and pass `--env PATH` to any CLI command.
 | `REWIND_AUTO_MIGRATE`   | _(unset)_                 | When `1`, boot runs pending migrations automatically.                                                 |
 | `REWIND_PUMA_PLUGINS`   | _(empty)_                 | Comma-separated extra Puma plugins to load on top of the built-in `tmp_restart`.                      |
 | `TMDB_API_KEY`          | _(required for metadata)_ | Your TMDB bearer token.                                                                               |
+| `FANART_API_KEY`        | _(optional)_              | [fanart.tv] project key, used for artist photos. Without it, artists fall back to a placeholder.      |
+| `REWIND_MUSICBRAINZ_UA` | _(sensible default)_      | User-Agent sent to MusicBrainz. Set a contact URL if you run at any volume (their policy asks for one). |
+
+[fanart.tv]: https://fanart.tv/get-an-api-key/
 
 `REWIND_SALT` is required. Generate one with:
 
@@ -156,7 +163,7 @@ that can be revoked at any time.
       doesn't finish).
     - **Playback Stop** (so natural completion is recorded; combined with
       Progress, Rewind collapses them into a single play per session).
-  - **Item Types**: enable **Movies** and **Episodes**.
+  - **Item Types**: enable **Movies**, **Episodes**, and **Audio** (for music).
   - **User filter**: pick your user (recommended even if you set the user id in
     Rewind — belt and suspenders).
   - **Template**: paste the one shown on Rewind's Settings page. It includes the
@@ -176,8 +183,9 @@ Trigger a playback past 85% and refresh History — the play should appear.
   reasons:
   - `user_mismatch` — the integration's "Jellyfin user ID" doesn't match the one
     in the payload.
-  - `no_tmdb_id` — the item has neither TMDB nor IMDB ids in Jellyfin.
-    Re-identify the show/movie in Jellyfin.
+  - `unresolved_item` — the item couldn't be resolved: a movie/episode with
+    neither TMDB nor IMDB ids, or an audio track with no title. Re-identify it
+    in Jellyfin.
 - **Host rejected.** Add the hostname Jellyfin uses to reach Rewind to
   `REWIND_ALLOWED_HOSTS`.
 - **Multiple instances.** Add one integration per Jellyfin install; each gets

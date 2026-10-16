@@ -190,6 +190,60 @@ class WebhooksTest < Minitest::Test
     assert_equal 0, Rewind::Play.count
   end
 
+  test "records a play for a completed track" do
+    stub_mb_recording("rec-111", title: "Paranoid")
+    post webhook_url, fixture("playback_stop_audio"),
+         "CONTENT_TYPE" => "application/json"
+
+    assert_equal 201, last_response.status
+    play = Rewind::Play.last
+
+    assert_equal "jellyfin", play.source
+    assert_equal "track", play.item.media_type
+    assert_equal "Paranoid", play.item.title
+    assert_equal "Black Sabbath", play.item.artist
+  end
+
+  test "records an id-less track through the synthetic chain" do
+    stub_mb_search_empty
+    post webhook_url, fixture("playback_stop_audio_no_mbid"),
+         "CONTENT_TYPE" => "application/json"
+
+    assert_equal 201, last_response.status
+    play = Rewind::Play.last
+
+    assert_equal "track", play.item.media_type
+    assert_equal "Bedroom Take", play.item.title
+    assert_equal "Unsigned Band", play.item.artist
+  end
+
+  test "ignores an audio event with no title" do
+    payload = JSON.parse(fixture("playback_stop_audio"))
+    payload.delete("Name")
+    post webhook_url, payload.to_json, "CONTENT_TYPE" => "application/json"
+
+    assert_equal 204, last_response.status
+    assert_equal 0, Rewind::Play.count
+  end
+
+  test "a track replay after its (short) length is not deduped" do
+    stub_mb_recording("rec-111", title: "Paranoid")
+
+    first = JSON.parse(fixture("playback_stop_audio"))
+    first["Id"] = "play-a"
+    first["UtcTimestamp"] = (Time.now - 300).utc.iso8601
+    post webhook_url, first.to_json, "CONTENT_TYPE" => "application/json"
+
+    second = JSON.parse(fixture("playback_stop_audio"))
+    second["Id"] = "play-b"
+    second["UtcTimestamp"] = Time.now.utc.iso8601
+    post webhook_url, second.to_json, "CONTENT_TYPE" => "application/json"
+
+    # RunTimeTicks is 240s, so two listens 300s apart are distinct plays —
+    # the old 30-minute floor would have wrongly dropped the second.
+    assert_equal 2, Rewind::Play.count
+  end
+
   test "disabled instance returns 403" do
     @webhook.update(enabled: false)
     post webhook_url, fixture("playback_stop_movie"),
