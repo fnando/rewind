@@ -37,7 +37,14 @@ module Rewind
     def db
       @db ||= begin
         FileUtils.mkdir_p(config.data_dir)
-        Sequel.sqlite(config.db_path.to_s)
+        # WAL lets web reads run concurrently with the background sync thread's
+        # writes. In the default rollback-journal mode they deadlock on the
+        # single writer lock (busy_timeout can't break it), surfacing as
+        # "database is locked". WAL is persistent, so it applies to every
+        # pooled connection; synchronous: normal is the safe WAL pairing.
+        database = Sequel.sqlite(config.db_path.to_s, synchronous: :normal)
+        database.run("PRAGMA journal_mode = WAL")
+        database
       end
     end
 
