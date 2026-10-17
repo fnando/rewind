@@ -186,6 +186,32 @@ module Rewind
         end
       end
 
+      # Folds an ordered play list into display entries, collapsing consecutive
+      # track plays from the same album into a single album group. Returns an
+      # array of {type: :single, play:} or {type: :album, album_id:, plays:}.
+      def group_day_plays(plays)
+        entries = plays.each_with_object([]) do |play, acc|
+          album_id = play.item.media_type == "track" &&
+                     play.item.metadata["album_external_id"]
+          last = acc.last
+          if album_id && last && last[:type] == :album &&
+             last[:album_id] == album_id
+            last[:plays] << play
+          elsif album_id
+            acc << {type: :album, album_id:, plays: [play]}
+          else
+            acc << {type: :single, play:}
+          end
+        end
+        entries.map do |entry|
+          if entry[:type] == :album && entry[:plays].size == 1
+            {type: :single, play: entry[:plays].first}
+          else
+            entry
+          end
+        end
+      end
+
       def load_shows_for(plays)
         parent_ids = plays.filter_map do |p|
           p.item.media_type == "episode" ? p.item.parent_external_id : nil

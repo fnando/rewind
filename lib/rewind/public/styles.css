@@ -706,6 +706,35 @@ select.input::-ms-expand { display: none; }
 .play-card__detail a:hover { color: var(--text); text-decoration: underline; }
 .play-card__meta { font-size: 13px; color: var(--muted); }
 
+.play-card--album { position: relative; }
+.play-card--album .play-card__title { padding-right: 28px; }
+.play-card__album-toggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.play-card__album-toggle:hover { color: var(--text); background: var(--subtle); }
+.play-card__chevron { transition: transform .15s ease; }
+.play-card__album-toggle[aria-expanded="true"] .play-card__chevron { transform: rotate(180deg); }
+
+.play-card--in-album {
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent-soft-border);
+}
+/* Author display:flex on .play-card beats the UA [hidden] rule, so be explicit. */
+.play-card[hidden] { display: none; }
+
 .badge {
   align-self: flex-start;
   margin-top: 4px;

@@ -27,10 +27,35 @@
         <span class="day__meta"><%= day.strftime("%A, %B %-d") %> · <%= plays.size %> play<%= "s" unless plays.size == 1 %></span>
       </h2>
       <ul class="play-grid">
-        <% plays.each do |play| %>
-          <%= erb :"_partials/play_card", locals: {play: play} %>
+        <% group_day_plays(plays).each do |entry| %>
+          <% if entry[:type] == :album %>
+            <% group_key = "group-#{entry[:plays].first.id}" %>
+            <%= erb :"_partials/album_card", locals: {plays: entry[:plays], group_key: group_key} %>
+            <% entry[:plays].each do |play| %>
+              <%= erb :"_partials/play_card", locals: {play: play, grouped: true, group_key: group_key} %>
+            <% end %>
+          <% else %>
+            <%= erb :"_partials/play_card", locals: {play: entry[:play]} %>
+          <% end %>
         <% end %>
       </ul>
     </section>
   <% end %>
 </main>
+
+<script>
+  (function () {
+    function toggle(card) {
+      var key = card.getAttribute("data-album-toggle");
+      var open = card.getAttribute("aria-expanded") === "true";
+      card.setAttribute("aria-expanded", String(!open));
+      document.querySelectorAll('[data-album-tracks="' + key + '"]')
+        .forEach(function (el) { el.hidden = open; });
+    }
+
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-album-toggle]");
+      if (btn) { toggle(btn); }
+    });
+  })();
+</script>

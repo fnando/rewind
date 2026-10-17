@@ -61,6 +61,39 @@ class ItemsMusicTest < Minitest::Test
     assert_includes last_response.body, %[href="/items/#{@album.id}"]
   end
 
+  test "history does not collapse a lone track into an album group" do
+    get "/plays"
+
+    assert_equal 200, last_response.status
+    refute_includes last_response.body, "play-card--album"
+  end
+
+  test "history collapses consecutive tracks from one album into a group" do
+    base = Time.now
+    3.times do |i|
+      track = create_item(
+        media_type: "track", external_id: "mbid:extra:#{i}",
+        title: "Extra #{i}", parent_external_id: "mbid:rg:r1", runtime: 4,
+        metadata_json: {
+          "artist" => "Radiohead", "artist_external_id" => "mbid:artist:a1",
+          "album" => "OK Computer", "album_external_id" => "mbid:rg:r1"
+        }.to_json
+      )
+      Rewind::Play.create(user_id: @user.id, item_id: track.id,
+                          played_at: base + i, source: "jellyfin")
+    end
+
+    get "/plays?type=track"
+
+    assert_equal 200, last_response.status
+    # The group renders a collapsing summary card with a track count...
+    assert_includes last_response.body, "play-card--album"
+    assert_includes last_response.body, "4 tracks"
+    # ...and the individual tracks are present but hidden by default.
+    assert_includes last_response.body, "data-album-tracks"
+    assert_includes last_response.body, "play-card--in-album"
+  end
+
   test "history has a music filter that lists only tracks" do
     movie = create_item(media_type: "movie", title: "Heat")
     Rewind::Play.create(user_id: @user.id, item_id: movie.id,
