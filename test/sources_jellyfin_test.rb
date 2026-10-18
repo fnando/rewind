@@ -93,6 +93,52 @@ class SourcesJellyfinTest < Minitest::Test
     assert_includes item.poster_path, "/Items/vid-1/Images/Primary?tag=ptag"
   end
 
+  test "groups a video in a folder under a series named after the folder" do
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items/folder-1})
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {
+                        "Id" => "folder-1", "Type" => "Folder",
+                        "Name" => "35mm Film Photography",
+                        "ImageTags" => {"Primary" => "ft"}
+                      }.to_json)
+
+    item = adapter.resolve(
+      "Id" => "v9", "Type" => "Video", "Name" => "001 - Intro",
+      "ParentId" => "folder-1", "ImageTags" => {"Primary" => "et"},
+      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+    )
+
+    assert_equal "episode", item.media_type
+    assert_equal "jellyfin:folder-1", item.parent_external_id
+    assert_equal "001 - Intro", item.title
+
+    series = Rewind::Item.where(media_type: "series",
+                                external_id: "jellyfin:folder-1").first
+
+    refute_nil series
+    assert_equal "35mm Film Photography", series.title
+  end
+
+  test "keeps a loose video in the library root as a standalone movie" do
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items/lib-1})
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {
+                        "Id" => "lib-1", "Name" => "other",
+                        "Type" => "CollectionFolder"
+                      }.to_json)
+
+    item = adapter.resolve(
+      "Id" => "v10", "Type" => "Video", "Name" => "A Fat Wreck",
+      "ParentId" => "lib-1",
+      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+    )
+
+    assert_equal "movie", item.media_type
+    assert_equal "jellyfin:v10", item.external_id
+  end
+
   test "logs items it still can't keep so skips are visible with --verbose" do
     # Audio with no name can't resolve and has no fallback.
     stub_items([

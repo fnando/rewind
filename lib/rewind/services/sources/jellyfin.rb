@@ -25,6 +25,7 @@ module Rewind
           @client = Services::Jellyfin.new(source.url,
                                            token: source.access_token)
           @series_tmdb = {}
+          @folders = {}
         end
 
         def recent_plays(since:)
@@ -53,9 +54,10 @@ module Rewind
           when "Audio"
             resolve_audio(item)
           when "Video", "MusicVideo"
-            # Standalone/home videos (e.g. a one-off YouTube download) have no
-            # external ids; keep them as generic movies.
-            generic_episode(item) || generic_video(item, "movie")
+            # Loose videos (e.g. YouTube downloads) carry no external ids. If
+            # they sit in a folder, treat the folder as a series; otherwise
+            # keep them as standalone movies.
+            generic_folder_episode(item) || generic_video(item, "movie")
           end
         end
 
@@ -236,6 +238,56 @@ module Rewind
                                            item.dig("ImageTags", "Primary")),
             metadata: {
               "series_name" => presence(item["SeriesName"]),
+              "source" => "jellyfin"
+            }
+          )
+        end
+
+        # When a loose video lives in a sub-folder, people often name the folder
+        # after the "show" (a course, a concert series). Use that folder as the
+        # series. Loose files in the library root have no such folder.
+        private def generic_folder_episode(item)
+          title = presence(item["Name"])
+          folder = parent_folder(item)
+          return unless title && folder
+
+          series = ensure_folder_series(folder)
+          upsert_item(
+            media_type: "episode",
+            external_id: generic_external_id(item),
+            parent_external_id: series.external_id,
+            title: title,
+            release_date: premiere_date(item),
+            runtime: ticks_to_minutes(item["RunTimeTicks"]),
+            poster_path: primary_image_url(item["Id"],
+                                           item.dig("ImageTags", "Primary")),
+            metadata: {"series_name" => folder["Name"], "source" => "jellyfin"}
+          )
+        end
+
+        # The containing Folder, or nil when the parent is the library root
+        # (a CollectionFolder) — i.e. the video isn't inside a named folder.
+        private def parent_folder(item)
+          parent_id = presence(item["ParentId"])
+          return unless parent_id
+
+          @folders.fetch(parent_id) do
+            parent = @client.item(user_id: @source.external_user_id,
+                                  item_id: parent_id)
+            @folders[parent_id] = parent["Type"] == "Folder" ? parent : nil
+          end
+        end
+
+        private def ensure_folder_series(folder)
+          upsert_item(
+            media_type: "series",
+            external_id: "jellyfin:#{folder['Id']}",
+            title: presence(folder["Name"]) || "Unknown series",
+            poster_path: primary_image_url(
+              folder["Id"], folder.dig("ImageTags", "Primary")
+            ),
+            metadata: {
+              "series_name" => presence(folder["Name"]),
               "source" => "jellyfin"
             }
           )

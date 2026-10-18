@@ -106,6 +106,15 @@ module Rewind
         {}
       end
 
+      # A single item (Name/Type/ImageTags), used to read a video's parent
+      # folder. Empty hash on failure.
+      def item(user_id:, item_id:)
+        response = get("#{@url}/Users/#{user_id}/Items/#{item_id}")
+        JSON.parse(response.body.to_s)
+      rescue Error
+        {}
+      end
+
       private def get_items(user_id, start_index)
         response = get(
           "#{@url}/Users/#{user_id}/Items",
@@ -114,7 +123,7 @@ module Rewind
           Filters: "IsPlayed",
           SortBy: "DatePlayed",
           SortOrder: "Descending",
-          Fields: "ProviderIds,ParentIndexNumber,IndexNumber,SeriesId",
+          Fields: "ProviderIds,ParentIndexNumber,IndexNumber,SeriesId,ParentId",
           Limit: @page_size,
           StartIndex: start_index
         )
