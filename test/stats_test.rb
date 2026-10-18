@@ -109,7 +109,7 @@ class StatsTest < Minitest::Test
 
     assert_equal 3, stats[:totals][:plays]
 
-    stats = Rewind::Services::Stats.new(user: @user, media_type: "tv",
+    stats = Rewind::Services::Stats.new(user: @user, media_type: "series",
                                         from: nil, to: nil, period: "all").to_h
 
     assert_equal 1, stats[:totals][:plays]

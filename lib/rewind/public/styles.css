@@ -56,7 +56,7 @@
   --content-wide: min(100% - 2 * var(--gutter), var(--page-wide) - 2 * var(--gutter));
 
   --chart-movies: #1F5FD1;
-  --chart-tv: #E57C2E;
+  --chart-series: #E57C2E;
   --chart-music: #2E9E6B;
   --tint-blue-bg: #E8EFFC;
   --tint-orange-bg: #FCECD9;
@@ -113,7 +113,7 @@
     --seg-active-shadow: none;
 
     --chart-movies: #6A9BFF;
-    --chart-tv: #F0A35E;
+    --chart-series: #F0A35E;
     --chart-music: #5CC79A;
     --tint-blue-bg: #253656;
     --tint-orange-bg: #4A3220;
@@ -1135,7 +1135,7 @@ select.input::-ms-expand { display: none; }
 }
 .donut__seg { fill: none; stroke-width: 6; stroke-linecap: butt; }
 .donut__seg--movies { stroke: var(--chart-movies); }
-.donut__seg--tv { stroke: var(--chart-tv); }
+.donut__seg--series { stroke: var(--chart-series); }
 .donut__seg--music { stroke: var(--chart-music); }
 .donut-legend {
   list-style: none;
@@ -1150,7 +1150,7 @@ select.input::-ms-expand { display: none; }
 .donut-legend li { display: grid; grid-template-columns: 10px minmax(0, 1fr) 3.5ch; gap: 8px; align-items: center; font-variant-numeric: tabular-nums; }
 .donut-legend__swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .donut-legend__swatch--movies { background: var(--chart-movies); }
-.donut-legend__swatch--tv { background: var(--chart-tv); }
+.donut-legend__swatch--series { background: var(--chart-series); }
 .donut-legend__swatch--music { background: var(--chart-music); }
 .donut-legend__count { color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .donut-legend__pct { color: var(--muted); text-align: right; }
@@ -1182,7 +1182,7 @@ select.input::-ms-expand { display: none; }
 .stat-card--titles { background: var(--tint-blue-bg); border-color: transparent; }
 .stat-card--titles .stat-card__icon { background: rgba(255, 255, 255, 0.4); color: var(--chart-movies); }
 .stat-card--rewatches { background: var(--tint-orange-bg); border-color: transparent; }
-.stat-card--rewatches .stat-card__icon { background: rgba(255, 255, 255, 0.4); color: var(--chart-tv); }
+.stat-card--rewatches .stat-card__icon { background: rgba(255, 255, 255, 0.4); color: var(--chart-series); }
 .stat-card--busiest { background: var(--tint-mint-bg); border-color: transparent; }
 .stat-card--busiest .stat-card__icon { background: rgba(255, 255, 255, 0.4); color: var(--success); }
 .stat-card--avg { background: var(--tint-violet-bg); border-color: transparent; }
@@ -1192,7 +1192,7 @@ select.input::-ms-expand { display: none; }
 .chart-legend li { display: flex; align-items: center; gap: 6px; }
 .chart-legend__swatch { width: 10px; height: 10px; border-radius: 2px; }
 .chart-legend__swatch--movies { background: var(--chart-movies); }
-.chart-legend__swatch--tv { background: var(--chart-tv); }
+.chart-legend__swatch--series { background: var(--chart-series); }
 .chart-legend__swatch--music { background: var(--chart-music); }
 
 .rhythm-chart {
@@ -1209,9 +1209,9 @@ select.input::-ms-expand { display: none; }
 .rhythm-chart__stack { position: relative; width: 70%; max-width: 44px; height: 180px; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; }
 .rhythm-chart__seg { display: block; width: 100%; }
 .rhythm-chart__seg--movies { background: var(--chart-movies); border-radius: 4px 4px 0 0; }
-.rhythm-chart__seg--tv { background: var(--chart-tv); border-radius: 4px 4px 0 0; }
+.rhythm-chart__seg--series { background: var(--chart-series); border-radius: 4px 4px 0 0; }
 .rhythm-chart__seg--music { background: var(--chart-music); border-radius: 4px 4px 0 0; }
-.rhythm-chart__stack .rhythm-chart__seg--tv + .rhythm-chart__seg--movies { border-radius: 4px 4px 0 0; }
+.rhythm-chart__stack .rhythm-chart__seg--series + .rhythm-chart__seg--movies { border-radius: 4px 4px 0 0; }
 .rhythm-chart__stack .rhythm-chart__seg--movies:not(:last-child) { border-radius: 0 0 4px 4px; }
 .rhythm-chart__peak {
   position: absolute;
@@ -1334,7 +1334,7 @@ select.input::-ms-expand { display: none; }
   background: var(--chart-movies);
   border-radius: 4px;
 }
-.rank-panel--shows .rank-list__bar::after { background: var(--chart-tv); }
+.rank-panel--shows .rank-list__bar::after { background: var(--chart-series); }
 .rank-list__count { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
 
 .people-grid {

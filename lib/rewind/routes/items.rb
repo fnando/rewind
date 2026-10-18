@@ -79,7 +79,7 @@ module Rewind
         case type
         when "movie"
           Services::TMDB.new.movie(tmdb_id)
-        when "tv"
+        when "series"
           Services::TMDB.new.tv_item(tmdb_id)
         else
           halt 400, "Unsupported media_type"
@@ -90,7 +90,7 @@ module Rewind
 
     post "/items/:id/log-episode" do
       show = Item[params[:id].to_i]
-      halt 404 unless show && show.media_type == "tv"
+      halt 404 unless show && show.media_type == "series"
 
       season = params[:season].to_i
       episode = params[:episode].to_i
@@ -121,10 +121,10 @@ module Rewind
         @plays = Play.where(user_id: current_user.id, item_id: @item.id)
                      .order(Sequel.desc(:played_at))
                      .all
-        @show = Item.where(media_type: "tv",
+        @show = Item.where(media_type: "series",
                            external_id: @item.parent_external_id).first
         erb :"items/show_episode"
-      when "tv"
+      when "series"
         seasons = Array(@item.metadata["seasons"]).reject do |s|
           s["season_number"].to_i.zero?
         end
@@ -194,7 +194,7 @@ module Rewind
               .distinct
               .count
         @total_episodes = seasons.sum {|s| s["episode_count"].to_i }
-        erb :"items/show_tv"
+        erb :"items/show_series"
       when "track"
         @plays = Play.where(user_id: current_user.id, item_id: @item.id)
                      .order(Sequel.desc(:played_at))

@@ -32,11 +32,11 @@ module Rewind
       end
 
       def tv_item(tmdb_id)
-        cache_item("tv", tmdb_id) do
+        cache_item("series", tmdb_id) do
           data = tv(tmdb_id)
 
           {
-            media_type: "tv",
+            media_type: "series",
             external_id: "tmdb:#{data['id']}",
             title: data["name"] || data["original_name"],
             overview: data["overview"],
@@ -88,7 +88,7 @@ module Rewind
           }
         when "tv"
           {
-            media_type: "tv",
+            media_type: "series",
             tmdb_id: result["id"],
             title: result["name"] || result["original_name"],
             overview: result["overview"],

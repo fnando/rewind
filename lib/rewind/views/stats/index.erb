@@ -7,7 +7,7 @@
       <% end %>
     </nav>
     <nav class="segmented" aria-label="Media type">
-      <% [%w[all All], %w[movie Movies], %w[tv TV], %w[music Music]].each do |value, label| %>
+      <% [%w[all All], %w[movie Movies], %w[series Series], %w[music Music]].each do |value, label| %>
         <a href="/stats?period=<%= h(@period) %>&type=<%= value %>"<%= ' aria-current="page"' if @media_type == value %>><%= label %></a>
       <% end %>
     </nav>
@@ -43,7 +43,7 @@
   <% if shows.any? %>
     <%
       show_external_ids = shows.map {|s| s[:parent_external_id] }.compact
-      show_items = Rewind::Item.where(media_type: "tv", external_id: show_external_ids).all.each_with_object({}) {|it, h| h[it.external_id] = it }
+      show_items = Rewind::Item.where(media_type: "series", external_id: show_external_ids).all.each_with_object({}) {|it, h| h[it.external_id] = it }
       hero_show = shows.first
       hero_show_item = show_items[hero_show[:parent_external_id]]
       hero_poster = poster_url(hero_show_item, size: "w185") if hero_show_item

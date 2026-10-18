@@ -144,7 +144,7 @@ module Rewind
       def media_type_label(type)
         case type
         when "movie" then "Movies"
-        when "episode", "tv" then "TV"
+        when "episode", "series" then "Series"
         when "track", "album", "artist" then "Music"
         else "All"
         end
@@ -257,7 +257,7 @@ module Rewind
         end.uniq
         return {} if parent_ids.empty?
 
-        Item.where(media_type: "tv", external_id: parent_ids)
+        Item.where(media_type: "series", external_id: parent_ids)
             .all.each_with_object({}) do |show, h|
           h[show.external_id] = show
         end

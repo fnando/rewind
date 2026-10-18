@@ -3,7 +3,7 @@
 <%
   segments = [
     {cls: "movies", noun: "movie", count: totals[:movies_count], hours: totals[:movies_hours]},
-    {cls: "tv", noun: "episode", count: totals[:episodes_count], hours: totals[:episodes_hours]},
+    {cls: "series", noun: "episode", count: totals[:episodes_count], hours: totals[:episodes_hours]},
     {cls: "music", noun: "track", count: totals[:tracks_count].to_i, hours: totals[:listening_hours]}
   ].select {|s| s[:count].positive? }
   split_total = segments.sum {|s| s[:count] }

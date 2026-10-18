@@ -1,4 +1,4 @@
-<% kind_label = {"movie" => "movie", "episode" => "episode", "tv" => "show"}.fetch(item.media_type, "item") %>
+<% kind_label = {"movie" => "movie", "episode" => "episode", "series" => "series"}.fetch(item.media_type, "item") %>
 <% editing = (params[:editing] == "1") || user_item.nil? || user_item.review.to_s.empty? %>
 <section class="section" aria-labelledby="review-h">
   <div class="section__head">

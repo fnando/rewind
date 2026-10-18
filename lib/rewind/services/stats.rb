@@ -82,7 +82,7 @@ module Rewind
                     .order(:played_at)
 
         scope = scope.for_media_type("movie") if @media_type == "movie"
-        scope = scope.for_media_type("episode") if @media_type == "tv"
+        scope = scope.for_media_type("episode") if @media_type == "series"
         scope = scope.for_media_type("track") if @media_type == "music"
         scope.all
       end
@@ -203,7 +203,7 @@ module Rewind
         case @media_type
         when "music"
           count == 1 ? "listen" : "listens"
-        when "movie", "tv"
+        when "movie", "series"
           count == 1 ? "thing watched" : "things watched"
         else # mixed (all): neutral wording that fits watching and listening
           count == 1 ? "thing played" : "things played"
@@ -217,7 +217,7 @@ module Rewind
           case @media_type
           when "music"
             [count == 1 ? "replay" : "replays", "worth a second listen"]
-          when "movie", "tv"
+          when "movie", "series"
             [count == 1 ? "rewatch" : "rewatches", "worth seeing twice"]
           else
             [count == 1 ? "repeat" : "repeats", "worth going back to"]
@@ -296,7 +296,7 @@ module Rewind
       private def show_for(episode)
         @show_cache ||= {}
         @show_cache[episode.parent_external_id] ||=
-          Item.where(media_type: "tv",
+          Item.where(media_type: "series",
                      external_id: episode.parent_external_id).first
       end
 
@@ -397,7 +397,7 @@ module Rewind
                                 from_date.day) - (14 * 3600)
         end
         scope = scope.for_media_type("movie") if @media_type == "movie"
-        scope = scope.for_media_type("episode") if @media_type == "tv"
+        scope = scope.for_media_type("episode") if @media_type == "series"
         scope = scope.for_media_type("track") if @media_type == "music"
 
         counts = Hash.new(0)

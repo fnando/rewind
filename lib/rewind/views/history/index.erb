@@ -6,7 +6,7 @@
       <nav class="segmented" aria-label="Media type">
         <a href="/history"<%= ' aria-current="page"' if @type.nil? || @type == "all" %>>All</a>
         <a href="/history?type=movie"<%= ' aria-current="page"' if @type == "movie" %>>Movies</a>
-        <a href="/history?type=episode"<%= ' aria-current="page"' if @type == "episode" %>>TV</a>
+        <a href="/history?type=episode"<%= ' aria-current="page"' if @type == "episode" %>>Series</a>
         <a href="/history?type=track"<%= ' aria-current="page"' if @type == "track" %>>Music</a>
       </nav>
     </div>
