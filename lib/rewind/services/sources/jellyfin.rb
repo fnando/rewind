@@ -45,10 +45,24 @@ module Rewind
         # MusicBrainz (synthetic ids), so it needs no fallback.
         def resolve(item)
           case item["Type"]
-          when "Movie" then resolve_movie(item) || generic_video(item, "movie")
-          when "Episode" then resolve_episode(item) || generic_episode(item)
-          when "Audio" then resolve_audio(item)
+          when "Movie"
+            try_match { resolve_movie(item) } || generic_video(item, "movie")
+          when "Episode"
+            try_match { resolve_episode(item) } ||
+              generic_episode(item) || generic_video(item, "movie")
+          when "Audio"
+            resolve_audio(item)
           end
+        end
+
+        # Runs a TMDB/MusicBrainz match but swallows lookup errors so a flaky
+        # match (e.g. a bogus provider id) still falls through to the
+        # Jellyfin-native fallback instead of dropping the play.
+        private def try_match
+          yield
+        rescue Services::TMDB::Error, Services::Jellyfin::Error => error
+          Rewind.logger.info("[sync/jellyfin] match failed: #{error.message}")
+          nil
         end
 
         private def build_play(item)
