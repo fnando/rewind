@@ -93,45 +93,46 @@ class SourcesJellyfinTest < Minitest::Test
     assert_includes item.poster_path, "/Items/vid-1/Images/Primary?tag=ptag"
   end
 
-  test "groups a video in a folder under a series named after the folder" do
-    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items/folder-1})
+  def stub_item(id, attrs)
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items/#{id}\z})
            .to_return(status: 200,
                       headers: {"Content-Type" => "application/json"},
-                      body: {
-                        "Id" => "folder-1", "Type" => "Folder",
-                        "Name" => "35mm Film Photography",
-                        "ImageTags" => {"Primary" => "ft"}
-                      }.to_json)
+                      body: {"Id" => id}.merge(attrs).to_json)
+  end
+
+  test "groups a video in a nested folder under a folder-named series" do
+    # video -> "35mm…" (series folder) -> "other" (library root folder) -> lib
+    stub_item("f-sub", "Type" => "Folder", "ParentId" => "f-root",
+                       "Name" => "35mm Film Photography",
+                       "ImageTags" => {"Primary" => "ft"})
+    stub_item("f-root", "Type" => "Folder", "Name" => "other",
+                        "ParentId" => "coll")
 
     item = adapter.resolve(
       "Id" => "v9", "Type" => "Video", "Name" => "001 - Intro",
-      "ParentId" => "folder-1", "ImageTags" => {"Primary" => "et"},
+      "ParentId" => "f-sub", "ImageTags" => {"Primary" => "et"},
       "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
     )
 
     assert_equal "episode", item.media_type
-    assert_equal "jellyfin:folder-1", item.parent_external_id
-    assert_equal "001 - Intro", item.title
+    assert_equal "jellyfin:f-sub", item.parent_external_id
 
     series = Rewind::Item.where(media_type: "series",
-                                external_id: "jellyfin:folder-1").first
+                                external_id: "jellyfin:f-sub").first
 
     refute_nil series
     assert_equal "35mm Film Photography", series.title
   end
 
   test "keeps a loose video in the library root as a standalone movie" do
-    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items/lib-1})
-           .to_return(status: 200,
-                      headers: {"Content-Type" => "application/json"},
-                      body: {
-                        "Id" => "lib-1", "Name" => "other",
-                        "Type" => "CollectionFolder"
-                      }.to_json)
+    # video -> "other" (library root folder) -> library (CollectionFolder)
+    stub_item("f-root", "Type" => "Folder", "Name" => "other",
+                        "ParentId" => "coll")
+    stub_item("coll", "Type" => "CollectionFolder", "Name" => "other")
 
     item = adapter.resolve(
       "Id" => "v10", "Type" => "Video", "Name" => "A Fat Wreck",
-      "ParentId" => "lib-1",
+      "ParentId" => "f-root",
       "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
     )
 

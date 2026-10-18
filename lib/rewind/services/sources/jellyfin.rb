@@ -265,17 +265,39 @@ module Rewind
           )
         end
 
-        # The containing Folder, or nil when the parent is the library root
-        # (a CollectionFolder) — i.e. the video isn't inside a named folder.
+        # Types that are a library, not a content folder.
+        LIBRARY_ROOT_TYPES = %w[
+          CollectionFolder UserRootFolder AggregateFolder
+        ].freeze
+
+        # The containing Folder to treat as a series, or nil. A video's parent
+        # is NOT a series when it's a library (CollectionFolder) or the
+        # library's own top folder (a Folder sitting directly under one) — only
+        # genuinely nested folders become series.
         private def parent_folder(item)
           parent_id = presence(item["ParentId"])
           return unless parent_id
 
           @folders.fetch(parent_id) do
-            parent = @client.item(user_id: @source.external_user_id,
-                                  item_id: parent_id)
-            @folders[parent_id] = parent["Type"] == "Folder" ? parent : nil
+            @folders[parent_id] = series_folder(parent_id)
           end
+        end
+
+        private def series_folder(folder_id)
+          folder = fetch_item(folder_id)
+          return unless folder["Type"] == "Folder"
+
+          grandparent_id = presence(folder["ParentId"])
+          return unless grandparent_id
+
+          grandparent = fetch_item(grandparent_id)
+          return if LIBRARY_ROOT_TYPES.include?(grandparent["Type"])
+
+          folder
+        end
+
+        private def fetch_item(item_id)
+          @client.item(user_id: @source.external_user_id, item_id: item_id)
         end
 
         private def ensure_folder_series(folder)
