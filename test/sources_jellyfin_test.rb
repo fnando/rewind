@@ -156,6 +156,43 @@ class SourcesJellyfinTest < Minitest::Test
     assert_equal "jellyfin:m2:played", play[:source_event_id]
   end
 
+  test "anchors a dateless play to DateCreated when available" do
+    stub_tmdb_movie(27_205)
+    stub_items([
+      {
+        "Id" => "m3", "Type" => "Movie", "Name" => "Inception",
+        "ProviderIds" => {"Tmdb" => "27205"},
+        "DateCreated" => "2025-01-02T00:00:00Z",
+        "UserData" => {"Played" => true}
+      }
+    ])
+
+    play = adapter.recent_plays(since: nil)[:plays].first
+
+    assert_equal Time.parse("2025-01-02T00:00:00Z"), play[:played_at]
+    assert_equal "jellyfin:m3:played", play[:source_event_id]
+  end
+
+  test "dumps the raw fields for every item, even resolved ones" do
+    stub_tmdb_movie(27_205)
+    stub_items([movie_item(id: "m1")])
+
+    io = StringIO.new
+    level = Rewind.logger.level
+    Rewind.logger.reopen(io)
+    Rewind.logger.level = Logger::INFO
+
+    begin
+      adapter.recent_plays(since: nil)
+    ensure
+      Rewind.logger.level = level
+      Rewind.logger.reopen($stdout)
+    end
+
+    assert_includes io.string, %[fields: {"Id":"m1"]
+    assert_includes io.string, "resolved Movie"
+  end
+
   test "logs items it still can't keep so skips are visible with --verbose" do
     # Audio with no name can't resolve and has no fallback.
     stub_items([

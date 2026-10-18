@@ -123,7 +123,8 @@ module Rewind
           Filters: "IsPlayed",
           SortBy: "DatePlayed",
           SortOrder: "Descending",
-          Fields: "ProviderIds,ParentIndexNumber,IndexNumber,SeriesId,ParentId",
+          Fields: "ProviderIds,ParentIndexNumber,IndexNumber,SeriesId," \
+                  "ParentId,DateCreated,PremiereDate",
           Limit: @page_size,
           StartIndex: start_index
         )

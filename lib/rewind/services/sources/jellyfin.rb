@@ -72,18 +72,25 @@ module Rewind
         end
 
         private def build_play(item)
+          # Always dump the raw payload, whatever the type or outcome.
+          Rewind.logger.info(
+            "[sync/jellyfin] #{describe(item)} fields: #{JSON.generate(item)}"
+          )
           resolved = resolve(item)
           return log_skip(item, "no TMDB/MusicBrainz match") unless resolved
 
-          # Jellyfin marks some items watched without a date; keep them with a
-          # null played_at (shown as just "Watched") and a stable event id.
+          # No real play date? Anchor to when it was added, then when it aired,
+          # so it still lands on the timeline. Stable event id either way.
           played = last_played(item)
+          anchor = played ||
+                   presence(item["DateCreated"]) ||
+                   presence(item["PremiereDate"])
           Rewind.logger.info(
             "[sync/jellyfin] resolved #{describe(item)} -> item #{resolved.id}"
           )
           {
             item_id: resolved.id,
-            played_at: played && Time.parse(played),
+            played_at: anchor && Time.parse(anchor),
             source_event_id: "jellyfin:#{item['Id']}:#{played || 'played'}"
           }
         rescue Services::TMDB::Error, Services::Jellyfin::Error => error
@@ -96,8 +103,6 @@ module Rewind
           Rewind.logger.info(
             "[sync/jellyfin] skipped #{describe(item)} — #{reason}"
           )
-          # Dump what Jellyfin gave us, so we can see what a fallback could use.
-          Rewind.logger.info("[sync/jellyfin]   fields: #{JSON.generate(item)}")
           nil
         end
 
