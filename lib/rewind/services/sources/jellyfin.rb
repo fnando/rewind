@@ -52,6 +52,10 @@ module Rewind
               generic_episode(item) || generic_video(item, "movie")
           when "Audio"
             resolve_audio(item)
+          when "Video", "MusicVideo"
+            # Standalone/home videos (e.g. a one-off YouTube download) have no
+            # external ids; keep them as generic movies.
+            generic_episode(item) || generic_video(item, "movie")
           end
         end
 

@@ -16,7 +16,7 @@ module Rewind
 
       TIMEOUT = 8
       PAGE_SIZE = 100
-      PLAYED_TYPES = "Movie,Episode,Audio"
+      PLAYED_TYPES = "Movie,Episode,Audio,Video,MusicVideo"
 
       def self.public_users(url)
         new(url).public_users

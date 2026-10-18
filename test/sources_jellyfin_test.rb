@@ -78,6 +78,21 @@ class SourcesJellyfinTest < Minitest::Test
                     "/Items/series-jf-1/Images/Primary?tag=stag"
   end
 
+  test "keeps a standalone Video as a generic movie" do
+    item = adapter.resolve(
+      "Id" => "vid-1", "Type" => "Video", "Name" => "Photography Course",
+      "ImageTags" => {"Primary" => "ptag"},
+      "ProviderIds" => {"youtube" => "abc123"},
+      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+    )
+
+    assert_equal "movie", item.media_type
+    assert_equal "youtube:abc123", item.external_id
+    assert_equal "Photography Course", item.title
+    assert_equal "jellyfin", item.metadata["source"]
+    assert_includes item.poster_path, "/Items/vid-1/Images/Primary?tag=ptag"
+  end
+
   test "logs items it still can't keep so skips are visible with --verbose" do
     # Audio with no name can't resolve and has no fallback.
     stub_items([
