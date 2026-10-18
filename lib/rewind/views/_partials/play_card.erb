@@ -31,7 +31,7 @@
     <span class="play-card__meta"><time datetime="<%= play.played_at.iso8601 %>"><%= format_time(play.played_at) %></time> · <%= h(play.source.capitalize) %></span>
     <div class="play-card__actions">
       <%= rating_input(play.item, @user_items_by_item && @user_items_by_item[play.item_id], current_user) %>
-      <form method="post" action="/plays/<%= play.id %>">
+      <form method="post" action="/history/<%= play.id %>">
         <%= csrf_tag %>
         <input type="hidden" name="_method" value="delete">
         <button class="icon-btn" type="submit" aria-label="Remove this watch"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>

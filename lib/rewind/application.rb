@@ -91,7 +91,7 @@ module Rewind
 
     require_relative "routes/auth"
     require_relative "routes/items"
-    require_relative "routes/plays"
+    require_relative "routes/history"
     require_relative "routes/settings"
     require_relative "routes/stats"
   end

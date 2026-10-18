@@ -76,7 +76,7 @@
                     <input type="hidden" name="episode" value="<%= n %>">
                     <button class="icon-btn" type="submit" aria-label="Log a rewatch"><%= plus_svg %></button>
                   </form>
-                  <form method="post" action="/plays/<%= latest.id %>">
+                  <form method="post" action="/history/<%= latest.id %>">
                     <%= csrf_tag %>
                     <input type="hidden" name="_method" value="delete">
                     <button class="icon-btn" type="submit" aria-label="Remove latest watch"><%= trash_svg %></button>

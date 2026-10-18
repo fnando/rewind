@@ -2,17 +2,24 @@
 
 module Rewind
   class Application < Sinatra::Base
+    PLAYS_PER_PAGE = 200
+
     get "/" do
-      redirect "/plays"
+      redirect "/history"
     end
 
-    get "/plays" do
+    get "/history" do
       @type = params[:type]
+      @page = [params[:page].to_i, 1].max
       scope = Play.for_user(current_user)
                   .order(Sequel.desc(:played_at))
                   .eager(:item)
       scope = scope.for_media_type(@type) if @type && @type != "all"
-      @plays = scope.limit(200).all
+      rows = scope.limit(PLAYS_PER_PAGE + 1)
+                  .offset((@page - 1) * PLAYS_PER_PAGE).all
+      @has_prev = @page > 1
+      @has_next = rows.size > PLAYS_PER_PAGE
+      @plays = rows.first(PLAYS_PER_PAGE)
       tz = TZInfo::Timezone.get(current_user.timezone || "UTC")
       @plays_by_day = @plays.group_by do |p|
         tz.to_local(p.played_at.utc).to_date
@@ -20,10 +27,10 @@ module Rewind
       @user_items_by_item = load_user_items_for(@plays)
       @shows_by_tmdb = load_shows_for(@plays)
       @music_parents = load_music_parents_for(@plays)
-      erb :"plays/index"
+      erb :"history/index"
     end
 
-    post "/plays" do
+    post "/history" do
       item_id = params[:item_id].to_i
       item = Item[item_id]
       halt 404 unless item
@@ -49,12 +56,12 @@ module Rewind
       redirect "/items/#{item.id}"
     end
 
-    delete "/plays/:id" do
+    delete "/history/:id" do
       play = Play.where(id: params[:id].to_i, user_id: current_user.id).first
       halt 404 unless play
 
       play.destroy
-      redirect(request.referer || "/plays")
+      redirect(request.referer || "/history")
     end
   end
 end

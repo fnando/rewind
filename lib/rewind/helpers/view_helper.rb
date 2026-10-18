@@ -162,6 +162,15 @@ module Rewind
         end
       end
 
+      # Builds a /history URL for the given page, preserving the active media
+      # type filter. Omits the page param for page 1 to keep URLs clean.
+      def history_page_url(page)
+        query = {}
+        query[:type] = @type if @type && @type != "all"
+        query[:page] = page if page > 1
+        query.empty? ? "/history" : "/history?#{Rack::Utils.build_query(query)}"
+      end
+
       # A link to an item's page, styled to read like body text. Falls back to
       # plain escaped text when the target item is missing.
       def item_link(item, text)

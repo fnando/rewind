@@ -50,7 +50,7 @@ class ItemsMusicTest < Minitest::Test
   end
 
   test "history shows the track with links to its artist and album" do
-    get "/plays"
+    get "/history"
 
     assert_equal 200, last_response.status
     assert_includes last_response.body, "Karma Police"
@@ -62,7 +62,7 @@ class ItemsMusicTest < Minitest::Test
   end
 
   test "history does not collapse a lone track into an album group" do
-    get "/plays"
+    get "/history"
 
     assert_equal 200, last_response.status
     refute_includes last_response.body, "play-card--album"
@@ -83,7 +83,7 @@ class ItemsMusicTest < Minitest::Test
                           played_at: base + i, source: "jellyfin")
     end
 
-    get "/plays?type=track"
+    get "/history?type=track"
 
     assert_equal 200, last_response.status
     # The group renders a collapsing summary card with a track count...
@@ -99,7 +99,7 @@ class ItemsMusicTest < Minitest::Test
     Rewind::Play.create(user_id: @user.id, item_id: movie.id,
                         played_at: Time.now, source: "manual")
 
-    get "/plays?type=track"
+    get "/history?type=track"
 
     assert_equal 200, last_response.status
     assert_includes last_response.body, "Karma Police"

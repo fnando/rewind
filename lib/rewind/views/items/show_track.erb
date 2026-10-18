@@ -31,7 +31,7 @@
       <% end %>
 
       <div class="hero-actions">
-        <form method="post" action="/plays">
+        <form method="post" action="/history">
           <%= csrf_tag %>
           <input type="hidden" name="item_id" value="<%= @item.id %>">
           <button class="btn btn--primary" type="submit">
@@ -62,7 +62,7 @@
               <span><%= format_time(play.played_at) %> · <%= play.source == "manual" ? "Logged manually" : "via #{play.source.capitalize}" %></span>
             </div>
             <div class="watch-row__actions">
-              <form method="post" action="/plays/<%= play.id %>">
+              <form method="post" action="/history/<%= play.id %>">
                 <%= csrf_tag %>
                 <input type="hidden" name="_method" value="delete">
                 <button class="icon-btn" type="submit" aria-label="Remove this listen"><%= trash_svg %></button>

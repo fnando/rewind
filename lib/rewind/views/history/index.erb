@@ -4,10 +4,10 @@
     <div class="history-head__left">
       <h1>History</h1>
       <nav class="segmented" aria-label="Media type">
-        <a href="/plays"<%= ' aria-current="page"' if @type.nil? || @type == "all" %>>All</a>
-        <a href="/plays?type=movie"<%= ' aria-current="page"' if @type == "movie" %>>Movies</a>
-        <a href="/plays?type=episode"<%= ' aria-current="page"' if @type == "episode" %>>TV</a>
-        <a href="/plays?type=track"<%= ' aria-current="page"' if @type == "track" %>>Music</a>
+        <a href="/history"<%= ' aria-current="page"' if @type.nil? || @type == "all" %>>All</a>
+        <a href="/history?type=movie"<%= ' aria-current="page"' if @type == "movie" %>>Movies</a>
+        <a href="/history?type=episode"<%= ' aria-current="page"' if @type == "episode" %>>TV</a>
+        <a href="/history?type=track"<%= ' aria-current="page"' if @type == "track" %>>Music</a>
       </nav>
     </div>
     <a class="btn btn--primary" href="/search">
@@ -40,6 +40,17 @@
         <% end %>
       </ul>
     </section>
+  <% end %>
+
+  <% if @has_prev || @has_next %>
+    <nav class="pagination" aria-label="History pages">
+      <% if @has_prev %>
+        <a class="btn btn--secondary" rel="prev" href="<%= history_page_url(@page - 1) %>">Newer</a>
+      <% end %>
+      <% if @has_next %>
+        <a class="btn btn--secondary" rel="next" href="<%= history_page_url(@page + 1) %>">Older</a>
+      <% end %>
+    </nav>
   <% end %>
 </main>
 

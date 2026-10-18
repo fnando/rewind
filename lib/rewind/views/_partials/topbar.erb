@@ -4,7 +4,7 @@
     <span>rewind</span>
   </a>
   <nav class="nav" aria-label="Main">
-    <a href="/plays"<%= ' aria-current="page"' if nav_current?("/plays") || current_path == "/" %>>History</a>
+    <a href="/history"<%= ' aria-current="page"' if nav_current?("/history") || current_path == "/" %>>History</a>
     <a href="/stats"<%= ' aria-current="page"' if nav_current?("/stats") %>>Stats</a>
     <a class="nav__search" href="/search"<%= ' aria-current="page"' if nav_current?("/search") %>>Search</a>
     <a href="/settings"<%= ' aria-current="page"' if nav_current?("/settings") %>>Settings</a>
