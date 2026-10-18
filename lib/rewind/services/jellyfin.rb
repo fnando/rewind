@@ -54,9 +54,15 @@ module Rewind
           "#{@url}/Users/AuthenticateByName",
           json: {Username: username, Pw: password}
         )
-        if response.is_a?(HTTPX::ErrorResponse) ||
-           !response.status.between?(200, 299)
-          raise AuthError, "Jellyfin authentication failed"
+        if response.is_a?(HTTPX::ErrorResponse)
+          raise AuthError,
+                "Jellyfin authentication failed: #{response.error.message}"
+        end
+        unless response.status.between?(200, 299)
+          body = response.body.to_s.strip[0, 200]
+          raise AuthError,
+                "Jellyfin authentication failed (HTTP #{response.status})" \
+                "#{": #{body}" unless body.empty?}"
         end
 
         data = JSON.parse(response.body.to_s)
