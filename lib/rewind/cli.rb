@@ -219,7 +219,6 @@ module Rewind
     def trakt
       Rewind::CLI.load_env!(options[:env])
       Rewind::CLI.boot_db!
-      require_relative "services/importers/trakt"
 
       archive = options[:archive]
       abort("Archive not found: #{archive}") unless File.file?(archive)
@@ -265,7 +264,6 @@ module Rewind
     def rebuild
       Rewind::CLI.load_env!(options[:env])
       Rewind::CLI.boot_db!
-      require_relative "services/streaks"
 
       users = target_users
       abort("No users found.") if users.empty?
@@ -328,7 +326,6 @@ module Rewind
     def rebuild
       Rewind::CLI.load_env!(options[:env])
       Rewind::CLI.boot_db!
-      require_relative "services/sync"
       Rewind.logger.level = Logger::INFO if options[:verbose]
 
       options[:source] ? sync_one(options[:source]) : sync_all
@@ -383,7 +380,6 @@ module Rewind
       require_relative "migrator"
       Rewind::Migrator.migrate! if ENV["REWIND_AUTO_MIGRATE"] == "1"
       Rewind.boot!
-      require_relative "services/password_generator"
     end
 
     class_option :env, type: :string,
@@ -501,5 +497,3 @@ module Rewind
     end
   end
 end
-
-require_relative "services/password_generator"

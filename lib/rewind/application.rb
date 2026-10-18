@@ -5,19 +5,11 @@ require "sinatra/contrib"
 require "rack/protection"
 require "erubi"
 
+# Domain code (models + services) comes from the central boot; here we add only
+# the web layer on top of it.
+require_relative "boot"
 require_relative "helpers/view_helper"
 require_relative "helpers/rating_helper"
-require_relative "services/password_generator"
-require_relative "services/tmdb"
-require_relative "services/fanart"
-require_relative "services/musicbrainz"
-require_relative "services/jellyfin"
-require_relative "services/sources/jellyfin"
-require_relative "services/sync"
-require_relative "services/stats"
-require_relative "services/streaks"
-require_relative "services/avatar"
-require_relative "services/image_cache"
 require_relative "image_store"
 
 module Rewind

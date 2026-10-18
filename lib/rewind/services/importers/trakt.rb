@@ -2,8 +2,6 @@
 
 require "zip"
 require "time"
-require_relative "../tmdb"
-require_relative "../streaks"
 
 module Rewind
   module Services

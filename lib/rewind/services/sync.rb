@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "sources/jellyfin"
-
 module Rewind
   module Services
     # Pulls recent plays from every enabled source into the plays table. Runs

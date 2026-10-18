@@ -58,7 +58,7 @@ module Rewind
 
     def boot!
       db
-      require_relative "rewind/models"
+      require_relative "rewind/boot"
     end
 
     def application

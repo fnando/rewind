@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "../services/streaks"
-
 module Rewind
   class Play < Sequel::Model
     plugin :dirty # exposes previous_changes for the activity hooks

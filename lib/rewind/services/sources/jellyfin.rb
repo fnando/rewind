@@ -1,9 +1,6 @@
 # frozen_string_literal: true
 
 require "json"
-require_relative "../tmdb"
-require_relative "../musicbrainz"
-require_relative "../jellyfin"
 
 module Rewind
   module Services
