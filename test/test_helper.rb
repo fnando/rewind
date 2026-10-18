@@ -11,7 +11,7 @@ ENV["REWIND_KEYRING"] ||=
 
 require "simplecov"
 SimpleCov.start do
-  add_filter "/test/"
+  skip "/test/"
 end
 
 require "bundler/setup"
