@@ -3,6 +3,7 @@
 require "zip"
 require "time"
 require_relative "../tmdb"
+require_relative "../streaks"
 
 module Rewind
   module Services
@@ -38,7 +39,11 @@ module Rewind
         def call
           Zip::File.open(@archive) do |zip|
             @zip = zip
-            import_watchings
+            # Skip per-row streak hooks for the (potentially huge) import, then
+            # rebuild the user's activity once at the end — far cheaper than an
+            # upsert per play.
+            Play.skip_activity_tracking { import_watchings }
+            Services::Streaks.rebuild_user(@user)
             import_ratings
             import_reviews
           end

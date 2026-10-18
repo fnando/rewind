@@ -1,7 +1,11 @@
 # frozen_string_literal: true
 
+require_relative "../services/streaks"
+
 module Rewind
   class Play < Sequel::Model
+    plugin :dirty # exposes previous_changes for the activity hooks
+
     many_to_one :user
     many_to_one :item
 
@@ -34,6 +38,53 @@ module Rewind
     def validate
       super
       errors.add(:source, "invalid") unless SOURCES.include?(source)
+    end
+
+    # Run a block (e.g. a bulk import) without the streak-activity hooks firing,
+    # so thousands of rows don't each trigger an upsert. Callers must rebuild
+    # the affected users afterwards with Services::Streaks.rebuild_user.
+    def self.skip_activity_tracking
+      previous = Thread.current[:rewind_skip_activity_tracking]
+      Thread.current[:rewind_skip_activity_tracking] = true
+      yield
+    ensure
+      Thread.current[:rewind_skip_activity_tracking] = previous
+    end
+
+    def self.skip_activity_tracking?
+      Thread.current[:rewind_skip_activity_tracking] == true
+    end
+
+    # Keep user_day_activity in sync. These run inside Sequel's save/destroy
+    # transaction, so the derived table never drifts from `plays`. Plays are
+    # immutable today, but after_update is handled defensively.
+    def after_create
+      super
+      return if self.class.skip_activity_tracking?
+
+      Services::Streaks.add_for_play(self)
+    end
+
+    def after_destroy
+      super
+      return if self.class.skip_activity_tracking?
+
+      Services::Streaks.remove_for_play(self)
+    end
+
+    def after_update
+      super
+      return if self.class.skip_activity_tracking?
+      return unless columns_changed_for_activity?
+
+      previous = dup
+      previous_changes.each {|col, (was, _now)| previous[col] = was }
+      Services::Streaks.remove_for_play(previous)
+      Services::Streaks.add_for_play(self)
+    end
+
+    private def columns_changed_for_activity?
+      previous_changes.keys.intersect?(%i[played_at item_id user_id])
     end
   end
 end

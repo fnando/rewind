@@ -1,0 +1,47 @@
+<%
+  # Pick the scope matching the active media filter; "all" maps to overall.
+  scope =
+    if @media_type == "all"
+      @streaks[:overall]
+    else
+      @streaks[:by_media_group][@media_type]
+    end
+  scope ||= {current: 0, longest: nil, is_record: false}
+  longest = scope[:longest]
+%>
+<% if longest %>
+  <%
+    phrase =
+      case @media_type
+      when "movie" then "watching movies"
+      when "series" then "watching series"
+      when "music" then "listening to music"
+      else "playing something"
+      end
+    current = scope[:current]
+  %>
+  <section class="panel">
+    <div class="section__head panel__title">
+      <div>
+        <h2>Streak</h2>
+        <p class="muted">
+          <% if current.positive? %>
+            You've been <%= phrase %> for <strong><%= pluralize(current, "day") %></strong> straight. Nice!
+          <% else %>
+            No active streak right now — <%= phrase %> today to start one.
+          <% end %>
+        </p>
+      </div>
+    </div>
+    <div class="panel__body">
+      <p class="muted">
+        <% if scope[:is_record] %>
+          This is your biggest streak so far!
+        <% else %>
+          Your longest streak was <strong><%= pluralize(longest[:length], "day") %></strong>
+          (<%= Date.parse(longest[:start]).strftime("%b %-d") %>–<%= Date.parse(longest[:end]).strftime("%b %-d, %Y") %>).
+        <% end %>
+      </p>
+    </div>
+  </section>
+<% end %>

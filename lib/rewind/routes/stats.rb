@@ -19,6 +19,8 @@ module Rewind
         period: @period
       ).to_h
 
+      @streaks = Services::Streaks.new(user: current_user).get_streaks
+
       erb :"stats/index"
     end
   end

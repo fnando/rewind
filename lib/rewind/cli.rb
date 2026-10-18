@@ -249,6 +249,67 @@ module Rewind
     end
   end
 
+  class StreaksCLI < Thor
+    class_option :env, type: :string,
+                       desc: "Path to a dotenv file to load before executing"
+
+    def self.exit_on_failure?
+      true
+    end
+
+    desc "rebuild", "Rebuild the play-streak activity table from plays"
+    option :user, type: :numeric,
+                  desc: "Only rebuild this user id (default: all users)"
+    option :verify, type: :boolean, default: false,
+                    desc: "Report differences without writing"
+    def rebuild
+      Rewind::CLI.load_env!(options[:env])
+      Rewind::CLI.boot_db!
+      require_relative "services/streaks"
+
+      users = target_users
+      abort("No users found.") if users.empty?
+
+      options[:verify] ? verify_users(users) : rebuild_users(users)
+    end
+
+    no_commands do
+      def target_users
+        if options[:user]
+          user = Rewind::User[options[:user].to_i]
+          abort("User not found: #{options[:user]}") unless user
+          [user]
+        else
+          Rewind::User.order(:id).all
+        end
+      end
+
+      def rebuild_users(users)
+        users.each do |user|
+          Rewind::Services::Streaks.rebuild_user(user)
+          say "Rebuilt streaks for user #{user.id} (#{user.username})."
+        end
+      end
+
+      def verify_users(users)
+        differences = 0
+        users.each do |user|
+          diffs = Rewind::Services::Streaks.verify(user)
+          differences += diffs.size
+          next if diffs.empty?
+
+          say "User #{user.id} (#{user.username}): #{diffs.size} difference(s)"
+          diffs.each do |d|
+            say format("  %-8s %s expected=%d actual=%d",
+                       d[:media_group], d[:day], d[:expected], d[:actual])
+          end
+        end
+        say(differences.zero? ? "No differences." : "#{differences} diff(s).")
+        abort if differences.positive?
+      end
+    end
+  end
+
   class CLI < Thor
     check_unknown_options!
 
@@ -367,6 +428,9 @@ module Rewind
 
     desc "import SUBCOMMAND", "Import data from other services (trakt)"
     subcommand "import", ImportCLI
+
+    desc "streaks SUBCOMMAND", "Maintain play streaks (rebuild)"
+    subcommand "streaks", StreaksCLI
 
     def self.start(given_args = ARGV, config = {})
       # Allow colon form: users:new -> users new
