@@ -60,15 +60,31 @@ module Rewind
         "/avatars/#{user.id}?v=#{mtime}"
       end
 
-      # A cover image URL. Routed through the local cache proxy (/images/...)
-      # keyed by the upstream URL itself, so every item that shares a cover
-      # (e.g. all tracks of an album, whose art is the release-group's) maps to
-      # one URL, fetched once and served from disk. Placeholder when no art.
+      # A cover image URL, always routed through the local cache proxy so the
+      # image is (re)fetched on demand — even for items whose art wasn't stored
+      # at sync time. Keyed by the art's owner (the album for its tracks, the
+      # item itself otherwise), so everything sharing a cover resolves to one
+      # URL and one cached file.
       def poster_url(item, size: "w185")
-        remote = remote_poster_url(item, size)
-        return "/poster-placeholder.svg" unless remote
+        owner_type, owner_id = poster_owner(item)
+        return "/poster-placeholder.svg" unless owner_id
 
-        "/images/#{Base64.urlsafe_encode64(remote, padding: false)}.jpg"
+        token = Base64.urlsafe_encode64("#{owner_type}:#{owner_id}:#{size}",
+                                        padding: false)
+        "/images/#{token}.jpg"
+      end
+
+      # [media_type, external_id] of the item that owns the cover art, or nil.
+      def poster_owner(item)
+        return unless item
+
+        if item.media_type == "track"
+          album = item.metadata["album_external_id"].to_s
+          return ["album", album] unless album.empty?
+        end
+
+        external_id = item.external_id.to_s
+        [item.media_type, external_id] unless external_id.empty?
       end
 
       # The upstream CDN URL for an item's poster, or nil when it has no art.

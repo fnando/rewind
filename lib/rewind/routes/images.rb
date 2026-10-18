@@ -4,36 +4,76 @@ require "base64"
 
 module Rewind
   class Application < Sinatra::Base
-    # Cache miss for a cover image: the path is the base64 upstream URL, so
-    # every item sharing a cover resolves here identically. Fetch it, store it
-    # under the image storage dir so ImageStore serves it from disk next time,
-    # and return the bytes. Falls back to placeholder on failure.
+    # Cache miss for a cover image: the path encodes the art owner, so every
+    # item sharing a cover resolves here identically. Resolve the upstream URL
+    # (stored, else re-derived), fetch it, store it under the image storage dir
+    # so ImageStore serves it from disk next time, backfill the item so it
+    # self-heals, and return the bytes. Placeholder on any failure.
     get %r{/images/([A-Za-z0-9_-]+)\.jpg} do
       name = File.basename(request.path_info)
-      remote = decode_image_token(params[:captures].first)
-      pass unless remote
+      media_type, external_id, size =
+        decode_image_token(params[:captures].first)
+      pass unless external_id
 
-      Rewind.logger.info("[images] miss #{name}, downloading #{remote}")
+      item = Item.where(media_type:, external_id:).first
+      remote = item && resolve_poster_remote(item, size)
+      unless remote
+        reason = item ? "no cover source" : "unknown item"
+        Rewind.logger.info("[images] miss #{media_type}:#{external_id} — " \
+                           "#{reason}, serving placeholder")
+        next placeholder_redirect
+      end
+
+      Rewind.logger.info(
+        "[images] miss #{media_type}:#{external_id}, downloading #{remote}"
+      )
       data = Services::ImageCache.fetch(remote)
       unless data
-        Rewind.logger.info("[images] #{name} unavailable, serving placeholder")
+        Rewind.logger.info("[images] #{media_type}:#{external_id} fetch " \
+                           "failed, serving placeholder")
         next placeholder_redirect
       end
 
       store_image(name, data)
-      Rewind.logger.info("[images] stored #{name} (#{data.bytesize} bytes)")
+      item.update(poster_path: remote) if item.poster_path.to_s.empty?
+      Rewind.logger.info("[images] stored #{media_type}:#{external_id} " \
+                         "(#{data.bytesize} bytes)")
 
       cache_control :public, max_age: 31_536_000
       content_type "image/jpeg"
       data
     end
 
-    # Decodes the base64url token back into the upstream URL. The actual SSRF
-    # guard is the host allowlist in Services::ImageCache.
+    # The upstream URL for an item's cover: its stored poster_path if present,
+    # otherwise re-derived from the source (Cover Art Archive / fanart.tv) so a
+    # late-arriving key or image is picked up without a re-sync.
+    private def resolve_poster_remote(item, size)
+      stored = remote_poster_url(item, size)
+      return stored if stored
+
+      case item.media_type
+      when "artist"
+        mbid = strip_mbid(item.external_id, "mbid:artist:")
+        mbid && Services::Fanart.new.artist_image(mbid)
+      when "album"
+        mbid = strip_mbid(item.external_id, "mbid:rg:")
+        mbid && "https://coverartarchive.org/release-group/#{mbid}/front-250"
+      end
+    end
+
+    private def strip_mbid(external_id, prefix)
+      id = external_id.to_s
+      id.start_with?(prefix) ? id.delete_prefix(prefix) : nil
+    end
+
+    # Decodes "<media_type>:<external_id>:<size>"; external_id itself may hold
+    # colons, so split off the known first/last fields and rejoin the middle.
     private def decode_image_token(token)
       padded = token + ("=" * ((4 - (token.length % 4)) % 4))
-      url = Base64.urlsafe_decode64(padded)
-      url if url.start_with?("https://")
+      parts = Base64.urlsafe_decode64(padded).split(":")
+      return if parts.size < 3
+
+      [parts.first, parts[1..-2].join(":"), parts.last]
     rescue ArgumentError
       nil
     end
@@ -48,7 +88,7 @@ module Rewind
     end
 
     private def placeholder_redirect
-      cache_control :public, max_age: 300
+      cache_control :public, max_age: 60
       redirect "/poster-placeholder.svg"
     end
   end
