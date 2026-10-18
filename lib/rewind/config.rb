@@ -4,7 +4,7 @@ module Rewind
   class Config
     attr_accessor :data_dir, :tmdb_api_key, :fanart_api_key,
                   :session_secret, :host, :port, :keyring, :sync_interval,
-                  :allowed_hosts, :puma_plugins
+                  :streak_rebuild_interval, :allowed_hosts, :puma_plugins
     attr_writer :image_storage_dir
 
     def initialize
@@ -14,6 +14,12 @@ module Rewind
       @session_secret = ENV.fetch("REWIND_SESSION_SECRET", nil)
       @keyring = parse_keyring(ENV.fetch("REWIND_KEYRING", nil))
       @sync_interval = (ENV["REWIND_SYNC_INTERVAL"] || 60).to_i
+      # Self-healing rebuild of the derived streak table. Hooks keep it in sync
+      # on every write, but if it ever drifts we'd show a *broken* streak — the
+      # worst failure for this feature — so the heal runs every few minutes to
+      # keep any drift window small. Also picks up time-zone / media-type edits.
+      @streak_rebuild_interval =
+        (ENV["REWIND_STREAK_REBUILD_INTERVAL"] || 300).to_i
       @host = ENV["REWIND_HOST"] || "0.0.0.0"
       @port = (ENV["REWIND_PORT"] || 55_455).to_i
       @allowed_hosts =
@@ -105,7 +111,8 @@ module Rewind
         tmdb_api_key: redact ? redact_value(tmdb_api_key) : tmdb_api_key,
         session_secret: redact ? redact_value(session_secret) : session_secret,
         keyring: keyring.empty? ? "(unset)" : "[#{keyring.size} key(s)]",
-        sync_interval: sync_interval
+        sync_interval: sync_interval,
+        streak_rebuild_interval: streak_rebuild_interval
       }
     end
 

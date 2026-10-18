@@ -337,6 +337,28 @@ class StreaksTest < Minitest::Test
     assert_includes last_response.body, "Log a watch"
   end
 
+  test "rebuild_all heals drift for every user" do
+    other = create_user(username: "second")
+    play_on("2026-10-18", user: @user)
+    play_on("2026-10-18", user: other)
+    Rewind.db[:user_day_activity].delete # simulate drift
+
+    Rewind::Services::Streaks.rebuild_all
+
+    assert_empty Rewind::Services::Streaks.verify(@user)
+    assert_empty Rewind::Services::Streaks.verify(other)
+    assert_equal 1, activity_count("movie", "2026-10-18")
+  end
+
+  test "start_thread returns a running daemon thread" do
+    thread = Rewind::Services::Streaks.start_thread(interval: 3600)
+
+    assert_instance_of Thread, thread
+    assert_predicate thread, :alive?
+  ensure
+    thread&.kill
+  end
+
   # --- Dates / time zones --------------------------------------------------
 
   test "a late-night play lands on the local day, not the UTC day" do

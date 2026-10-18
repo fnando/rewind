@@ -92,6 +92,24 @@ module Rewind
           User.each {|user| rebuild_user(user) }
         end
 
+        # Daemon thread that rebuilds every user's streak table on a short
+        # interval, as a self-healing guard against drift — a stale table could
+        # otherwise show a broken streak. Started by `rewind run` only. Each
+        # pass is wrapped so one bad user can't kill the loop.
+        def start_thread(interval: Rewind.config.streak_rebuild_interval)
+          Thread.new do
+            loop do
+              sleep interval
+              begin
+                rebuild_all
+                Rewind.logger.info("[streaks] rebuilt all users")
+              rescue StandardError => error
+                Rewind.logger.error("[streaks] #{error.message}")
+              end
+            end
+          end
+        end
+
         # Recompute from `plays` and compare to the table without writing.
         # Returns an array of differences; empty means the table is in sync.
         def verify(user)

@@ -359,6 +359,7 @@ module Rewind
       Rewind.config.image_storage_dir = options[:image_storage_dir]
       app = Rewind.application
       Rewind::Services::Sync.start_thread
+      Rewind::Services::Streaks.start_thread
       wildcard = %w[0.0.0.0 ::].include?(Rewind.config.host)
       display_host = wildcard ? "localhost" : Rewind.config.host
       say "Rewind listening on http://#{display_host}:#{Rewind.config.port}/"
