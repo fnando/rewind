@@ -25,8 +25,12 @@ module Rewind
       module_function def sync_source(source)
         adapter = Sources.adapter_for(source)
         result = adapter.recent_plays(since: source.cursor)
-        result[:plays].each {|play| record_play(source, play) }
+        new_plays = result[:plays].count {|play| record_play(source, play) }
         source.update(cursor: result[:cursor], last_synced_at: Time.now)
+        Rewind.logger.info(
+          "[sync] source #{source.id}: #{result[:plays].size} resolved, " \
+          "#{new_plays} new"
+        )
       end
 
       module_function def record_play(source, play)

@@ -40,6 +40,32 @@ class SourcesJellyfinTest < Minitest::Test
     assert_equal "tmdb:27205", item.external_id
   end
 
+  test "logs items it can't match so skips are visible with --verbose" do
+    stub_items([
+      {
+        "Id" => "yt1", "Type" => "Movie", "Name" => "A YouTube Video",
+        "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+      }
+    ])
+
+    io = StringIO.new
+    level = Rewind.logger.level
+    Rewind.logger.reopen(io)
+    Rewind.logger.level = Logger::INFO
+
+    begin
+      result = adapter.recent_plays(since: nil)
+    ensure
+      Rewind.logger.level = level
+      Rewind.logger.reopen($stdout)
+    end
+
+    assert_empty result[:plays]
+    assert_includes io.string, "fetched 1 played items"
+    assert_includes io.string, %[skipped Movie "A YouTube Video" (yt1)]
+    assert_includes io.string, "no TMDB/MusicBrainz match"
+  end
+
   test "resolves an episode via the series' TMDB id" do
     WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items/series-1})
            .to_return(status: 200,

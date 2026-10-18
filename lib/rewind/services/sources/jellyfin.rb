@@ -28,6 +28,10 @@ module Rewind
         def recent_plays(since:)
           items = @client.played_items(user_id: @source.external_user_id,
                                        since: since)
+          Rewind.logger.info(
+            "[sync/jellyfin] fetched #{items.size} played items since " \
+            "#{since.inspect}"
+          )
           plays = items.filter_map {|item| build_play(item) }
           cursor = items.filter_map {|i| last_played(i) }.max
           {plays: plays, cursor: cursor || since}
@@ -43,19 +47,34 @@ module Rewind
 
         private def build_play(item)
           resolved = resolve(item)
-          return unless resolved
+          return log_skip(item, "no TMDB/MusicBrainz match") unless resolved
 
           played = last_played(item)
-          return unless played
+          return log_skip(item, "no play date") unless played
 
+          Rewind.logger.info(
+            "[sync/jellyfin] resolved #{describe(item)} -> item #{resolved.id}"
+          )
           {
             item_id: resolved.id,
             played_at: Time.parse(played),
             source_event_id: "jellyfin:#{item['Id']}:#{played}"
           }
         rescue Services::TMDB::Error, Services::Jellyfin::Error => error
-          Rewind.logger.warn("[sync/jellyfin] #{error.message}")
+          log_skip(item, error.message)
+        end
+
+        # Logs why an item isn't being recorded and returns nil, so callers can
+        # `return log_skip(...)`.
+        private def log_skip(item, reason)
+          Rewind.logger.info(
+            "[sync/jellyfin] skipped #{describe(item)} — #{reason}"
+          )
           nil
+        end
+
+        private def describe(item)
+          "#{item['Type']} #{item['Name'].inspect} (#{item['Id']})"
         end
 
         private def last_played(item)
