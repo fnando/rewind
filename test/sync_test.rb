@@ -80,4 +80,36 @@ class SyncTest < Minitest::Test
 
     assert_equal 0, Rewind::Play.count
   end
+
+  test "history:rebuild runs a sync immediately" do
+    stub_tmdb_movie(27_205)
+    stub_items([movie_item(id: "m1", last_played: "2026-10-16T05:00:00Z")])
+
+    out, = capture_io { Rewind::CLI.start(["history:rebuild", "--no-verbose"]) }
+
+    assert_equal 1, Rewind::Play.count
+    assert_match(/Synced 1 source/, out)
+  end
+
+  test "history:rebuild --reset clears cursors and refetches history" do
+    # A future cursor makes a normal sync skip the item; --reset clears it.
+    @source.update(cursor: "2099-01-01T00:00:00Z")
+    stub_tmdb_movie(27_205)
+    stub_items([movie_item(id: "m1", last_played: "2026-10-16T05:00:00Z")])
+
+    out, = capture_io do
+      Rewind::CLI.start(["history:rebuild", "--reset", "--no-verbose"])
+    end
+
+    assert_equal 1, Rewind::Play.count
+    assert_match(/Reset cursor on 1 source/, out)
+  end
+
+  test "history:rebuild aborts when there are no enabled sources" do
+    @source.update(enabled: false)
+
+    assert_raises(SystemExit) do
+      capture_io { Rewind::CLI.start(["history:rebuild", "--no-verbose"]) }
+    end
+  end
 end

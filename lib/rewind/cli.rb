@@ -310,6 +310,60 @@ module Rewind
     end
   end
 
+  class HistoryCLI < Thor
+    class_option :env, type: :string,
+                       desc: "Path to a dotenv file to load before executing"
+
+    def self.exit_on_failure?
+      true
+    end
+
+    desc "rebuild", "Re-sync plays from enabled sources right now"
+    option :source, type: :numeric,
+                    desc: "Only sync this source id (default: all enabled)"
+    option :verbose, type: :boolean, default: true, aliases: "-v",
+                     desc: "Log per-source sync activity"
+    option :reset, type: :boolean, default: false,
+                   desc: "Clear each source's cursor first, refetching history"
+    def rebuild
+      Rewind::CLI.load_env!(options[:env])
+      Rewind::CLI.boot_db!
+      require_relative "services/sync"
+      Rewind.logger.level = Logger::INFO if options[:verbose]
+
+      options[:source] ? sync_one(options[:source]) : sync_all
+    end
+
+    no_commands do
+      def sync_one(id)
+        source = Rewind::Source[id.to_i]
+        abort("Source not found: #{id}") unless source
+        reset_cursors(Rewind::Source.where(id: source.id))
+        Rewind::Services::Sync.sync_source(source)
+        say "Synced source #{source.id} (#{source.url})."
+      rescue StandardError => error
+        abort("Sync failed for source #{source.id}: #{error.message}")
+      end
+
+      def sync_all
+        scope = Rewind::Source.where(enabled: true)
+        count = scope.count
+        abort("No enabled sources to sync.") if count.zero?
+
+        reset_cursors(scope)
+        Rewind::Services::Sync.run_once
+        say "Synced #{count} #{count == 1 ? 'source' : 'sources'}."
+      end
+
+      def reset_cursors(scope)
+        return unless options[:reset]
+
+        reset = scope.update(cursor: nil)
+        say "Reset cursor on #{reset} #{reset == 1 ? 'source' : 'sources'}."
+      end
+    end
+  end
+
   class CLI < Thor
     check_unknown_options!
 
@@ -429,6 +483,9 @@ module Rewind
 
     desc "import SUBCOMMAND", "Import data from other services (trakt)"
     subcommand "import", ImportCLI
+
+    desc "history SUBCOMMAND", "Maintain play history (rebuild)"
+    subcommand "history", HistoryCLI
 
     desc "streaks SUBCOMMAND", "Maintain play streaks (rebuild)"
     subcommand "streaks", StreaksCLI
