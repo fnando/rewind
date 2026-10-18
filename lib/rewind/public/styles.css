@@ -49,6 +49,12 @@
   --radius-lg: 10px;
   --gutter: 20px;
 
+  /* Widest page outer width, and the inner content width once the gutters are
+     removed. Use --content-wide for any full-bleed element (e.g. the flash
+     banner) that must line up with the content inside a .page--wide. */
+  --page-wide: 1280px;
+  --content-wide: min(100% - 2 * var(--gutter), var(--page-wide) - 2 * var(--gutter));
+
   --chart-movies: #1F5FD1;
   --chart-tv: #E57C2E;
   --chart-music: #2E9E6B;
@@ -340,7 +346,27 @@ label.btn { cursor: pointer; display: inline-flex; align-items: center; }
 .page--narrow { max-width: 420px; padding-top: 72px; gap: 24px; }
 .page--form   { max-width: 560px; }
 .page--setup  { max-width: 640px; }
-.page--wide   { max-width: 1280px; padding-top: 24px; gap: 24px; }
+.page--wide   { max-width: var(--page-wide); padding-top: 24px; gap: 24px; }
+
+/* Flash banner: centered to match page content, color by kind. */
+.flash {
+  width: var(--content-wide);
+  margin: 16px auto 0;
+  padding: 12px 16px;
+  border: 1px solid;
+  border-radius: var(--radius);
+  font-size: 14px;
+}
+.flash--notice {
+  background: var(--accent-soft-bg);
+  color: var(--accent-soft-fg);
+  border-color: var(--accent-soft-border);
+}
+.flash--error {
+  background: var(--danger-soft-bg);
+  color: var(--danger-soft-fg);
+  border-color: var(--danger-soft-border);
+}
 
 .page-head { display: flex; flex-direction: column; gap: 8px; }
 .page-head h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
@@ -838,7 +864,7 @@ select.input::-ms-expand { display: none; }
   border-radius: var(--radius-lg);
 }
 
-.pagination { display: flex; justify-content: center; }
+.pagination { display: flex; justify-content: center; gap: 12px; margin-top: 8px; }
 
 /* ---------- Title pages (movie / TV show) ---------- */
 
