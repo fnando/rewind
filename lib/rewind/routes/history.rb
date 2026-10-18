@@ -34,6 +34,8 @@ module Rewind
       item_id = params[:item_id].to_i
       item = Item[item_id]
       halt 404 unless item
+      # Music is only ever recorded from scrobbles, never logged by hand.
+      halt 422, "Tracks can't be logged manually" if item.media_type == "track"
 
       played_at =
         begin

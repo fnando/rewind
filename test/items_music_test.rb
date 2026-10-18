@@ -34,6 +34,20 @@ class ItemsMusicTest < Minitest::Test
     assert_includes last_response.body, "/items/#{@artist.id}"
   end
 
+  test "the track page has no manual log button" do
+    get "/items/#{@track.id}"
+
+    refute_includes last_response.body, "Log a listen"
+  end
+
+  test "tracks cannot be logged manually" do
+    post "/history", {item_id: @track.id}
+
+    assert_equal 422, last_response.status
+    assert_equal 0,
+                 Rewind::Play.where(item_id: @track.id, source: "manual").count
+  end
+
   test "album page lists its tracks" do
     get "/items/#{@album.id}"
 

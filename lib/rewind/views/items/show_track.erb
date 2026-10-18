@@ -31,14 +31,6 @@
       <% end %>
 
       <div class="hero-actions">
-        <form method="post" action="/history">
-          <%= csrf_tag %>
-          <input type="hidden" name="item_id" value="<%= @item.id %>">
-          <button class="btn btn--primary" type="submit">
-            <%= plus_svg %>
-            Log a listen
-          </button>
-        </form>
         <div class="hero-rating">
           <span>Your rating</span>
           <%= rating_input(@item, @user_item, current_user) %>
