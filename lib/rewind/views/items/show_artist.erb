@@ -22,7 +22,7 @@
         <% @albums.each do |album| %>
           <li class="search-card">
             <a href="/items/<%= album.id %>">
-              <img class="search-card__poster" src="<%= poster_url(album, size: "w185") %>" alt="">
+              <img class="search-card__poster" src="<%= poster_url(album, size: "w185") %>" alt="" loading="lazy" decoding="async">
             </a>
             <div class="search-card__body">
               <a href="/items/<%= album.id %>"><%= h(album.title) %></a>

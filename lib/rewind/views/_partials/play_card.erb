@@ -1,6 +1,6 @@
 <% grouped = defined?(grouped) && grouped %>
 <li class="play-card<%= " play-card--in-album" if grouped %>"<% if grouped %> data-album-tracks="<%= group_key %>" hidden<% end %>>
-  <img class="play-card__poster" src="<%= poster_url(play.item) %>" alt="">
+  <img class="play-card__poster" src="<%= poster_url(play.item) %>" alt="" width="104" height="156" loading="lazy" decoding="async">
   <div class="play-card__body">
     <% if play.item.media_type == "episode" %>
       <% show = @shows_by_tmdb && @shows_by_tmdb[play.item.parent_external_id] %>

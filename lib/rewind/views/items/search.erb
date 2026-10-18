@@ -30,9 +30,9 @@
       <% @results.each do |r| %>
         <li class="search-card">
           <% if r[:poster_path] %>
-            <img class="search-card__poster" src="https://image.tmdb.org/t/p/w185<%= r[:poster_path] %>" alt="">
+            <img class="search-card__poster" src="https://image.tmdb.org/t/p/w185<%= r[:poster_path] %>" alt="" loading="lazy" decoding="async">
           <% else %>
-            <img class="search-card__poster" src="/poster-placeholder.svg" alt="">
+            <img class="search-card__poster" src="/poster-placeholder.svg" alt="" loading="lazy" decoding="async">
           <% end %>
           <div class="search-card__body">
             <strong><%= h(r[:title]) %></strong>

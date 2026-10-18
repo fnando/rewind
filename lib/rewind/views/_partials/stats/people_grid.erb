@@ -18,7 +18,7 @@
             <span class="person__avatar-wrap">
               <span class="person__avatar">
                 <% if person[:profile_path] %>
-                  <img src="https://image.tmdb.org/t/p/w92<%= person[:profile_path] %>" alt="">
+                  <img src="https://image.tmdb.org/t/p/w92<%= person[:profile_path] %>" alt="" loading="lazy" decoding="async">
                 <% else %>
                   <%= h(person[:name].to_s.split.map {|w| w[0] }.first(2).join.upcase) %>
                 <% end %>

@@ -54,7 +54,7 @@
         <% ep = @season_episodes[n] || {} %>
         <% ep_name = ep["name"] || "Episode #{n}" %>
         <li class="play-card<%= " play-card--unwatched" unless latest %>">
-          <img class="play-card__still" src="<%= still_url(ep["still_path"]) %>" alt="">
+          <img class="play-card__still" src="<%= still_url(ep["still_path"]) %>" alt="" loading="lazy" decoding="async">
           <div class="play-card__body">
             <% if latest %>
               <a class="play-card__title" href="/items/<%= latest.item_id %>"><%= h(ep_name) %></a>

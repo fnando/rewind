@@ -14,7 +14,7 @@
     end
 %>
 <li class="play-card play-card--album">
-  <img class="play-card__poster" src="<%= poster_url(item) %>" alt="">
+  <img class="play-card__poster" src="<%= poster_url(item) %>" alt="" width="104" height="156" loading="lazy" decoding="async">
   <div class="play-card__body">
     <% if album_item %>
       <a class="play-card__title" href="/items/<%= album_item.id %>"><%= h(album_name) %></a>
