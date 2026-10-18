@@ -10,7 +10,14 @@
       <% else %>
         <span class="play-card__title"><%= h(series_name) %></span>
       <% end %>
-      <span class="play-card__detail">S<%= play.item.season_number %> · E<%= play.item.episode_number %> — <a href="/items/<%= play.item.id %>"><%= h(play.item.title) %></a></span>
+      <span class="play-card__detail">
+        <% if play.item.metadata["source"] == "jellyfin" %>
+          <% if play.item.release_date %><%= h(format_date(play.item.release_date)) %> — <% end %>
+        <% else %>
+          S<%= play.item.season_number %> · E<%= play.item.episode_number %> —
+        <% end %>
+        <a href="/items/<%= play.item.id %>"><%= h(play.item.title) %></a>
+      </span>
     <% elsif play.item.media_type == "track" %>
       <a class="play-card__title" href="/items/<%= play.item.id %>"><%= h(play.item.title) %></a>
       <% artist_item = @music_parents && @music_parents[play.item.metadata["artist_external_id"]] %>

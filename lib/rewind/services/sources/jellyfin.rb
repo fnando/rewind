@@ -39,10 +39,14 @@ module Rewind
           {plays: plays, cursor: cursor || since}
         end
 
+        # Match to TMDB/MusicBrainz; failing that, keep the item anyway by
+        # building it straight from Jellyfin's own metadata (e.g. YouTube videos
+        # imported by Pinchflat have no external ids). Audio always resolves via
+        # MusicBrainz (synthetic ids), so it needs no fallback.
         def resolve(item)
           case item["Type"]
-          when "Movie" then resolve_movie(item)
-          when "Episode" then resolve_episode(item)
+          when "Movie" then resolve_movie(item) || generic_video(item, "movie")
+          when "Episode" then resolve_episode(item) || generic_episode(item)
           when "Audio" then resolve_audio(item)
           end
         end
@@ -175,6 +179,103 @@ module Rewind
         private def presence(value)
           str = value.to_s.strip
           str.empty? ? nil : str
+        end
+
+        # ----- Jellyfin-native fallback (no TMDB/MusicBrainz) -----
+
+        private def generic_video(item, media_type)
+          title = presence(item["Name"])
+          return unless title
+
+          upsert_item(
+            media_type: media_type,
+            external_id: generic_external_id(item),
+            title: title,
+            release_date: premiere_date(item),
+            runtime: ticks_to_minutes(item["RunTimeTicks"]),
+            poster_path: primary_image_url(item["Id"],
+                                           item.dig("ImageTags", "Primary")),
+            metadata: {"source" => "jellyfin"}
+          )
+        end
+
+        private def generic_episode(item)
+          title = presence(item["Name"])
+          series_id = presence(item["SeriesId"])
+          return unless title && series_id
+
+          series = ensure_generic_series(item, series_id)
+          upsert_item(
+            media_type: "episode",
+            external_id: generic_external_id(item),
+            parent_external_id: series.external_id,
+            title: title,
+            season_number: positive_int(item["ParentIndexNumber"]),
+            episode_number: positive_int(item["IndexNumber"]),
+            release_date: premiere_date(item),
+            runtime: ticks_to_minutes(item["RunTimeTicks"]),
+            poster_path: primary_image_url(item["Id"],
+                                           item.dig("ImageTags", "Primary")),
+            metadata: {
+              "series_name" => presence(item["SeriesName"]),
+              "source" => "jellyfin"
+            }
+          )
+        end
+
+        private def ensure_generic_series(item, series_id)
+          upsert_item(
+            media_type: "series",
+            external_id: "jellyfin:#{series_id}",
+            title: presence(item["SeriesName"]) || "Unknown series",
+            poster_path: primary_image_url(
+              series_id, presence(item["SeriesPrimaryImageTag"])
+            ),
+            metadata: {
+              "series_name" => presence(item["SeriesName"]),
+              "source" => "jellyfin"
+            }
+          )
+        end
+
+        # Prefer the stable YouTube id (survives re-imports) over Jellyfin's.
+        private def generic_external_id(item)
+          yt = presence(item.dig("ProviderIds", "youtube"))
+          yt ? "youtube:#{yt}" : "jellyfin:#{item['Id']}"
+        end
+
+        private def primary_image_url(item_id, tag)
+          return unless item_id && tag
+
+          base = @source.url.to_s.sub(%r{/+\z}, "")
+          "#{base}/Items/#{item_id}/Images/Primary?tag=#{tag}"
+        end
+
+        private def premiere_date(item)
+          premiere = presence(item["PremiereDate"])
+          return premiere[0, 10] if premiere
+
+          year = item["ProductionYear"]
+          year ? "#{year}-01-01" : nil
+        end
+
+        private def ticks_to_minutes(ticks)
+          minutes = (ticks.to_i / 600_000_000.0).round
+          minutes.positive? ? minutes : nil
+        end
+
+        private def upsert_item(media_type:, external_id:, **attrs)
+          existing = Rewind::Item.where(media_type: media_type,
+                                        external_id: external_id).first
+          attrs = attrs.merge(fetched_at: Time.now)
+          if existing
+            existing.update(attrs)
+            existing
+          else
+            Rewind::Item.create(
+              attrs.merge(media_type: media_type, external_id: external_id)
+            )
+          end
         end
       end
     end

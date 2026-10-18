@@ -98,8 +98,18 @@ module Rewind
 
       def still_url(path, size: "w300")
         return "/still-placeholder.svg" if path.to_s.empty?
+        return path if path.start_with?("http://", "https://")
 
         "https://image.tmdb.org/t/p/#{size}#{path}"
+      end
+
+      # Formats a "YYYY-MM-DD" date string as "Jul 1, 2026".
+      def format_date(value)
+        return "" if value.to_s.empty?
+
+        Date.parse(value.to_s).strftime("%b %-d, %Y")
+      rescue ArgumentError
+        value.to_s
       end
 
       def in_user_tz(time)

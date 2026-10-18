@@ -56,6 +56,21 @@ class ImagesProxyTest < Minitest::Test
     assert_includes last_response.headers["cache-control"], "immutable"
   end
 
+  test "a thumbnail on a configured source host is proxied" do
+    create_source(user_id: @user.id, url: "https://jf.test")
+    remote = "https://jf.test/Items/x/Images/Primary?tag=t"
+    artist = create_item(media_type: "artist", external_id: "mbid:artist:jf",
+                         title: "Chan", poster_path: remote)
+    WebMock.stub_request(:get, remote)
+           .to_return(status: 200, body: "THUMB",
+                      headers: {"Content-Type" => "image/jpeg"})
+
+    get @helper.poster_url(artist)
+
+    assert_equal 200, last_response.status
+    assert_equal "THUMB", last_response.body
+  end
+
   test "an upstream from a disallowed host falls back to the placeholder" do
     artist = create_item(media_type: "artist", external_id: "mbid:artist:x",
                          title: "X", poster_path: "https://evil.example/p.jpg")

@@ -40,10 +40,49 @@ class SourcesJellyfinTest < Minitest::Test
     assert_equal "tmdb:27205", item.external_id
   end
 
-  test "logs items it can't match so skips are visible with --verbose" do
+  def pinchflat_episode
+    {
+      "Id" => "ep-jf-1", "Type" => "Episode", "Name" => "ESCRITÓRIO CHATGPT",
+      "RunTimeTicks" => 1_800_243_080, "PremiereDate" => "2026-07-01T00:00:00Z",
+      "ProductionYear" => 2026, "IndexNumber" => 70_198,
+      "ParentIndexNumber" => 2026,
+      "ProviderIds" => {"youtube" => "9n6sxWtYz6I"},
+      "SeriesName" => "Porta dos Fundos", "SeriesId" => "series-jf-1",
+      "SeriesPrimaryImageTag" => "stag", "ImageTags" => {"Primary" => "etag"},
+      "UserData" => {"LastPlayedDate" => "2026-10-05T03:53:30Z"}
+    }
+  end
+
+  test "keeps an unmatched Jellyfin episode as a generic series + episode" do
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items/series-jf-1})
+           .to_return(status: 200, body: {"ProviderIds" => {}}.to_json,
+                      headers: {"Content-Type" => "application/json"})
+
+    item = adapter.resolve(pinchflat_episode)
+
+    assert_equal "episode", item.media_type
+    assert_equal "youtube:9n6sxWtYz6I", item.external_id
+    assert_equal "jellyfin:series-jf-1", item.parent_external_id
+    assert_equal "ESCRITÓRIO CHATGPT", item.title
+    assert_equal "2026-07-01", item.release_date
+    assert_equal 3, item.runtime
+    assert_equal "jellyfin", item.metadata["source"]
+    assert_includes item.poster_path, "/Items/ep-jf-1/Images/Primary?tag=etag"
+
+    series = Rewind::Item.where(media_type: "series",
+                                external_id: "jellyfin:series-jf-1").first
+
+    refute_nil series
+    assert_equal "Porta dos Fundos", series.title
+    assert_includes series.poster_path,
+                    "/Items/series-jf-1/Images/Primary?tag=stag"
+  end
+
+  test "logs items it still can't keep so skips are visible with --verbose" do
+    # Audio with no name can't resolve and has no fallback.
     stub_items([
       {
-        "Id" => "yt1", "Type" => "Movie", "Name" => "A YouTube Video",
+        "Id" => "a1", "Type" => "Audio",
         "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
       }
     ])
@@ -62,10 +101,9 @@ class SourcesJellyfinTest < Minitest::Test
 
     assert_empty result[:plays]
     assert_includes io.string, "fetched 1 played items"
-    assert_includes io.string, %[skipped Movie "A YouTube Video" (yt1)]
+    assert_includes io.string, "skipped Audio nil (a1)"
     assert_includes io.string, "no TMDB/MusicBrainz match"
-    # the raw Jellyfin payload is dumped so we can see what's available
-    assert_includes io.string, %[fields: {"Id":"yt1"]
+    assert_includes io.string, %[fields: {"Id":"a1"]
   end
 
   test "resolves an episode via the series' TMDB id" do
