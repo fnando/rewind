@@ -87,19 +87,35 @@ module Rewind
       username = params[:username].to_s.strip
       password = params[:password].to_s
 
+      # On failure, re-render settings with the form open and the entered URL
+      # and username prefilled, so nothing has to be retyped. The detail (with
+      # the underlying reason) is logged at info level, so `rewind run
+      # --verbose` surfaces it on the console.
+      fail_form = lambda do |message, detail: nil|
+        Rewind.logger.info(
+          "[settings] jellyfin connection failed for " \
+          "#{username.inspect} at #{url.inspect}: #{detail || message}"
+        )
+        session[:flash_error] = message
+        @open_source_form = true
+        @source_values = {url:, username:}
+        @sources = current_user.sources_dataset.order(:created_at).all
+        halt erb(:"settings/index")
+      end
+
       if url.empty? || username.empty?
-        session[:flash_error] = "Enter your Jellyfin URL and username."
-        redirect "/settings"
+        fail_form.call("Enter your Jellyfin URL and username.")
       end
 
       begin
         auth = Services::Jellyfin.new(url).authenticate(
           username:, password:
         )
-      rescue Services::Jellyfin::AuthError, Services::Jellyfin::Error
-        session[:flash_error] =
-          "Could not sign in to Jellyfin. Check the URL and credentials."
-        redirect "/settings"
+      rescue Services::Jellyfin::AuthError, Services::Jellyfin::Error => error
+        fail_form.call(
+          "Could not sign in to Jellyfin. Check the URL and credentials.",
+          detail: "#{error.class}: #{error.message}"
+        )
       end
 
       source = Source.new(
@@ -112,10 +128,10 @@ module Rewind
         if source.valid?
           source.save
         else
-          session[:flash_error] = source.errors.full_messages.join(". ")
+          fail_form.call(source.errors.full_messages.join(". "))
         end
       rescue Sequel::UniqueConstraintViolation
-        session[:flash_error] = "That Jellyfin account is already connected."
+        fail_form.call("That Jellyfin account is already connected.")
       end
 
       redirect "/settings"

@@ -83,17 +83,18 @@
       <% end %>
     </div>
 
-    <details class="disclosure">
+    <% source_values = @source_values || {} %>
+    <details class="disclosure"<%= " open" if @open_source_form %>>
       <summary>Connect Jellyfin</summary>
       <form method="post" action="/settings/sources" class="panel__body">
         <%= csrf_tag %>
         <div class="field">
           <label for="jf-url">Jellyfin URL</label>
-          <input class="input" id="jf-url" type="url" name="url" placeholder="https://jellyfin.example.com" required>
+          <input class="input" id="jf-url" type="url" name="url" placeholder="https://jellyfin.example.com" value="<%= h(source_values[:url]) %>" required>
         </div>
         <div class="field">
           <label for="jf-username">Username</label>
-          <input class="input" id="jf-username" type="text" name="username" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required>
+          <input class="input" id="jf-username" type="text" name="username" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" value="<%= h(source_values[:username]) %>" required>
         </div>
         <div class="field">
           <label for="jf-password">Password</label>

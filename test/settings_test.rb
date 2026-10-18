@@ -41,6 +41,41 @@ class SettingsSourcesTest < Minitest::Test
     assert_equal 0, @user.sources_dataset.count
   end
 
+  test "a failed connection reopens the form prefilled with what was entered" do
+    stub_auth(status: 401)
+
+    post "/settings/sources",
+         {url: "https://jf.test", username: "fnando", password: "y"}
+
+    assert_equal 200, last_response.status
+    # The disclosure is open and the URL/username are prefilled; the password
+    # is never echoed back.
+    assert_includes last_response.body, "<details class=\"disclosure\" open>"
+    assert_includes last_response.body, %[value="https://jf.test"]
+    assert_includes last_response.body, %[value="fnando"]
+    refute_includes last_response.body, %[value="y"]
+  end
+
+  test "a failed connection is logged at info level (surfaced by --verbose)" do
+    stub_auth(status: 401)
+
+    io = StringIO.new
+    original_level = Rewind.logger.level
+    Rewind.logger.reopen(io)
+    Rewind.logger.level = Logger::INFO
+
+    begin
+      post "/settings/sources",
+           {url: "https://jf.test", username: "fnando", password: "y"}
+    ensure
+      Rewind.logger.level = original_level
+      Rewind.logger.reopen($stdout)
+    end
+
+    assert_includes io.string, "[settings] jellyfin connection failed"
+    assert_includes io.string, "fnando"
+  end
+
   test "toggling a source flips enabled" do
     source = create_source(user_id: @user.id)
 
