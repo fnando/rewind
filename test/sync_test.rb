@@ -52,6 +52,19 @@ class SyncTest < Minitest::Test
     assert_equal 1, Rewind::Play.count
   end
 
+  test "recording the same source event twice keeps a single play" do
+    item = create_item(media_type: "movie")
+    play = {
+      item_id: item.id, played_at: Time.now,
+      source_event_id: "jellyfin:m1:2026-10-16T05:00:00Z"
+    }
+
+    Rewind::Services::Sync.record_play(@source, play)
+    Rewind::Services::Sync.record_play(@source, play)
+
+    assert_equal 1, Rewind::Play.count
+  end
+
   test "an unauthorized response disables the source" do
     WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
            .to_return(status: 401)
