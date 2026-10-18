@@ -25,7 +25,7 @@
 
       <% if @plays.any? %>
         <div class="chips">
-          <span class="chip chip--soft">Played <%= @plays.size %> time<%= "s" unless @plays.size == 1 %></span>
+          <span class="chip chip--soft">Played <%= pluralize(@plays.size, "time") %></span>
           <% if @plays.first.played_at %><span class="chip">Last played <%= in_user_tz(@plays.first.played_at).strftime("%b %-d, %Y") %></span><% end %>
         </div>
       <% end %>

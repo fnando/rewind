@@ -3,7 +3,7 @@
   <div class="stat-card stat-card--titles">
     <span class="stat-card__icon">◉</span>
     <span class="stat-card__value"><%= cards[:different_titles] %></span>
-    <span class="stat-card__label"><%= cards[:different_titles] == 1 ? "different title" : "different titles" %></span>
+    <span class="stat-card__label"><%= pluralize(cards[:different_titles], "different title", count: false) %></span>
   </div>
 
   <div class="stat-card stat-card--rewatches">
@@ -26,6 +26,6 @@
   <div class="stat-card stat-card--avg">
     <span class="stat-card__icon">⏱</span>
     <span class="stat-card__value"><%= cards[:average_per_week] %></span>
-    <span class="stat-card__label"><%= cards[:average_per_week] == 1 ? "play" : "plays" %> a week, on average</span>
+    <span class="stat-card__label"><%= pluralize(cards[:average_per_week], "play", count: false) %> a week, on average</span>
   </div>
 </section>

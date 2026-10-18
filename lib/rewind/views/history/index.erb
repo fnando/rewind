@@ -26,10 +26,10 @@
       <h2 class="day__title" id="day-<%= day_id %>">
         <% if day %>
           <%= h(day_label(day)) %>
-          <span class="day__meta"><%= day.strftime("%A, %B %-d") %> · <%= plays.size %> play<%= "s" unless plays.size == 1 %></span>
+          <span class="day__meta"><%= day.strftime("%A, %B %-d") %> · <%= pluralize(plays.size, "play") %></span>
         <% else %>
           Watched
-          <span class="day__meta">date unknown · <%= plays.size %> play<%= "s" unless plays.size == 1 %></span>
+          <span class="day__meta">date unknown · <%= pluralize(plays.size, "play") %></span>
         <% end %>
       </h2>
       <ul class="play-grid">

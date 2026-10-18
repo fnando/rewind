@@ -11,7 +11,7 @@
           <% parts << @item.release_date[0, 4] if @item.release_date %>
           <% parts << @item.genres.join(", ") if @item.genres.any? %>
           <% n = @item.metadata["number_of_seasons"].to_i %>
-          <% parts << "#{n} season#{"s" unless n == 1}" if n.positive? %>
+          <% parts << pluralize(n, "season") if n.positive? %>
           <%= h(parts.join(" · ")) %>
         </span>
       </div>

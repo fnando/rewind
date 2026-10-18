@@ -31,12 +31,14 @@ class StreaksTest < Minitest::Test
 
   # --- Streak logic --------------------------------------------------------
 
-  test "no plays yields a zero overall streak and no groups" do
+  test "no plays yields a zero overall streak and empty groups" do
     result = streaks
 
     assert_equal 0, result[:overall][:current]
     assert_nil result[:overall][:longest]
-    assert_empty result[:by_media_group]
+    assert_equal %w[movie series music], result[:by_media_group].keys
+    assert_equal 0, result[:by_media_group]["movie"][:current]
+    assert_nil result[:by_media_group]["movie"][:longest]
   end
 
   test "a single play today is a current streak of one" do
@@ -136,6 +138,50 @@ class StreaksTest < Minitest::Test
     assert_equal 1, result[:overall][:current]
     assert_equal 3, result[:overall][:longest][:length]
     refute result[:overall][:is_record]
+  end
+
+  test "an active streak exposes its current range and strip" do
+    play_on("2026-10-17")
+    play_on("2026-10-18")
+
+    scope = streaks(today: Date.new(2026, 10, 18))[:overall]
+    strip = scope[:strip]
+
+    assert_equal "2026-10-17", scope[:current_range][:start]
+    assert_equal "2026-10-18", scope[:current_range][:end]
+    assert_equal 14, strip.size
+    assert strip.last[:today]
+    assert strip.last[:in_streak]
+    assert strip[-2][:in_streak]
+    refute strip.first[:watched]
+  end
+
+  test "a record streak exposes the previous best" do
+    %w[2026-09-01 2026-09-02 2026-09-03].each {|d| play_on(d) }
+    %w[2026-10-14 2026-10-15 2026-10-16 2026-10-17 2026-10-18].each do |d|
+      play_on(d)
+    end
+
+    scope = streaks(today: Date.new(2026, 10, 18))[:overall]
+
+    assert scope[:is_record]
+    assert_equal 5, scope[:current]
+    assert_equal 3, scope[:previous_best][:length]
+    assert_equal "2026-09-01", scope[:previous_best][:start]
+  end
+
+  test "an ended streak exposes the last run and highlights it in the strip" do
+    %w[2026-10-08 2026-10-09 2026-10-10].each {|d| play_on(d) }
+
+    scope = streaks(today: Date.new(2026, 10, 18))[:overall]
+
+    assert_equal 0, scope[:current]
+    assert_nil scope[:current_range]
+    assert_equal 3, scope[:last_streak][:length]
+    assert_equal "2026-10-10", scope[:last_streak][:end]
+    highlighted = scope[:strip].count {|cell| cell[:in_streak] }
+
+    assert_equal 3, highlighted
   end
 
   test "music tracks form their own group" do
@@ -241,8 +287,54 @@ class StreaksTest < Minitest::Test
     get "/stats?period=all&type=all"
 
     assert_equal 200, last_response.status
-    assert_includes last_response.body, "Streak"
-    assert_includes last_response.body, "straight"
+    assert_includes last_response.body, "streak-card"
+    assert_includes last_response.body, "in a row"
+    assert_includes last_response.body, "Longest streak:"
+  end
+
+  test "the stats page renders the record state end to end" do
+    item = create_item(media_type: "movie")
+    # A 3-day current streak (today back) plus a shorter older streak.
+    [0, 1, 2, 30].each do |days_ago|
+      Rewind::Play.create(user_id: @user.id, item_id: item.id,
+                          played_at: Time.now - (days_ago * 86_400),
+                          source: "manual")
+    end
+    sign_in(@user)
+
+    get "/stats?period=all&type=all"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "New record"
+    assert_includes last_response.body, "Previous best:"
+  end
+
+  test "the stats page renders the ended state end to end" do
+    item = create_item(media_type: "movie")
+    # A 3-day streak that ended several days ago; nothing today or yesterday.
+    [5, 6, 7].each do |days_ago|
+      Rewind::Play.create(user_id: @user.id, item_id: item.id,
+                          played_at: Time.now - (days_ago * 86_400),
+                          source: "manual")
+    end
+    sign_in(@user)
+
+    get "/stats?period=all&type=all"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "streak-card--idle"
+    assert_includes last_response.body, "chase it"
+  end
+
+  test "the stats page shows the first-time streak card with a CTA" do
+    create_item(media_type: "movie") # item but no plays
+    sign_in(@user)
+
+    get "/stats?period=all&type=all"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "No streak yet"
+    assert_includes last_response.body, "Log a watch"
   end
 
   # --- Dates / time zones --------------------------------------------------

@@ -44,9 +44,12 @@ module Rewind
             .gsub(/^-+|-+$/, "")
       end
 
-      def pluralize(count, singular, plural = nil)
-        word = count == 1 ? singular : (plural || "#{singular}s")
-        "#{count} #{word}"
+      # Pluralize `singular` for `number`. By default the number is included
+      # ("5 days"); pass count: false for just the word ("days"), handy when the
+      # number is rendered separately.
+      def pluralize(number, singular, plural = nil, count: true)
+        word = number == 1 ? singular : (plural || "#{singular}s")
+        count ? "#{number} #{word}" : word
       end
 
       def avatar_letter(user)

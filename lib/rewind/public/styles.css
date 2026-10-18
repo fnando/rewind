@@ -67,6 +67,19 @@
   --heat-2: #7FA3E8;
   --heat-3: #3C77DB;
   --heat-4: #1F5FD1;
+
+  /* Streak card */
+  --foot: #FAFBFC;
+  --flame: #C2620A;
+  --flame-soft: #FDEFD9;
+  --on-flame: #FFFFFF;
+  --watched: #C3C9D0;
+  --empty: #EEF1F4;
+  --gold: #B07A00;
+  --gold-soft: #FBF0CF;
+  --gold-fg: #6B4A00;
+  --idle-bg: #EEF1F4;
+  --idle-fg: #8A929C;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -124,6 +137,19 @@
     --heat-2: #4C77C8;
     --heat-3: #6A9BFF;
     --heat-4: #A9C4FF;
+
+    /* Streak card */
+    --foot: #262D39;
+    --flame: #F0A35E;
+    --flame-soft: #3A2A1C;
+    --on-flame: #1A1F27;
+    --watched: #4A5361;
+    --empty: #2C3340;
+    --gold: #E9B949;
+    --gold-soft: #3A3220;
+    --gold-fg: #F3D58A;
+    --idle-bg: #2C3340;
+    --idle-fg: #7D8796;
   }
 }
 
@@ -1483,4 +1509,139 @@ select.input::-ms-expand { display: none; }
   .stars button { width: 30px; height: 40px; }
   .btn--soft { min-height: 40px; }
   .icon-btn, .thumbs button { height: 40px; }
+}
+
+/* ---------- Streak card ---------- */
+
+.streak-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.streak-card__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px 32px;
+  padding: 22px 24px;
+}
+.streak-card__summary { flex: 1 1 340px; min-width: 0; display: flex; align-items: center; gap: 18px; }
+.streak-card__icon {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--flame-soft);
+  color: var(--flame);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.streak-card__icon svg { width: 32px; height: 32px; fill: currentColor; stroke: currentColor; }
+.streak-card__icon svg .stroke-only { fill: none; }
+.streak-card__text { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.streak-card__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.streak-card__head h2 { margin: 0; font-size: 15px; font-weight: 700; color: var(--text-2); }
+.streak-card__badge {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--gold-soft);
+  color: var(--gold-fg);
+  font-size: 12px;
+  font-weight: 700;
+}
+.streak-card__count { margin: 0; display: flex; align-items: baseline; gap: 8px; }
+.streak-card__count strong {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.streak-card__count span { font-size: 18px; font-weight: 700; }
+.streak-card__line { margin: 0; color: var(--text-2); line-height: 1.45; text-wrap: pretty; }
+
+/* Record state: gold flame */
+.streak-card--record .streak-card__icon { background: var(--gold-soft); color: var(--gold); }
+
+/* Idle state (ended / first time): grey flame, muted number */
+.streak-card--idle .streak-card__icon { background: var(--idle-bg); color: var(--idle-fg); }
+.streak-card--idle .streak-card__icon svg { fill: none; }
+.streak-card--idle .streak-card__count { color: var(--muted); }
+
+/* 14-day strip */
+.streak-strip { flex: 0 1 auto; max-width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.streak-strip__scroll { overflow-x: auto; }
+.streak-strip ol {
+  margin: 0;
+  padding: 2px;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(14, 28px);
+  gap: 6px;
+}
+.streak-strip li { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.streak-day {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--empty);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.streak-day svg { width: 14px; height: 14px; }
+.streak-day.is-watched { background: var(--watched); }
+.streak-day.is-streak { background: var(--flame); color: var(--on-flame); }
+.streak-day.is-today { border: 2px solid var(--text); }
+.streak-day.is-today.is-pending { background: transparent; border-style: dashed; border-color: var(--muted); }
+.streak-day__label { font-size: 11px; font-weight: 500; color: var(--muted); }
+.streak-day__label.is-today { font-weight: 700; color: var(--text); }
+
+.streak-legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.streak-legend span { display: flex; align-items: center; gap: 6px; }
+.streak-legend i { width: 10px; height: 10px; border-radius: 3px; }
+.streak-legend .is-streak { background: var(--flame); }
+.streak-legend .is-watched { background: var(--watched); }
+.streak-legend .is-today { border: 2px solid var(--text); }
+
+/* Footer: record + progress, or the first-time call to action */
+.streak-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 24px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--foot);
+}
+.streak-card__foot--cta { justify-content: space-between; }
+.streak-best { display: flex; align-items: center; gap: 8px; color: var(--text-2); }
+.streak-best svg { flex: none; color: var(--gold); }
+.streak-best strong { color: var(--text); font-weight: 700; }
+.streak-best small { color: var(--muted); font-size: inherit; }
+.streak-progress { flex: 1 1 220px; min-width: 0; display: flex; align-items: center; gap: 12px; }
+.streak-progress__bar { flex: 1; height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
+.streak-progress__bar,
+.streak-progress__fill { display: block; }
+.streak-progress__fill { height: 100%; border-radius: 999px; background: var(--flame); }
+.streak-card--record .streak-progress__fill { background: var(--gold); }
+.streak-progress__text { flex: none; font-size: 13px; font-weight: 600; color: var(--text-2); }
+
+@media (max-width: 640px) {
+  .streak-card__main { padding: 18px 16px; }
+  .streak-card__foot { padding: 12px 16px; }
+  .streak-card__icon { width: 52px; height: 52px; border-radius: 14px; }
+  .streak-card__icon svg { width: 26px; height: 26px; }
+  .streak-card__count strong { font-size: 36px; }
+  .streak-card__foot--cta .btn { width: 100%; }
+  /* On phones the strip shows the last 7 days so it fits without scrolling */
+  .streak-strip { width: 100%; }
+  .streak-strip ol { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .streak-strip li:nth-child(-n+7) { display: none; }
+  .streak-day { width: 100%; max-width: 40px; height: auto; aspect-ratio: 1; }
 }

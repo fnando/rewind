@@ -154,16 +154,21 @@ module Rewind
         @user = user
       end
 
+      # Width of the activity strip shown on the card.
+      STRIP_DAYS = 14
+
       def get_streaks(today: nil)
         today ||= self.class.today_for(@user)
 
         Rewind.db.transaction do
-          {
-            overall: summarize(overall_islands, today),
-            by_media_group: group_islands.transform_values do |islands|
-              summarize(islands, today)
-            end
-          }
+          groups = group_islands
+          by_media_group = {}
+          MEDIA_GROUPS.values.uniq.each do |g|
+            by_media_group[g] = summarize(groups[g] || [], today)
+          end
+          overall = summarize(overall_islands, today)
+
+          {overall:, by_media_group:}
         end
       end
 
@@ -205,24 +210,66 @@ module Rewind
         rows.group_by {|row| row[:media_group] }
       end
 
-      # Reduce a set of islands to current + longest + is-record.
+      # Reduce a set of islands to everything the card needs: the current and
+      # longest runs, whether the current run is a record, the previous best and
+      # most recent runs, and a day-by-day strip for the last STRIP_DAYS.
       private def summarize(islands, today)
-        return {current: 0, longest: nil, is_record: false} if islands.empty?
+        if islands.empty?
+          return {
+            current: 0, longest: nil, is_record: false, current_range: nil,
+            previous_best: nil, last_streak: nil,
+            strip: strip_for([], nil, today)
+          }
+        end
 
-        longest = islands.max_by {|i| [i[:length], i[:end_day]] }
         alive = [today.iso8601, (today - 1).iso8601]
         current_island = islands.find {|i| alive.include?(i[:end_day]) }
+        last_island = islands.max_by {|i| i[:end_day] }
+        others = islands - [current_island].compact
+        best_other = others.max_by {|i| [i[:length], i[:end_day]] }
+
         current = current_island ? current_island[:length] : 0
+        best_other_len = best_other ? best_other[:length] : 0
+        is_record = current.positive? && current >= best_other_len
+        highlight = current_island || last_island
 
         {
           current:,
-          longest: {
-            length: longest[:length],
-            start: longest[:start_day],
-            end: longest[:end_day]
-          },
-          is_record: current.positive? && current >= longest[:length]
+          longest: island_hash(islands.max_by {|i| [i[:length], i[:end_day]] }),
+          is_record:,
+          current_range: current_island && island_hash(current_island),
+          previous_best: best_other && island_hash(best_other),
+          last_streak: island_hash(last_island),
+          strip: strip_for(islands, highlight, today)
         }
+      end
+
+      private def island_hash(island)
+        return unless island
+
+        {
+          length: island[:length], start: island[:start_day],
+          end: island[:end_day]
+        }
+      end
+
+      # The last STRIP_DAYS calendar days, oldest first, each flagged as watched
+      # (falls in any island), part of the highlighted run, and/or today.
+      private def strip_for(islands, highlight, today)
+        (0...STRIP_DAYS).map do |offset|
+          date = today - (STRIP_DAYS - 1 - offset)
+          iso = date.iso8601
+          {
+            date:,
+            watched: islands.any? {|i| covers?(i, iso) },
+            in_streak: highlight ? covers?(highlight, iso) : false,
+            today: date == today
+          }
+        end
+      end
+
+      private def covers?(island, iso)
+        iso.between?(island[:start_day], island[:end_day])
       end
     end
   end
