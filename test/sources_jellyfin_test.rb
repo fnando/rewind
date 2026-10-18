@@ -64,6 +64,8 @@ class SourcesJellyfinTest < Minitest::Test
     assert_includes io.string, "fetched 1 played items"
     assert_includes io.string, %[skipped Movie "A YouTube Video" (yt1)]
     assert_includes io.string, "no TMDB/MusicBrainz match"
+    # the raw Jellyfin payload is dumped so we can see what's available
+    assert_includes io.string, %[fields: {"Id":"yt1"]
   end
 
   test "resolves an episode via the series' TMDB id" do

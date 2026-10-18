@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "json"
+
 module Rewind
   module Services
     # Per-provider sync adapters. Each implements:
@@ -70,6 +72,8 @@ module Rewind
           Rewind.logger.info(
             "[sync/jellyfin] skipped #{describe(item)} — #{reason}"
           )
+          # Dump what Jellyfin gave us, so we can see what a fallback could use.
+          Rewind.logger.info("[sync/jellyfin]   fields: #{JSON.generate(item)}")
           nil
         end
 
