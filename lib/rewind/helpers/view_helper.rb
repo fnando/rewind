@@ -58,9 +58,23 @@ module Rewind
         "/avatars/#{user.id}?v=#{mtime}"
       end
 
+      # A cover image URL. Routed through the local cache proxy (/images/...)
+      # so the slow upstream (esp. Cover Art Archive) is fetched once and then
+      # served from disk. Falls back to the raw remote URL for items without an
+      # id, and to the placeholder when there's no art.
       def poster_url(item, size: "w185")
+        remote = remote_poster_url(item, size)
+        return "/poster-placeholder.svg" unless remote
+        return remote unless item.respond_to?(:id) && item.id
+
+        digest = Digest::MD5.hexdigest(remote)[0, 8]
+        "/images/#{item.id}-#{size}-#{digest}.jpg"
+      end
+
+      # The upstream CDN URL for an item's poster, or nil when it has no art.
+      def remote_poster_url(item, size = "w185")
         path = item&.poster_path.to_s
-        return "/poster-placeholder.svg" if path.empty?
+        return if path.empty?
         return path if path.start_with?("http://", "https://")
 
         "https://image.tmdb.org/t/p/#{size}#{path}"

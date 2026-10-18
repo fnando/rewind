@@ -281,6 +281,8 @@ module Rewind
                      desc: "Run pending migrations before booting"
     option :verbose, type: :boolean, default: false, aliases: "-v",
                      desc: "Log sync activity at info level"
+    option :image_storage_dir, type: :string,
+                               desc: "Directory to cache proxied cover images"
     def run_server
       CLI.load_env!(options[:env])
       Rewind.logger.level = Logger::INFO if options[:verbose]
@@ -293,6 +295,7 @@ module Rewind
       end
       Rewind.config.port = options[:port] if options[:port]
       Rewind.config.host = options[:host] if options[:host]
+      Rewind.config.image_storage_dir = options[:image_storage_dir]
       app = Rewind.application
       Rewind::Services::Sync.start_thread
       wildcard = %w[0.0.0.0 ::].include?(Rewind.config.host)

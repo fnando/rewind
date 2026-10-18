@@ -16,6 +16,8 @@ require_relative "services/sources/jellyfin"
 require_relative "services/sync"
 require_relative "services/stats"
 require_relative "services/avatar"
+require_relative "services/image_cache"
+require_relative "image_store"
 
 module Rewind
   class Application < Sinatra::Base
@@ -30,6 +32,8 @@ module Rewind
     set :show_exceptions, false
     set :raise_errors, false
     set :dump_errors, false
+
+    use ImageStore
 
     use Rack::Session::Cookie,
         key: "rewind.session",
@@ -62,7 +66,7 @@ module Rewind
       path = request.path_info
       public_paths = ["/login", "/logout"]
       next if public_paths.include?(path)
-      next if path.start_with?("/assets", "/public")
+      next if path.start_with?("/assets", "/public", "/images")
 
       halt redirect "/login" unless @current_user
     end
@@ -92,6 +96,7 @@ module Rewind
     require_relative "routes/auth"
     require_relative "routes/items"
     require_relative "routes/history"
+    require_relative "routes/images"
     require_relative "routes/settings"
     require_relative "routes/stats"
   end

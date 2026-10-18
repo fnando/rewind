@@ -5,6 +5,7 @@ module Rewind
     attr_accessor :data_dir, :tmdb_api_key, :fanart_api_key,
                   :session_secret, :host, :port, :keyring, :sync_interval,
                   :allowed_hosts, :puma_plugins
+    attr_writer :image_storage_dir
 
     def initialize
       @data_dir = ENV["REWIND_DATA_DIR"] || File.join(Dir.pwd, "data")
@@ -45,6 +46,10 @@ module Rewind
 
     def db_path
       File.join(data_dir, "rewind.sqlite3")
+    end
+
+    def image_storage_dir
+      @image_storage_dir || File.join(data_dir, "images")
     end
 
     def avatars_dir
