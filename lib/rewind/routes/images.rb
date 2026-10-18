@@ -1,15 +1,16 @@
 # frozen_string_literal: true
 
+require "base64"
+
 module Rewind
   class Application < Sinatra::Base
-    # Cache miss for a cover image: fetch the upstream poster, store it under
-    # the image storage dir so ImageStore serves it from disk next time, and
-    # return the bytes for this request. Falls back to placeholder on failure.
-    get %r{/images/(\d+)-(w\d+|original)-[0-9a-f]{8}\.jpg} do
-      item_id, size = params[:captures]
+    # Cache miss for a cover image: the path is the base64 upstream URL, so
+    # every item sharing a cover resolves here identically. Fetch it, store it
+    # under the image storage dir so ImageStore serves it from disk next time,
+    # and return the bytes. Falls back to placeholder on failure.
+    get %r{/images/([A-Za-z0-9_-]+)\.jpg} do
       name = File.basename(request.path_info)
-      item = Item[item_id.to_i]
-      remote = item && remote_poster_url(item, size)
+      remote = decode_image_token(params[:captures].first)
       pass unless remote
 
       Rewind.logger.info("[images] miss #{name}, downloading #{remote}")
@@ -25,6 +26,16 @@ module Rewind
       cache_control :public, max_age: 31_536_000
       content_type "image/jpeg"
       data
+    end
+
+    # Decodes the base64url token back into the upstream URL. The actual SSRF
+    # guard is the host allowlist in Services::ImageCache.
+    private def decode_image_token(token)
+      padded = token + ("=" * ((4 - (token.length % 4)) % 4))
+      url = Base64.urlsafe_decode64(padded)
+      url if url.start_with?("https://")
+    rescue ArgumentError
+      nil
     end
 
     private def store_image(name, data)

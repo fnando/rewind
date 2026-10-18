@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "base64"
+
 module Rewind
   module Helpers
     module ViewHelper
@@ -59,16 +61,14 @@ module Rewind
       end
 
       # A cover image URL. Routed through the local cache proxy (/images/...)
-      # so the slow upstream (esp. Cover Art Archive) is fetched once and then
-      # served from disk. Falls back to the raw remote URL for items without an
-      # id, and to the placeholder when there's no art.
+      # keyed by the upstream URL itself, so every item that shares a cover
+      # (e.g. all tracks of an album, whose art is the release-group's) maps to
+      # one URL, fetched once and served from disk. Placeholder when no art.
       def poster_url(item, size: "w185")
         remote = remote_poster_url(item, size)
         return "/poster-placeholder.svg" unless remote
-        return remote unless item.respond_to?(:id) && item.id
 
-        digest = Digest::MD5.hexdigest(remote)[0, 8]
-        "/images/#{item.id}-#{size}-#{digest}.jpg"
+        "/images/#{Base64.urlsafe_encode64(remote, padding: false)}.jpg"
       end
 
       # The upstream CDN URL for an item's poster, or nil when it has no art.

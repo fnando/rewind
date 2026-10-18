@@ -12,7 +12,7 @@ class ImagesProxyTest < Minitest::Test
     @item = create_item(media_type: "movie", title: "Heat",
                         poster_path: "/heat.jpg")
     @remote = "https://image.tmdb.org/t/p/w185/heat.jpg"
-    @url = proxied_url(@item, @remote, "w185")
+    @url = proxied_url(@remote)
   end
 
   def teardown
@@ -20,9 +20,9 @@ class ImagesProxyTest < Minitest::Test
     FileUtils.remove_entry(@image_dir) if @image_dir && File.exist?(@image_dir)
   end
 
-  def proxied_url(item, remote, size)
-    digest = Digest::MD5.hexdigest(remote)[0, 8]
-    "/images/#{item.id}-#{size}-#{digest}.jpg"
+  # The proxy keys on the upstream URL, so this mirrors poster_url's scheme.
+  def proxied_url(remote)
+    "/images/#{Base64.urlsafe_encode64(remote, padding: false)}.jpg"
   end
 
   test "poster_url routes items through the local image proxy" do
@@ -63,14 +63,25 @@ class ImagesProxyTest < Minitest::Test
   end
 
   test "an upstream from a disallowed host falls back to the placeholder" do
-    item = create_item(media_type: "artist", title: "X",
-                       poster_path: "https://evil.example/pic.jpg")
-    url = proxied_url(item, "https://evil.example/pic.jpg", "w185")
-
-    get url
+    get proxied_url("https://evil.example/pic.jpg")
 
     assert_equal 302, last_response.status
     assert_includes last_response.headers["location"], "/poster-placeholder.svg"
+  end
+
+  test "tracks that share an album cover resolve to one proxied URL" do
+    cover = "https://coverartarchive.org/release-group/rg-1/front-250"
+    two = (1..2).map do |n|
+      create_item(media_type: "track", external_id: "mbid:t#{n}",
+                  title: "Track #{n}", poster_path: cover,
+                  metadata_json: {"album_external_id" => "mbid:rg:1"}.to_json)
+    end
+
+    helper = Object.new.extend(Rewind::Helpers::ViewHelper)
+    urls = two.map {|track| helper.poster_url(track) }
+
+    assert_equal 1, urls.uniq.size
+    assert_equal proxied_url(cover), urls.first
   end
 
   test "logs the download on a miss and the hit on a cached serve" do
