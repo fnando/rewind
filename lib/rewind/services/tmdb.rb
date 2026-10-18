@@ -174,6 +174,9 @@ module Rewind
                          })
                    .get("#{BASE_URL}#{path}", params: params)
 
+        if response.is_a?(HTTPX::ErrorResponse)
+          raise Error, "TMDB request failed: #{response.error.message}"
+        end
         unless response.status.between?(200, 299)
           raise Error, "TMDB request failed: #{response.status}"
         end

@@ -31,6 +31,9 @@ module Rewind
         response = HTTPX.get("#{BASE_URL}#{path}",
                              params: {api_key: @api_key})
 
+        if response.is_a?(HTTPX::ErrorResponse)
+          raise Error, "fanart.tv request failed: #{response.error.message}"
+        end
         unless response.status.between?(200, 299)
           raise Error, "fanart.tv request failed: #{response.status}"
         end
