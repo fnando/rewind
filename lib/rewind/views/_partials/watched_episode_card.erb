@@ -4,7 +4,7 @@
   <div class="play-card__body">
     <a class="play-card__title" href="/items/<%= ep.id %>"><%= h(ep.title) %></a>
     <% if ep.release_date %><span class="play-card__detail"><%= h(format_date(ep.release_date)) %></span><% end %>
-    <span class="play-card__status is-watched"><%= check_svg %>Watched <%= in_user_tz(latest.played_at).strftime("%b %-d") %> · <%= h(latest.source.capitalize) %></span>
+    <span class="play-card__status is-watched"><%= check_svg %><%= watched_status(latest) %> · <%= h(latest.source.capitalize) %></span>
     <% if plays.size > 1 %><span class="badge"><%= plays.size %> watches</span><% end %>
     <div class="play-card__actions">
       <%= rating_input(ep, user_item, current_user) %>

@@ -103,6 +103,30 @@ module Rewind
         "https://image.tmdb.org/t/p/#{size}#{path}"
       end
 
+      # The time element for a history card, or just "Watched" when the play
+      # has no recorded date.
+      def play_time_html(play)
+        return "Watched" unless play.played_at
+
+        %[<time datetime="#{play.played_at.iso8601}">] \
+          "#{format_time(play.played_at)}</time>"
+      end
+
+      # "Watched Jul 1" status, or just "Watched" without a date.
+      def watched_status(play, fmt = "%b %-d")
+        return "Watched" unless play.played_at
+
+        "Watched #{in_user_tz(play.played_at).strftime(fmt)}"
+      end
+
+      # The dated <time> for a play row on an item page, or "Date unknown".
+      def play_date_html(play, fmt = "%a, %b %-d, %Y")
+        return "Date unknown" unless play.played_at
+
+        %[<time datetime="#{play.played_at.iso8601}">] \
+          "#{in_user_tz(play.played_at).strftime(fmt)}</time>"
+      end
+
       # Formats a "YYYY-MM-DD" date string as "Jul 1, 2026".
       def format_date(value)
         return "" if value.to_s.empty?

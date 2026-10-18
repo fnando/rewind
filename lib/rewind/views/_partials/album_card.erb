@@ -5,7 +5,7 @@
   artist_item = @music_parents && @music_parents[item.metadata["artist_external_id"]]
   album_item = @music_parents && @music_parents[item.metadata["album_external_id"]]
   album_name = item.album || item.title
-  times = plays.map(&:played_at).minmax
+  times = plays.map(&:played_at).compact.minmax
   time_label =
     if format_time(times[0]) == format_time(times[1])
       format_time(first.played_at)

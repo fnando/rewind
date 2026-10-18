@@ -63,7 +63,7 @@
             <% end %>
             <span class="play-card__detail">S<%= @current_season %> · E<%= n %></span>
             <% if latest %>
-              <span class="play-card__status is-watched"><%= check_svg %>Watched <%= in_user_tz(latest.played_at).strftime("%b %-d") %> · <%= latest.source.capitalize %></span>
+              <span class="play-card__status is-watched"><%= check_svg %><%= watched_status(latest) %> · <%= latest.source.capitalize %></span>
               <% if plays.size > 1 %>
                 <span class="badge"><%= plays.size %> watches</span>
               <% end %>

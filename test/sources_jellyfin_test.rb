@@ -140,6 +140,22 @@ class SourcesJellyfinTest < Minitest::Test
     assert_equal "jellyfin:v10", item.external_id
   end
 
+  test "keeps a watched item with no play date as a null-dated play" do
+    stub_tmdb_movie(27_205)
+    stub_items([
+      {
+        "Id" => "m2", "Type" => "Movie", "Name" => "Inception",
+        "ProviderIds" => {"Tmdb" => "27205"},
+        "UserData" => {"Played" => true}
+      }
+    ])
+
+    play = adapter.recent_plays(since: nil)[:plays].first
+
+    assert_nil play[:played_at]
+    assert_equal "jellyfin:m2:played", play[:source_event_id]
+  end
+
   test "logs items it still can't keep so skips are visible with --verbose" do
     # Audio with no name can't resolve and has no fallback.
     stub_items([

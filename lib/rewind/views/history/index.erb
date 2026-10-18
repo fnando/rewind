@@ -21,10 +21,16 @@
   <% end %>
 
   <% @plays_by_day.each do |day, plays| %>
-    <section class="day" aria-labelledby="day-<%= day.iso8601 %>">
-      <h2 class="day__title" id="day-<%= day.iso8601 %>">
-        <%= h(day_label(day)) %>
-        <span class="day__meta"><%= day.strftime("%A, %B %-d") %> · <%= plays.size %> play<%= "s" unless plays.size == 1 %></span>
+    <% day_id = day ? day.iso8601 : "undated" %>
+    <section class="day" aria-labelledby="day-<%= day_id %>">
+      <h2 class="day__title" id="day-<%= day_id %>">
+        <% if day %>
+          <%= h(day_label(day)) %>
+          <span class="day__meta"><%= day.strftime("%A, %B %-d") %> · <%= plays.size %> play<%= "s" unless plays.size == 1 %></span>
+        <% else %>
+          Watched
+          <span class="day__meta">date unknown · <%= plays.size %> play<%= "s" unless plays.size == 1 %></span>
+        <% end %>
       </h2>
       <ul class="play-grid">
         <% group_day_plays(plays).each do |entry| %>

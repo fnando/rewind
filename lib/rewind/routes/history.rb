@@ -22,7 +22,7 @@ module Rewind
       @plays = rows.first(PLAYS_PER_PAGE)
       tz = TZInfo::Timezone.get(current_user.timezone || "UTC")
       @plays_by_day = @plays.group_by do |p|
-        tz.to_local(p.played_at.utc).to_date
+        p.played_at ? tz.to_local(p.played_at.utc).to_date : nil
       end
       @user_items_by_item = load_user_items_for(@plays)
       @shows_by_tmdb = load_shows_for(@plays)

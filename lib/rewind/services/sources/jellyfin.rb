@@ -75,16 +75,16 @@ module Rewind
           resolved = resolve(item)
           return log_skip(item, "no TMDB/MusicBrainz match") unless resolved
 
+          # Jellyfin marks some items watched without a date; keep them with a
+          # null played_at (shown as just "Watched") and a stable event id.
           played = last_played(item)
-          return log_skip(item, "no play date") unless played
-
           Rewind.logger.info(
             "[sync/jellyfin] resolved #{describe(item)} -> item #{resolved.id}"
           )
           {
             item_id: resolved.id,
-            played_at: Time.parse(played),
-            source_event_id: "jellyfin:#{item['Id']}:#{played}"
+            played_at: played && Time.parse(played),
+            source_event_id: "jellyfin:#{item['Id']}:#{played || 'played'}"
           }
         rescue Services::TMDB::Error, Services::Jellyfin::Error => error
           log_skip(item, error.message)

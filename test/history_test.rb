@@ -17,6 +17,19 @@ class HistoryTest < Minitest::Test
     end
   end
 
+  test "a dateless play renders as 'Watched' under an undated group" do
+    item = create_item(media_type: "movie", title: "Adventure Time")
+    Rewind::Play.create(user_id: @user.id, item_id: item.id,
+                        played_at: nil, source: "jellyfin")
+
+    get "/history"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "Adventure Time"
+    assert_includes last_response.body, "date unknown"
+    assert_includes last_response.body, "Watched · Jellyfin"
+  end
+
   test "no pagination nav when plays fit on one page" do
     create_plays(3)
 

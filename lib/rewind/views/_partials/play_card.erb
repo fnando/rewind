@@ -35,7 +35,7 @@
         <span class="play-card__detail"><%= play.item.release_date[0, 4] %></span>
       <% end %>
     <% end %>
-    <span class="play-card__meta"><time datetime="<%= play.played_at.iso8601 %>"><%= format_time(play.played_at) %></time> · <%= h(play.source.capitalize) %></span>
+    <span class="play-card__meta"><%= play_time_html(play) %> · <%= h(play.source.capitalize) %></span>
     <div class="play-card__actions">
       <%= rating_input(play.item, @user_items_by_item && @user_items_by_item[play.item_id], current_user) %>
       <form method="post" action="/history/<%= play.id %>">

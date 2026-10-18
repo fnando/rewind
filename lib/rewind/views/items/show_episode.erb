@@ -22,7 +22,7 @@
       <% if @plays.any? %>
         <div class="chips">
           <span class="chip chip--soft">Watched <%= @plays.size %> time<%= "s" unless @plays.size == 1 %></span>
-          <span class="chip">Last watched <%= in_user_tz(@plays.first.played_at).strftime("%b %-d, %Y") %></span>
+          <% if @plays.first.played_at %><span class="chip">Last watched <%= in_user_tz(@plays.first.played_at).strftime("%b %-d, %Y") %></span><% end %>
         </div>
       <% end %>
 
@@ -54,8 +54,8 @@
         <% @plays.each do |play| %>
           <li class="watch-row">
             <div class="watch-row__when">
-              <strong><time datetime="<%= play.played_at.iso8601 %>"><%= in_user_tz(play.played_at).strftime("%a, %b %-d, %Y") %></time></strong>
-              <span><%= format_time(play.played_at) %> · <%= play.source == "manual" ? "Logged manually" : "via #{play.source.capitalize}" %></span>
+              <strong><%= play_date_html(play) %></strong>
+              <span><% if play.played_at %><%= format_time(play.played_at) %> · <% end %><%= play.source == "manual" ? "Logged manually" : "via #{play.source.capitalize}" %></span>
             </div>
             <div class="watch-row__actions">
               <form method="post" action="/history/<%= play.id %>">
