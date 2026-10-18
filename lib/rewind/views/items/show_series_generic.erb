@@ -1,0 +1,26 @@
+<% @page_title = @item.title %>
+<main class="page page--title">
+  <section class="title-hero">
+    <img class="title-hero__poster" src="<%= poster_url(@item, size: "w342") %>" alt="">
+    <div class="title-hero__info">
+      <div class="title-hero__heading">
+        <span class="eyebrow">Series</span>
+        <h1><%= h(@item.title) %></h1>
+        <span class="title-meta"><%= pluralize(@episodes.size, "episode") %> watched</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="episodes-h">
+    <div class="section__head"><h2 id="episodes-h">Episodes</h2></div>
+    <ol class="play-grid">
+      <% @episodes.each do |ep| %>
+        <%= erb :"_partials/watched_episode_card", locals: {
+          ep: ep,
+          plays: @plays_by_episode_item[ep.id] || [],
+          user_item: @user_items_by_item[ep.id]
+        } %>
+      <% end %>
+    </ol>
+  </section>
+</main>

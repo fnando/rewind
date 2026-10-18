@@ -125,6 +125,27 @@ module Rewind
                            external_id: @item.parent_external_id).first
         erb :"items/show_episode"
       when "series"
+        # Jellyfin-native series (e.g. YouTube channels) have no TMDB seasons;
+        # list the actual episodes we've recorded instead of faking a season.
+        if @item.metadata["source"] == "jellyfin"
+          @generic_series = true
+          @episode_plays = Play.where(user_id: current_user.id)
+                               .join(:items, id: :item_id)
+                               .where(
+                                 Sequel[:items][:media_type] => "episode",
+                                 Sequel[:items][:parent_external_id] =>
+                                   @item.external_id
+                               )
+                               .select_all(:plays)
+                               .order(Sequel.desc(Sequel[:plays][:played_at]))
+                               .eager(:item)
+                               .all
+          @plays_by_episode_item = @episode_plays.group_by(&:item_id)
+          @episodes = @episode_plays.map(&:item).uniq(&:id)
+          @user_items_by_item = load_user_items_for(@episode_plays)
+          halt erb(:"items/show_series_generic")
+        end
+
         seasons = Array(@item.metadata["seasons"]).reject do |s|
           s["season_number"].to_i.zero?
         end
