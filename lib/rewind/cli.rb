@@ -339,10 +339,8 @@ module Rewind
     option :verbose, type: :boolean, default: true, aliases: "-v",
                      desc: "Log per-source sync activity"
     option :reset, type: :boolean, default: false,
-                   desc: "Delete synced + derived data and rebuild from " \
-                         "scratch (ratings and reviews are kept)"
-    option :yes, type: :boolean, default: false, aliases: "-y",
-                 desc: "Skip the --reset confirmation prompt"
+                   desc: "Clear cursors and re-pull the full history, then " \
+                         "rebuild streaks (non-destructive: deletes nothing)"
     def sync
       CLI.load_env!(options[:env])
       CLI.boot_db!
@@ -373,36 +371,20 @@ module Rewind
         abort("Sync failed for source #{source.id}: #{error.message}")
       end
 
-      # --reset: wipe the synced + derived data and rebuild from scratch. Only
-      # data we can re-fetch from Jellyfin is touched — ratings and reviews
-      # (user_items) are never deleted.
+      # --reset: re-pull the full history and rebuild derived data. It deletes
+      # NOTHING — `plays` is an accumulated event log that Jellyfin does not
+      # retain (it keeps only the latest LastPlayedDate per item), so wiping it
+      # would be irreversible data loss. Clearing cursors refetches everything;
+      # re-syncing refreshes item metadata and dedupes plays by source_event_id;
+      # rebuilding recomputes streaks from the (intact) plays.
       def resync
         scope = Rewind::Source.where(enabled: true)
         abort("No enabled sources to sync.") if scope.empty?
-        confirm_reset!
 
-        purge_synced_data
         scope.update(cursor: nil)
         Rewind::Services::Sync.run_once
         Rewind::Services::Streaks.rebuild_all
-        say "Rebuilt from scratch. Ratings and reviews were kept."
-      end
-
-      def confirm_reset!
-        return if options[:yes]
-
-        say "This deletes all synced plays, items and streak data, then " \
-            "re-syncs from your sources."
-        say "Ratings and reviews are kept."
-        abort("Aborted.") unless yes?("Continue? [y/N]")
-      end
-
-      def purge_synced_data
-        Rewind.db.transaction do
-          Rewind.db[:user_day_activity].delete
-          Rewind::Play.dataset.delete
-          Rewind::Item.dataset.delete
-        end
+        say "Re-pulled full history and rebuilt streaks. Nothing was deleted."
       end
     end
 

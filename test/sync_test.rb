@@ -91,12 +91,14 @@ class SyncTest < Minitest::Test
     assert_match(/Synced 1 source/, out)
   end
 
-  test "sync --reset wipes synced data and rebuilds, keeping ratings" do
-    # Seed stale synced data plus a rating that must survive the wipe.
+  test "sync --reset re-pulls without deleting existing plays or ratings" do
+    # Accumulated history Jellyfin no longer exposes must survive a --reset.
     old = create_item(media_type: "movie", external_id: "tmdb:999",
                       title: "Old")
-    Rewind::Play.create(user_id: @user.id, item_id: old.id, source: "jellyfin",
-                        source_event_id: "jellyfin:old:x", played_at: Time.now)
+    old_play = Rewind::Play.create(
+      user_id: @user.id, item_id: old.id, source: "jellyfin",
+      source_event_id: "jellyfin:old:x", played_at: Time.now
+    )
     Rewind::UserItem.create(user_id: @user.id, item_key: old.rating_key,
                             rating: 5)
 
@@ -104,30 +106,16 @@ class SyncTest < Minitest::Test
     stub_items([movie_item(id: "m1", last_played: "2026-10-16T05:00:00Z")])
 
     out, = capture_io do
-      Rewind::CLI.start(["sync", "--reset", "--yes", "--no-verbose"])
+      Rewind::CLI.start(["sync", "--reset", "--no-verbose"])
     end
 
-    # Stale item/play gone; a fresh one synced in their place.
-    assert_nil Rewind::Item.where(external_id: "tmdb:999").first
+    # Nothing deleted: the old play/item stay, the fresh one is added on top.
+    refute_nil Rewind::Play[old_play.id]
+    refute_nil Rewind::Item.where(external_id: "tmdb:999").first
     refute_nil Rewind::Item.where(external_id: "tmdb:27205").first
-    assert_equal 1, Rewind::Play.count
-    # The rating survived, untouched by the rebuild.
+    assert_equal 2, Rewind::Play.count
     assert_equal 1, Rewind::UserItem.count
-    assert_match(/Ratings and reviews were kept/, out)
-  end
-
-  test "sync --reset without --yes aborts unless confirmed" do
-    original = $stdin
-    $stdin = StringIO.new("n\n") # decline the confirmation prompt
-    begin
-      assert_raises(SystemExit) do
-        capture_io { Rewind::CLI.start(["sync", "--reset", "--no-verbose"]) }
-      end
-    ensure
-      $stdin = original
-    end
-
-    assert_nil Rewind::Item.where(external_id: "tmdb:27205").first
+    assert_match(/Nothing was deleted/, out)
   end
 
   test "sync aborts when there are no enabled sources" do
