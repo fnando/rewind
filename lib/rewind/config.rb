@@ -4,7 +4,8 @@ module Rewind
   class Config
     attr_accessor :data_dir, :tmdb_api_key, :fanart_api_key,
                   :session_secret, :host, :port, :keyring, :sync_interval,
-                  :streak_rebuild_interval, :allowed_hosts, :puma_plugins
+                  :streak_rebuild_interval, :allowed_hosts, :puma_plugins,
+                  :db_busy_timeout
     attr_writer :image_storage_dir
 
     def initialize
@@ -20,6 +21,10 @@ module Rewind
       # keep any drift window small. Also picks up time-zone / media-type edits.
       @streak_rebuild_interval =
         (ENV["REWIND_STREAK_REBUILD_INTERVAL"] || 300).to_i
+      # How long a blocked SQLite writer waits before raising "database is
+      # locked" (ms). Generous so the web app's background sync/streak threads
+      # and a concurrent `sync` take turns instead of failing.
+      @db_busy_timeout = (ENV["REWIND_DB_BUSY_TIMEOUT"] || 15_000).to_i
       @host = ENV["REWIND_HOST"] || "0.0.0.0"
       @port = (ENV["REWIND_PORT"] || 55_455).to_i
       @allowed_hosts =

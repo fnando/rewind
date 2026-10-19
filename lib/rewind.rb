@@ -38,12 +38,22 @@ module Rewind
       @db ||= begin
         FileUtils.mkdir_p(config.data_dir)
         # WAL lets web reads run concurrently with the background sync thread's
-        # writes. In the default rollback-journal mode they deadlock on the
-        # single writer lock (busy_timeout can't break it), surfacing as
-        # "database is locked". WAL is persistent, so it applies to every
-        # pooled connection; synchronous: normal is the safe WAL pairing.
-        database = Sequel.sqlite(config.db_path.to_s, synchronous: :normal)
+        # writes. SQLite still allows only one writer at a time, so when the web
+        # app and a separate `sync` process write at once, the loser
+        # must wait: busy_timeout (per connection, via Sequel's :timeout, ms)
+        # makes it retry instead of raising "database is locked". WAL is
+        # persistent; synchronous: normal is the safe WAL pairing.
+        database = Sequel.sqlite(
+          config.db_path.to_s,
+          synchronous: :normal,
+          timeout: config.db_busy_timeout
+        )
         database.run("PRAGMA journal_mode = WAL")
+        # Take the write lock up front (BEGIN IMMEDIATE) on every write
+        # transaction. A default deferred transaction that reads then writes can
+        # get an un-retryable "database is locked" the instant another writer
+        # holds the lock; grabbing it first means busy_timeout governs the wait.
+        database.transaction_mode = :immediate
         database
       end
     end
