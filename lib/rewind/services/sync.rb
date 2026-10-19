@@ -11,11 +11,12 @@ module Rewind
         Rewind::Source.where(enabled: true).each do |source|
           sync_source(source)
         rescue Services::Jellyfin::AuthError => error
+          # Leave the source enabled: a failure is often transient (expired
+          # token, server restart), and disabling it would silently stop sync
+          # until someone noticed. We log and retry on the next run instead.
           Rewind.logger.warn(
-            "[sync] source #{source.id} unauthorized, disabling: " \
-            "#{error.message}"
+            "[sync] source #{source.id} unauthorized: #{error.message}"
           )
-          source.update(enabled: false)
         rescue StandardError => error
           Rewind.logger.warn("[sync] source #{source.id} failed: " \
                              "#{error.message}")

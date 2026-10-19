@@ -65,13 +65,13 @@ class SyncTest < Minitest::Test
     assert_equal 1, Rewind::Play.count
   end
 
-  test "an unauthorized response disables the source" do
+  test "an unauthorized response leaves the source enabled for next run" do
     WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
            .to_return(status: 401)
 
     Rewind::Services::Sync.run_once
 
-    refute @source.refresh.enabled?
+    assert @source.refresh.enabled?
   end
 
   test "a disabled source is skipped" do
