@@ -24,8 +24,9 @@ Highlights:
 - All user management lives in the CLI — no self-serve registration, no admin
   UI, no in-app admin role. Privileged ops require shell access.
 - Connect a Jellyfin account (username/password) and a background thread polls
-  its play history — capturing plays from **every** client, not just the ones
-  that fire webhooks. Access tokens are stored encrypted at rest.
+  its play history. An optional Jellyfin webhook adds a real-time push path, so
+  a play missed by one is usually caught by the other. Access tokens are stored
+  encrypted at rest.
 - Incremental, idempotent sync: each source tracks a cursor and dedupes plays.
 - Dark/light theme follows the OS via `prefers-color-scheme`.
 
@@ -113,7 +114,7 @@ rewind run --env .env
 
 ```bash
 rewind migrate                                 # run all pending migrations
-rewind run [--port N] [--host HOST] [--verbose-level info|debug]  # start the web server (puma)
+rewind run [--port N] [--host HOST] [--workers N] [--threads N] [-e ENV] [-v]  # start the web server (puma)
 rewind restart                                 # restart a running server (touches tmp/restart.txt)
 rewind console                                 # IRB with models loaded
 rewind config                                  # print resolved config (secrets redacted)
@@ -130,7 +131,9 @@ rewind users:delete --username USERNAME [--yes]
 rewind users:list
 ```
 
-Any CLI command accepts `--env PATH` to load a dotenv file first.
+Any CLI command accepts `--env-file PATH` to load a dotenv file first, and
+`--environment NAME` / `-e` to set the run environment (defaults to
+`production`, falling back to `APP_ENV`/`RACK_ENV`).
 
 Operators can inspect/cleanup connected sources (users connect them from
 Settings, so there's no `new`):
@@ -140,6 +143,16 @@ rewind sources:list
 rewind sources:disable --id N
 rewind sources:enable  --id N
 rewind sources:delete  --id N [--yes]
+```
+
+Webhook secrets (for the Jellyfin webhook fallback below) are admin-minted and
+stored only as a salted hash:
+
+```bash
+rewind webhooks:new [--name LABEL]   # mint a secret (shown once) + its URL path
+rewind webhooks:list
+rewind webhooks:rotate --id N        # replace the secret
+rewind webhooks:revoke --id N        # disable without deleting
 ```
 
 ## Jellyfin integration
@@ -161,6 +174,39 @@ stored encrypted.)
 Pause or disconnect a source any time from **Settings**. The access token is
 scoped to your Jellyfin user, so Rewind can only read your own plays.
 
+### Webhook fallback (optional)
+
+Polling is best-effort: some clients don't reliably settle a track's played
+state, so the odd listen is missed. Jellyfin's **Webhook** plugin can push a
+notification the moment a track finishes, as a second, redundant source — a play
+seen by either path is recorded, and de-duplicated when both see it. Today only
+music (audio) is recorded via the webhook; movies and episodes still come from
+polling.
+
+1. Mint a secret and note its URL path (shown once):
+
+   ```bash
+   rewind webhooks:new --name mediabox
+   #   path:  /webhooks/jellyfin/<secret>
+   ```
+
+2. In Jellyfin, install the **Webhook** plugin → **Add Generic Destination**:
+   - **Webhook URL:** `https://your-rewind-host/webhooks/jellyfin/<secret>`
+   - **Notification Type:** _Playback Stop_
+   - Leave the default JSON template — Rewind reads the track's MusicBrainz ids,
+     your user id, and `PlayedToCompletion` from the standard payload.
+
+3. Save. Finished music plays now arrive in real time; whatever the webhook
+   misses is still caught by the next poll, and vice versa.
+
+The secret is the only auth, so treat the URL like a password; rotate or revoke
+it with `rewind webhooks:rotate`/`webhooks:revoke`.
+
+> **Note:** both paths are best-effort — Jellyfin (and some clients) can fail to
+> report a play to either one. Running pull and push together makes a missed
+> track far less likely, but not impossible; the occasional listen may still
+> never be recorded.
+
 ### Troubleshooting
 
 - **Nothing syncs.** Confirm `REWIND_KEYRING` is set and the source is enabled
@@ -169,10 +215,10 @@ scoped to your Jellyfin user, so Rewind can only read your own plays.
 - **An item isn't recorded.** It couldn't be resolved: a movie/episode with
   neither a TMDB nor IMDB id, or an audio track with no title. Re-identify it in
   Jellyfin so it carries provider ids.
-- **Only official clients counted before.** Webhooks only fired for official
-  Jellyfin clients; polling the API captures every client the server knows
-  about. (A client that plays fully offline and never tells the server still
-  can't be seen.)
+- **A music play is missing.** Polling relies on the client settling the track's
+  played state, which some 3rd-party clients do unreliably. Enable the webhook
+  fallback (above) so finished tracks are pushed in real time too. (A client
+  that plays fully offline and never tells the server still can't be seen.)
 
 ## Importing from Trakt
 

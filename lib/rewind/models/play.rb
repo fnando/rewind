@@ -13,6 +13,26 @@ module Rewind
     # Source (connection) is referenced by the `source_id` column directly.
     SOURCES = %w[manual jellyfin trakt].freeze
 
+    # A completed Jellyfin play reaches us from both the pull sync and the
+    # webhook, stamped a second or two apart (LastPlayedDate vs the webhook's
+    # stop time) — usually the webhook first, since pull only runs each minute.
+    # Whichever lands second must skip. This window spans that skew while
+    # staying below any track length, so genuine re-listens (>= a track apart)
+    # are never merged.
+    JELLYFIN_DEDUP_WINDOW = 3 # seconds
+
+    # True when a Jellyfin play of this track for this user already sits within
+    # the dedup window of played_at — i.e. the other ingestion path got it.
+    def self.jellyfin_recorded_near?(user_id:, item_id:, played_at:)
+      return false unless played_at
+
+      low = played_at - JELLYFIN_DEDUP_WINDOW
+      high = played_at + JELLYFIN_DEDUP_WINDOW
+      where(user_id:, item_id:, source: "jellyfin")
+        .where(played_at: low..high)
+        .any?
+    end
+
     dataset_module do
       def for_user(user)
         where(user_id: user.id)

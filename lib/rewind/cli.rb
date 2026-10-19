@@ -254,6 +254,78 @@ module Rewind
     end
   end
 
+  class WebhooksCLI < Thor
+    class_option :env_file, type: :string,
+                            desc: "Dotenv file to load before executing"
+    class_option :environment, aliases: "-e", type: :string,
+                               desc: "Run environment (default: production)"
+
+    def self.exit_on_failure?
+      true
+    end
+
+    desc "new", "Mint a webhook secret (shown once)"
+    option :name, type: :string, desc: "A label, e.g. the instance name"
+    def new
+      boot!
+      record, secret = Rewind::Webhook.mint(name: options[:name])
+      say "\n== Webhook created =="
+      say "  id:    #{record.id}"
+      say "  name:  #{record.name || '-'}"
+      say "  path:  /webhooks/jellyfin/#{secret}"
+      say "\nStore the secret now — it can't be shown again. Register your " \
+          "host + that path in Jellyfin's webhook plugin."
+    end
+
+    desc "list", "List webhook secrets"
+    def list
+      boot!
+      rows = Rewind::Webhook.order(:id).all
+      return say "No webhooks yet. Run: rewind webhooks:new" if rows.empty?
+
+      say "ID    NAME                 ENABLED  LAST USED"
+      rows.each do |w|
+        say format(
+          "%-5s %-20s %-8s %-20s",
+          w.id, w.name || "-", w.enabled ? "yes" : "no",
+          w.last_used_at&.strftime("%Y-%m-%d %H:%M") || "never"
+        )
+      end
+    end
+
+    desc "rotate", "Replace a webhook's secret (shown once)"
+    option :id, type: :numeric, required: true
+    def rotate
+      boot!
+      webhook = find(options[:id])
+      secret = webhook.rotate!
+      say "Rotated webhook #{webhook.id}. New path: " \
+          "/webhooks/jellyfin/#{secret}"
+    end
+
+    desc "revoke", "Disable a webhook without deleting it"
+    option :id, type: :numeric, required: true
+    def revoke
+      boot!
+      webhook = find(options[:id])
+      webhook.update(enabled: false)
+      say "Revoked webhook #{webhook.id}."
+    end
+
+    no_commands do
+      def boot!
+        Rewind::CLI.load_env!(options)
+        Rewind::CLI.boot_db!
+      end
+
+      def find(id)
+        webhook = Rewind::Webhook[id.to_i]
+        abort("Webhook not found: #{id}") unless webhook
+        webhook
+      end
+    end
+  end
+
   class CLI < Thor
     check_unknown_options!
 
@@ -486,6 +558,9 @@ module Rewind
 
     desc "import SUBCOMMAND", "Import data from other services (trakt)"
     subcommand "import", ImportCLI
+
+    desc "webhooks SUBCOMMAND", "Manage webhook secrets"
+    subcommand "webhooks", WebhooksCLI
 
     def self.start(given_args = ARGV, config = {})
       # Allow colon form: users:new -> users new
