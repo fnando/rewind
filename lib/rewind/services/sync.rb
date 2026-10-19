@@ -18,8 +18,8 @@ module Rewind
             "[sync] source #{source.id} unauthorized: #{error.message}"
           )
         rescue StandardError => error
-          Rewind.logger.warn("[sync] source #{source.id} failed: " \
-                             "#{error.message}")
+          Rewind.logger.error("[sync] source #{source.id} failed: " \
+                              "#{error.message}")
         end
       end
 

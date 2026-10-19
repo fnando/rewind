@@ -180,7 +180,7 @@ class SourcesJellyfinTest < Minitest::Test
     io = StringIO.new
     level = Rewind.logger.level
     Rewind.logger.reopen(io)
-    Rewind.logger.level = Logger::INFO
+    Rewind.logger.level = Logger::DEBUG
 
     begin
       adapter.recent_plays(since: nil)
@@ -205,7 +205,7 @@ class SourcesJellyfinTest < Minitest::Test
     io = StringIO.new
     level = Rewind.logger.level
     Rewind.logger.reopen(io)
-    Rewind.logger.level = Logger::INFO
+    Rewind.logger.level = Logger::DEBUG
 
     begin
       result = adapter.recent_plays(since: nil)

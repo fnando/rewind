@@ -113,7 +113,7 @@ rewind run --env .env
 
 ```bash
 rewind migrate                                 # run all pending migrations
-rewind run [--port N] [--host HOST] [--verbose]  # start the web server (puma)
+rewind run [--port N] [--host HOST] [--verbose-level info|debug]  # start the web server (puma)
 rewind restart                                 # restart a running server (touches tmp/restart.txt)
 rewind console                                 # IRB with models loaded
 rewind config                                  # print resolved config (secrets redacted)

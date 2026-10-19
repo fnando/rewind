@@ -269,6 +269,18 @@ module Rewind
       Rewind.boot!
     end
 
+    # The Logger level for the verbose options. Default is ERROR — quiet, but
+    # failures still surface. --verbose-level raises it; --verbose/-v is a
+    # shortcut for the most detail (debug).
+    def self.resolve_log_level(options)
+      level = options[:verbose] ? "debug" : options[:verbose_level]
+      case level
+      when "debug" then Logger::DEBUG
+      when "info" then Logger::INFO
+      else Logger::ERROR
+      end
+    end
+
     class_option :env, type: :string,
                        desc: "Path to a dotenv file to load before executing"
 
@@ -277,13 +289,15 @@ module Rewind
     option :host, type: :string
     option :migrate, type: :boolean, default: false,
                      desc: "Run pending migrations before booting"
-    option :verbose, type: :boolean, default: false, aliases: "-v",
-                     desc: "Log sync activity at info level"
+    option :verbose_level, type: :string, enum: %w[info debug],
+                           desc: "Log verbosity: info or debug"
+    option :verbose, type: :boolean, aliases: "-v",
+                     desc: "Shortcut for --verbose-level=debug"
     option :image_storage_dir, type: :string,
                                desc: "Directory to cache proxied cover images"
     def run_server
       CLI.load_env!(options[:env])
-      Rewind.logger.level = Logger::INFO if options[:verbose]
+      Rewind.logger.level = CLI.resolve_log_level(options)
       require_relative "migrator"
       if options[:migrate] || ENV["REWIND_AUTO_MIGRATE"] == "1"
         Rewind::Migrator.migrate!
@@ -336,15 +350,17 @@ module Rewind
     desc "sync", "Sync plays from enabled sources"
     option :source, type: :numeric,
                     desc: "Only sync this source id (default: all enabled)"
-    option :verbose, type: :boolean, default: true, aliases: "-v",
-                     desc: "Log per-source sync activity"
+    option :verbose_level, type: :string, enum: %w[info debug],
+                           desc: "Log verbosity: info or debug"
+    option :verbose, type: :boolean, aliases: "-v",
+                     desc: "Shortcut for --verbose-level=debug"
     option :reset, type: :boolean, default: false,
                    desc: "Clear cursors and re-pull the full history, then " \
                          "rebuild streaks (non-destructive: deletes nothing)"
     def sync
       CLI.load_env!(options[:env])
       CLI.boot_db!
-      Rewind.logger.level = Logger::INFO if options[:verbose]
+      Rewind.logger.level = CLI.resolve_log_level(options)
 
       options[:reset] ? resync : sync_sources
     end

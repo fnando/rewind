@@ -104,8 +104,9 @@ module Rewind
         end
 
         private def build_play(item)
-          # Always dump the raw payload, whatever the type or outcome.
-          Rewind.logger.info(
+          # Dump the raw payload (debug only — it's noisy), whatever the type
+          # or outcome.
+          Rewind.logger.debug(
             "[sync/jellyfin] #{describe(item)} fields: #{JSON.generate(item)}"
           )
           resolved = resolve(item)

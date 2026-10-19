@@ -61,7 +61,7 @@ module Rewind
     def logger
       @logger ||= Logger.new(
         $stdout,
-        level: Logger::WARN,
+        level: Logger::ERROR,
         formatter: proc do |severity, time, _progname, message|
           "[rewind] #{time.strftime('%Y-%m-%dT%H:%M:%S')} #{severity} " \
             "#{message}\n"
