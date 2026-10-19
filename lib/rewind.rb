@@ -59,7 +59,14 @@ module Rewind
     end
 
     def logger
-      @logger ||= Logger.new($stdout, level: Logger::WARN)
+      @logger ||= Logger.new(
+        $stdout,
+        level: Logger::WARN,
+        formatter: proc do |severity, time, _progname, message|
+          "[rewind] #{time.strftime('%Y-%m-%dT%H:%M:%S')} #{severity} " \
+            "#{message}\n"
+        end
+      )
     end
 
     def root
