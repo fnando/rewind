@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "time"
 
 module Rewind
   module Services
@@ -20,24 +21,50 @@ module Rewind
       # MusicBrainz, and turns a user's played history into play records keyed
       # by the item id + its LastPlayedDate.
       class Jellyfin
+        # Re-scan this far back before the cursor every sync. Jellyfin dates a
+        # play only once it settles, which can land after a mid-session sync has
+        # already advanced the cursor past it; re-scanning the window catches
+        # those late-dated plays (dedup on source_event_id keeps it idempotent).
+        LOOKBACK_SECONDS = 24 * 60 * 60
+
         def initialize(source)
           @source = source
           @client = Services::Jellyfin.new(source.url,
                                            token: source.access_token)
           @series_tmdb = {}
           @folders = {}
+          @albums_backfilled = {}
         end
 
         def recent_plays(since:)
+          fetch_since = lookback(since)
           items = @client.played_items(user_id: @source.external_user_id,
-                                       since: since)
+                                       since: fetch_since)
           Rewind.logger.info(
             "[sync/jellyfin] fetched #{items.size} played items since " \
-            "#{since.inspect}"
+            "#{fetch_since.inspect} (cursor #{since.inspect})"
           )
           plays = items.filter_map {|item| build_play(item) }
-          cursor = items.filter_map {|i| last_played(i) }.max
-          {plays: plays, cursor: cursor || since}
+          # Advance to the newest real play date, but never behind the incoming
+          # cursor (the lookback re-scans older items; it must not rewind us).
+          latest = items.filter_map {|i| last_played(i) }.max
+          cursor =
+            if latest && since
+              [latest, since].max_by {|value| Time.parse(value) }
+            else
+              latest || since
+            end
+          {plays: plays, cursor: cursor}
+        end
+
+        # Shift the cursor back by the lookback window so late-dated plays are
+        # re-scanned. nil (full history) stays nil.
+        private def lookback(since)
+          return since if since.nil?
+
+          (Time.parse(since.to_s) - LOOKBACK_SECONDS).iso8601
+        rescue ArgumentError
+          since
         end
 
         # Match to TMDB/MusicBrainz; failing that, keep the item anyway by
@@ -79,9 +106,20 @@ module Rewind
           resolved = resolve(item)
           return log_skip(item, "no TMDB/MusicBrainz match") unless resolved
 
-          # No real play date? Anchor to when it was added, then when it aired,
-          # so it still lands on the timeline. Stable event id either way.
+          # A genuine scrobble always carries a play date. A dateless Audio item
+          # is a Jellyfin artifact — the IsPlayed flag set before the date is
+          # written (an eventual-consistency race mid-session), or a stale flag.
+          # Anchoring it to the file's import date would strand the play on the
+          # wrong day and can double a track that's also reported with a real
+          # date. Skip it; the lookback window re-catches it once Jellyfin dates
+          # it, landing it in the right session.
           played = last_played(item)
+          if played.nil? && item["Type"] == "Audio"
+            return log_skip(item, "audio scrobble has no play date")
+          end
+
+          # No real play date (movies/episodes)? Anchor to when it was added,
+          # then when it aired, so it still lands on the timeline.
           anchor = played ||
                    presence(item["DateCreated"]) ||
                    presence(item["PremiereDate"])
@@ -133,6 +171,16 @@ module Rewind
         end
 
         private def resolve_audio(item)
+          track = music_item(item)
+          return unless track
+
+          backfill_album(item)
+          track
+        end
+
+        # The shared Jellyfin-Audio -> MusicBrainz track resolution, used both
+        # for the played track and for each of its album siblings.
+        private def music_item(item)
           title = presence(item["Name"])
           return unless title
 
@@ -146,8 +194,31 @@ module Rewind
             release_group_mbid: presence(ids["MusicBrainzReleaseGroup"]),
             artist_mbid: presence(ids["MusicBrainzAlbumArtist"]) ||
                          presence(ids["MusicBrainzArtist"]),
-            length_ms: item["RunTimeTicks"].to_i / 10_000
+            length_ms: item["RunTimeTicks"].to_i / 10_000,
+            track_number: positive_int(item["IndexNumber"]),
+            disc_number: positive_int(item["ParentIndexNumber"]),
+            release_date: premiere_date(item),
+            genres: item["Genres"]
           )
+        end
+
+        # Pull every track on the played track's album (even unplayed ones) so
+        # the album page shows the full tracklist. Each sibling resolves through
+        # the same MusicBrainz path, so a later play of one dedupes onto the
+        # item created here, and re-resolving keeps its metadata current.
+        # Fetched at most once per album per run (so N plays off one album = one
+        # call), but always re-fetched on the next run — cheap, and it picks up
+        # tracks added to the album since.
+        private def backfill_album(played_item)
+          album_id = presence(played_item["ParentId"])
+          return unless album_id
+          return if @albums_backfilled.key?(album_id)
+
+          @albums_backfilled[album_id] = true
+          @client.album_tracks(user_id: @source.external_user_id,
+                               album_id: album_id).each do |sibling|
+            music_item(sibling)
+          end
         end
 
         # Episodes carry only their own ids; fetch the series' ProviderIds (once

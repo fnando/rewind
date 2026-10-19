@@ -75,6 +75,45 @@ class MusicBrainzServiceTest < Minitest::Test
     assert_equal "https://fanart.example/a.jpg", artist.poster_path
   end
 
+  test "resolve stores the track and disc numbers in metadata" do
+    track = resolve(track_number: 3, disc_number: 2)
+
+    assert_equal 3, track.track_number
+    assert_equal 2, track.disc_number
+  end
+
+  test "resolve stores the album's release date and genres" do
+    resolve(release_date: "2007-10-10", genres: ["Alternative Rock", ""])
+    album = Rewind::Item.where(media_type: "album").first
+
+    assert_equal "2007-10-10", album.release_date
+    assert_equal ["Alternative Rock"], album.genres
+  end
+
+  test "resolve keeps the album's year and genres when a track omits them" do
+    resolve(release_date: "2007-10-10", genres: ["Alternative Rock"])
+    resolve(title: "Faust Arp", release_date: nil, genres: nil)
+    album = Rewind::Item.where(media_type: "album").first
+
+    assert_equal "2007-10-10", album.release_date
+    assert_equal ["Alternative Rock"], album.genres
+  end
+
+  test "re-resolving refreshes fields without re-fetching the artist photo" do
+    stub_fanart_artist("a-7", url: "https://fanart.example/a.jpg")
+    svc = service(fanart: Rewind::Services::Fanart.new(api_key: "k"))
+
+    svc.resolve(title: "T", artist: "A", album: "B", artist_mbid: "a-7")
+    # A later play of the same track carries its number; it must land now.
+    track = svc.resolve(title: "T", artist: "A", album: "B", artist_mbid: "a-7",
+                        track_number: 4)
+
+    assert_equal 4, track.track_number
+    # The artist photo was stored on the first pass and reused on the second.
+    assert_requested(:get, %r{webservice\.fanart\.tv/v3\.2/music/a-7},
+                     times: 1)
+  end
+
   test "resolve returns nil without a title" do
     assert_nil resolve(title: "")
   end

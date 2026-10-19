@@ -97,6 +97,40 @@ class JellyfinServiceTest < Minitest::Test
     assert_equal(%w[a], items.map {|i| i["Id"] })
   end
 
+  test "album_tracks lists the audio children of an album" do
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
+           .with(query: hash_including("ParentId" => "alb-1",
+                                       "IncludeItemTypes" => "Audio"))
+           .to_return(
+             status: 200,
+             body: {
+               "Items" => [
+                 {"Id" => "t1", "Name" => "One", "IndexNumber" => 1},
+                 {"Id" => "t2", "Name" => "Two", "IndexNumber" => 2}
+               ]
+             }.to_json,
+             headers: {"Content-Type" => "application/json"}
+           )
+
+    tracks = Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
+                                       .album_tracks(user_id: "u-1",
+                                                     album_id: "alb-1")
+
+    assert_equal(%w[t1 t2], tracks.map {|t| t["Id"] })
+  end
+
+  test "album_tracks returns an empty list on failure" do
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
+           .with(query: hash_including("ParentId" => "alb-x"))
+           .to_return(status: 500)
+
+    tracks = Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
+                                       .album_tracks(user_id: "u-1",
+                                                     album_id: "alb-x")
+
+    assert_empty tracks
+  end
+
   test "played_items paginates until the records are exhausted" do
     stub_items({
                  "Items" => Array.new(2) do |n|

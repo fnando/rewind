@@ -257,6 +257,121 @@ class SourcesJellyfinTest < Minitest::Test
     assert_equal "Green Day", item.artist
   end
 
+  def audio_item(id:, name:, index:, parent_id: "alb-1")
+    {
+      "Id" => id, "Type" => "Audio", "Name" => name,
+      "Album" => "Dookie", "AlbumArtist" => "Green Day",
+      "ParentId" => parent_id, "IndexNumber" => index,
+      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+    }
+  end
+
+  def stub_album_tracks(album_id, items)
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
+           .with(query: hash_including("ParentId" => album_id,
+                                       "IncludeItemTypes" => "Audio"))
+           .to_return(status: 200,
+                      body: {"Items" => items}.to_json,
+                      headers: {"Content-Type" => "application/json"})
+  end
+
+  test "backfills an album's unplayed tracks from a played one" do
+    stub_album_tracks("alb-1", [
+      audio_item(id: "a1", name: "Burnout", index: 1),
+      audio_item(id: "a2", name: "Having a Blast", index: 2),
+      audio_item(id: "a3", name: "Chump", index: 3)
+    ])
+
+    adapter.resolve(audio_item(id: "a1", name: "Burnout", index: 1))
+
+    tracks = Rewind::Item.where(media_type: "track").order(:title).all
+
+    assert_equal ["Burnout", "Chump", "Having a Blast"], tracks.map(&:title)
+    assert_equal [1, 3, 2], tracks.map(&:track_number)
+    # None of the backfilled tracks carry a play — plays come from recent_plays.
+    assert_equal 0, Rewind::Play.count
+  end
+
+  test "fetches an album's tracklist at most once per run" do
+    stub_album_tracks("alb-1", [
+      audio_item(id: "a1", name: "Burnout", index: 1),
+      audio_item(id: "a2", name: "Having a Blast", index: 2)
+    ])
+
+    client = adapter
+    client.resolve(audio_item(id: "a1", name: "Burnout", index: 1))
+    client.resolve(audio_item(id: "a2", name: "Having a Blast", index: 2))
+
+    assert_requested(:get, %r{https://jf\.test/Users/u-1/Items},
+                     times: 1,
+                     query: hash_including("ParentId" => "alb-1"))
+  end
+
+  test "stores the album's release date and genres from a played track" do
+    stub_album_tracks("alb-1", [])
+
+    adapter.resolve(
+      audio_item(id: "a1", name: "Burnout", index: 1).merge(
+        "PremiereDate" => "1994-02-01T00:00:00Z",
+        "Genres" => ["Punk Rock", "Alternative Rock"]
+      )
+    )
+
+    album = Rewind::Item.where(media_type: "album").first
+
+    assert_equal "1994-02-01", album.release_date
+    assert_equal ["Punk Rock", "Alternative Rock"], album.genres
+  end
+
+  test "re-fetches the tracklist on a later run to pick up new tracks" do
+    stub_album_tracks("alb-1", [
+      audio_item(id: "a1", name: "Burnout", index: 1)
+    ])
+    adapter.resolve(audio_item(id: "a1", name: "Burnout", index: 1))
+
+    # A brand-new adapter (next sync run) re-fetches — no time-based cache.
+    adapter.resolve(audio_item(id: "a1", name: "Burnout", index: 1))
+
+    assert_requested(:get, %r{https://jf\.test/Users/u-1/Items},
+                     times: 2,
+                     query: hash_including("ParentId" => "alb-1"))
+  end
+
+  test "skips an audio scrobble that has no play date" do
+    stub_items([
+      {
+        "Id" => "a9", "Type" => "Audio", "Name" => "Ghost Play",
+        "Album" => "Nowhere", "AlbumArtist" => "Nobody",
+        "UserData" => {"Played" => true}
+      }
+    ])
+
+    result = adapter.recent_plays(since: nil)
+
+    assert_empty result[:plays]
+    # The track is still catalogued; only the dateless play is dropped.
+    refute_nil Rewind::Item.where(media_type: "track",
+                                  title: "Ghost Play").first
+  end
+
+  test "recent_plays re-scans the lookback window before the cursor" do
+    # A play dated an hour before the cursor would be cut off without the
+    # 24h lookback; with it, the late-dated play is recovered.
+    stub_items([
+      {
+        "Id" => "late", "Type" => "Audio", "Name" => "Late Dated",
+        "Album" => "X", "AlbumArtist" => "Y",
+        "UserData" => {"LastPlayedDate" => "2026-10-18T11:00:00Z"}
+      }
+    ])
+
+    result = adapter.recent_plays(since: "2026-10-18T12:00:00Z")
+
+    assert_equal 1, result[:plays].size
+    # The cursor never rewinds behind the incoming one.
+    assert_equal "2026-10-18T12:00:00Z", result[:cursor]
+  end
+
   test "recent_plays builds plays with a stable source_event_id and cursor" do
     stub_tmdb_movie(27_205)
     stub_items([movie_item(id: "m1", last_played: "2026-10-16T05:00:00Z")])

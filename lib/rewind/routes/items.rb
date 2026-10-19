@@ -230,8 +230,10 @@ module Rewind
       when "album"
         @artist = Item.where(external_id: @item.parent_external_id).first
         @tracks = Item.where(media_type: "track",
-                             parent_external_id: @item.external_id)
-                      .order(:title).all
+                             parent_external_id: @item.external_id).all
+        @tracks.sort_by! do |t|
+          [t.disc_number || 0, t.track_number || 0, t.title.to_s]
+        end
         track_ids = @tracks.map(&:id)
         @play_counts =
           if track_ids.empty?
@@ -239,6 +241,18 @@ module Rewind
           else
             Play.where(user_id: current_user.id, item_id: track_ids)
                 .group_and_count(:item_id).to_hash(:item_id, :count)
+          end
+        counts = @tracks.map {|t| @play_counts[t.id].to_i }
+        @total_plays = counts.sum
+        @max_track_plays = counts.max.to_i
+        # A lower bound on full listens: times every track has been heard.
+        @complete_listens = counts.min.to_i
+        @total_length_ms = @tracks.sum {|t| t.metadata["length_ms"].to_i }
+        @last_played =
+          unless track_ids.empty?
+            Play.where(user_id: current_user.id, item_id: track_ids)
+                .exclude(played_at: nil)
+                .order(Sequel.desc(:played_at)).first&.played_at
           end
         erb :"items/show_album"
       when "artist"

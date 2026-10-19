@@ -34,6 +34,15 @@ class ItemsMusicTest < Minitest::Test
     assert_includes last_response.body, "/items/#{@artist.id}"
   end
 
+  test "track page shows the album year next to the album" do
+    @album.update(release_date: "2007-10-10")
+
+    get "/items/#{@track.id}"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "(2007)"
+  end
+
   test "the track page has no manual log button" do
     get "/items/#{@track.id}"
 
@@ -54,6 +63,56 @@ class ItemsMusicTest < Minitest::Test
     assert_equal 200, last_response.status
     assert_includes last_response.body, "OK Computer"
     assert_includes last_response.body, "/items/#{@track.id}"
+  end
+
+  test "album page offers a rating input and a review section" do
+    get "/items/#{@album.id}"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "/items/#{@album.id}/rating"
+    assert_includes last_response.body, "/items/#{@album.id}/review"
+    assert_includes last_response.body, "Your review"
+  end
+
+  test "an album can be rated and reviewed" do
+    post "/items/#{@album.id}/rating", {rating: "4"}
+    post "/items/#{@album.id}/review", {review: "A classic."}
+
+    ui = Rewind::UserItem.where(user_id: @user.id, item_id: @album.id).first
+
+    assert_equal 4, ui.rating
+    assert_equal "A classic.", ui.review
+  end
+
+  test "album page orders tracks by track number, including unplayed ones" do
+    create_item(
+      media_type: "track", external_id: "mbid:t0", title: "Airbag",
+      parent_external_id: "mbid:rg:r1", runtime: 4,
+      metadata_json: {
+        "album_external_id" => "mbid:rg:r1", "track_number" => 1
+      }.to_json
+    )
+    # @track (Karma Police) is track 6.
+    @track.update(metadata: @track.metadata.merge("track_number" => 6))
+
+    get "/items/#{@album.id}"
+
+    assert_equal 200, last_response.status
+    # Unplayed track 1 (Airbag) sorts above played track 6 (Karma Police).
+    assert_operator last_response.body.index("Airbag"), :<,
+                    last_response.body.index("Karma Police")
+    # Both appear in the tracklist, played or not.
+    assert_includes last_response.body, "/items/#{@track.id}"
+  end
+
+  test "album page shows durations and totals from track length" do
+    @track.update(metadata: @track.metadata.merge("length_ms" => 237_000))
+
+    get "/items/#{@album.id}"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "3:57"
+    assert_includes last_response.body, "1 track play"
   end
 
   test "artist page lists its albums" do

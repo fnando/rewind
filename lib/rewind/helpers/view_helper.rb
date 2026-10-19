@@ -199,6 +199,42 @@ module Rewind
         "#{h}h #{m}m"
       end
 
+      # "3:57" from a track length in milliseconds, or nil when unknown.
+      def track_length(ms)
+        total = length_seconds(ms)
+        return unless total
+
+        "#{total / 60}:#{(total % 60).to_s.rjust(2, '0')}"
+      end
+
+      # "PT3M57S" for a <time datetime> from milliseconds, or nil.
+      def track_length_iso(ms)
+        total = length_seconds(ms)
+        return unless total
+
+        "PT#{total / 60}M#{total % 60}S"
+      end
+
+      # "42 min" / "1 hr 5 min" album total from summed milliseconds, or nil.
+      def album_length(ms)
+        total = length_seconds(ms)
+        return unless total
+
+        mins = (total / 60.0).round
+        hours = mins / 60
+        rest = mins % 60
+        return "#{mins} min" if hours.zero?
+
+        rest.zero? ? "#{hours} hr" : "#{hours} hr #{rest} min"
+      end
+
+      def length_seconds(ms)
+        ms = ms.to_i
+        return if ms <= 0
+
+        (ms / 1000.0).round
+      end
+
       def directors(item)
         Array(item.credits["crew"])
           .select {|c| c["job"] == "Director" }

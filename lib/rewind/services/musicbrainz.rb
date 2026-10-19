@@ -4,7 +4,7 @@ require "digest"
 
 module Rewind
   module Services
-    # Builds a cached artist -> album -> track chain of Items from a scrobble.
+    # Builds an artist -> album -> track chain of Items from a scrobble.
     #
     # Identity comes straight from the payload: MusicBrainz ids when the library
     # is tagged, otherwise deterministic synthetic keys derived from the text
@@ -14,22 +14,27 @@ module Rewind
     # Tagged and untagged copies of the same song may diverge into separate
     # items; that's accepted.
     #
-    # Album art is a plain Cover Art Archive URL; artist photos come from
-    # fanart.tv (one cached, best-effort call).
+    # Every resolve upserts the row from the data in hand (cheap, local SQLite),
+    # so fields like track/disc number stay current — no time-based cache to go
+    # stale. The one genuinely remote piece is the artist photo (fanart.tv); we
+    # reuse a stored one instead of re-fetching, so a full-album backfill never
+    # hits fanart once per track. Album art is a plain Cover Art Archive URL.
     class MusicBrainz
       COVER_ART_URL = "https://coverartarchive.org"
-      CACHE_TTL_DAYS = 7
 
       def initialize(fanart: Fanart.new)
         @fanart = fanart
       end
 
       def resolve(title:, artist:, album:, recording_mbid: nil,
-                  release_group_mbid: nil, artist_mbid: nil, length_ms: nil)
+                  release_group_mbid: nil, artist_mbid: nil, length_ms: nil,
+                  track_number: nil, disc_number: nil, release_date: nil,
+                  genres: nil)
         return if presence(title).nil?
 
         artist_item = ensure_artist(artist_mbid, artist)
-        album_item = ensure_album(release_group_mbid, album, artist_item)
+        album_item = ensure_album(release_group_mbid, album, artist_item,
+                                  release_date:, genres:)
         external_id =
           if presence(recording_mbid)
             "mbid:#{recording_mbid}"
@@ -37,7 +42,7 @@ module Rewind
             synthetic_id("track", "#{artist}/#{album}/#{title}")
           end
 
-        cache(external_id, "track") do
+        upsert(external_id, "track") do
           {
             media_type: "track",
             external_id: external_id,
@@ -46,7 +51,9 @@ module Rewind
             runtime: ms_to_minutes(length_ms),
             poster_path: album_item.poster_path,
             metadata: track_metadata(artist_item, album_item,
-                                     length_ms: length_ms)
+                                     length_ms: length_ms,
+                                     track_number: track_number,
+                                     disc_number: disc_number)
           }
         end
       end
@@ -56,17 +63,20 @@ module Rewind
         external_id =
           presence(mbid) ? "mbid:artist:#{mbid}" : synthetic_id("artist", name)
 
-        cache(external_id, "artist") do
+        upsert(external_id, "artist") do |existing|
           {
             media_type: "artist",
             external_id: external_id,
             title: name,
-            poster_path: @fanart.artist_image(presence(mbid))
+            # The only remote call: skip it once we already have a photo.
+            poster_path: existing&.poster_path ||
+              @fanart.artist_image(presence(mbid))
           }
         end
       end
 
-      private def ensure_album(mbid, title, artist)
+      private def ensure_album(mbid, title, artist, release_date: nil,
+                               genres: nil)
         title = presence(title) || "Unknown Album"
         external_id =
           if presence(mbid)
@@ -75,28 +85,37 @@ module Rewind
             synthetic_id("album", "#{artist.title}/#{title}")
           end
 
-        cache(external_id, "album") do
+        upsert(external_id, "album") do |existing|
+          genres = Array(genres).filter_map {|g| presence(g) }
+          genres = Array(existing&.metadata&.dig("genres")) if genres.empty?
           {
             media_type: "album",
             external_id: external_id,
             parent_external_id: artist.external_id,
             title: title,
+            # Tracks on an album share its year/genres; keep any we already have
+            # when a given track's payload is missing them.
+            release_date: presence(release_date) || existing&.release_date,
             poster_path: (cover_art_url(mbid) if presence(mbid)),
             metadata: {
               "artist" => artist.title,
-              "artist_external_id" => artist.external_id
+              "artist_external_id" => artist.external_id,
+              "genres" => genres
             }
           }
         end
       end
 
-      private def track_metadata(artist, album, length_ms:)
+      private def track_metadata(artist, album, length_ms:, track_number: nil,
+                                 disc_number: nil)
         {
           "artist" => artist.title,
           "artist_external_id" => artist.external_id,
           "album" => album.title,
           "album_external_id" => album.external_id,
-          "length_ms" => length_ms
+          "length_ms" => length_ms,
+          "track_number" => track_number,
+          "disc_number" => disc_number
         }
       end
 
@@ -119,14 +138,13 @@ module Rewind
         str.empty? ? nil : str
       end
 
-      private def cache(external_id, media_type)
+      # Upsert the item from the data in hand. The block receives the existing
+      # row (or nil) so it can preserve values that are expensive to refetch.
+      private def upsert(external_id, media_type)
         existing =
           Rewind::Item.where(media_type: media_type,
                              external_id: external_id).first
-        cutoff = Time.now - (CACHE_TTL_DAYS * 86_400)
-        return existing if existing&.fetched_at && existing.fetched_at > cutoff
-
-        attrs = yield.merge(fetched_at: Time.now)
+        attrs = yield(existing).merge(fetched_at: Time.now)
 
         if existing
           existing.update(attrs)

@@ -47,6 +47,14 @@ module Rewind
       metadata["album"]
     end
 
+    def track_number
+      metadata["track_number"]
+    end
+
+    def disc_number
+      metadata["disc_number"]
+    end
+
     def display_title
       case media_type
       when "episode"

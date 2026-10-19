@@ -115,6 +115,26 @@ module Rewind
         {}
       end
 
+      # Every Audio track belonging to an album, in disc/track order. Used to
+      # backfill an album's unplayed tracks from a played one's parent. Empty
+      # list on failure.
+      def album_tracks(user_id:, album_id:)
+        response = get(
+          "#{@url}/Users/#{user_id}/Items",
+          ParentId: album_id,
+          IncludeItemTypes: "Audio",
+          Recursive: true,
+          SortBy: "ParentIndexNumber,IndexNumber,SortName",
+          SortOrder: "Ascending",
+          Fields: "ProviderIds,ParentIndexNumber,IndexNumber,RunTimeTicks," \
+                  "PremiereDate,ProductionYear,Genres",
+          Limit: 500
+        )
+        Array(JSON.parse(response.body.to_s)["Items"])
+      rescue Error
+        []
+      end
+
       private def get_items(user_id, start_index)
         response = get(
           "#{@url}/Users/#{user_id}/Items",
@@ -124,7 +144,7 @@ module Rewind
           SortBy: "DatePlayed",
           SortOrder: "Descending",
           Fields: "ProviderIds,ParentIndexNumber,IndexNumber,SeriesId," \
-                  "ParentId,DateCreated,PremiereDate",
+                  "ParentId,DateCreated,PremiereDate,ProductionYear,Genres",
           Limit: @page_size,
           StartIndex: start_index
         )

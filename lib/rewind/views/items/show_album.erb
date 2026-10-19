@@ -1,45 +1,151 @@
 <% @page_title = @item.title %>
 <main class="page page--title">
   <section class="title-hero">
-    <img class="title-hero__poster" src="<%= poster_url(@item, size: "w342") %>" alt="">
+    <img class="album-cover" src="<%= poster_url(@item, size: "w342") %>" alt="">
     <div class="title-hero__info">
       <div class="title-hero__heading">
         <span class="eyebrow">Album</span>
         <h1><%= h(@item.title) %></h1>
-        <span class="title-meta">
-          <% if @artist %>
-            <a href="/items/<%= @artist.id %>"><%= h(@item.metadata["artist"]) %></a>
-          <% elsif @item.metadata["artist"] %>
-            <%= h(@item.metadata["artist"]) %>
-          <% end %>
-          <% if @item.genres.any? %> · <%= h(@item.genres.join(", ")) %><% end %>
-        </span>
+        <% if @artist %>
+          <a class="album-artist" href="/items/<%= @artist.id %>"><%= h(@item.metadata["artist"]) %></a>
+        <% elsif @item.metadata["artist"] %>
+          <span class="album-artist"><%= h(@item.metadata["artist"]) %></span>
+        <% end %>
+        <%
+          meta = []
+          year = @item.release_date.to_s[0, 4]
+          meta << year unless year.empty?
+          meta << pluralize(@tracks.size, "track")
+          total = album_length(@total_length_ms)
+          meta << total if total
+          meta << @item.genres.join(", ") if @item.genres.any?
+        %>
+        <% unless meta.empty? %>
+          <span class="title-meta"><%= h(meta.join(" · ")) %></span>
+        <% end %>
+      </div>
+
+      <div class="chips">
+        <span class="chip chip--soft"><%= pluralize(@total_plays, "track play") %></span>
+        <% if @complete_listens.positive? %>
+          <span class="chip">Heard start to finish <%= pluralize(@complete_listens, "time") %></span>
+        <% end %>
+        <% if @last_played %>
+          <span class="chip">Last played <%= in_user_tz(@last_played).strftime("%b %-d, %Y") %></span>
+        <% end %>
+      </div>
+
+      <div class="hero-actions">
+        <div class="hero-rating">
+          <span>Your rating</span>
+          <%= rating_input(@item, @user_item, current_user) %>
+        </div>
       </div>
     </div>
   </section>
 
-  <section class="section" aria-labelledby="tracks-h">
-    <h2 id="tracks-h">Tracks</h2>
+  <section class="section" aria-labelledby="tracklist-h">
+    <div class="section__head">
+      <h2 id="tracklist-h">Tracklist</h2>
+      <% if @total_plays.positive? %><small>Plays are yours, across every listen</small><% end %>
+    </div>
     <% if @tracks.empty? %>
-      <p class="muted">No tracks tracked from this album yet.</p>
+      <p class="empty">No tracks tracked from this album yet.</p>
     <% else %>
-      <ul class="watch-list">
-        <% @tracks.each do |track| %>
-          <% count = @play_counts[track.id].to_i %>
-          <li class="watch-row">
-            <div class="watch-row__when">
-              <strong><a href="/items/<%= track.id %>"><%= h(track.title) %></a></strong>
-              <span>
-                <% if count.positive? %>
-                  Played <%= pluralize(count, "time") %>
-                <% else %>
-                  Not played yet
-                <% end %>
-              </span>
-            </div>
-          </li>
-        <% end %>
-      </ul>
+      <div class="tracklist">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col" class="col-num">#</th>
+              <th scope="col">Title</th>
+              <th scope="col" class="col-plays">Plays</th>
+              <th scope="col" class="col-length">Length</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @tracks.each_with_index do |track, index| %>
+              <% count = @play_counts[track.id].to_i %>
+              <% length_ms = track.metadata["length_ms"] %>
+              <tr>
+                <td class="col-num"><%= track.track_number || index + 1 %></td>
+                <td class="col-title"><a class="content-link" href="/items/<%= track.id %>"><%= h(track.title) %></a></td>
+                <td class="col-plays">
+                  <span class="plays">
+                    <span class="plays__count"><%= count %></span>
+                    <% if @max_track_plays.positive? %>
+                      <span class="plays__bar" aria-hidden="true"><span class="plays__fill" style="width: <%= (count * 100.0 / @max_track_plays).round(1) %>%"></span></span>
+                    <% end %>
+                  </span>
+                </td>
+                <td class="col-length">
+                  <% if (len = track_length(length_ms)) %>
+                    <time datetime="<%= track_length_iso(length_ms) %>"><%= len %></time>
+                  <% else %>
+                    —
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td class="col-num"></td>
+              <td><%= pluralize(@tracks.size, "track") %></td>
+              <td class="col-plays"><span class="plays"><span class="plays__count"><%= @total_plays %></span></span></td>
+              <td class="col-length"><%= album_length(@total_length_ms) %></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    <% end %>
+  </section>
+
+  <% editing = params[:editing] == "1" || @user_item.nil? || @user_item.review.to_s.empty? %>
+  <section class="section" aria-labelledby="review-h">
+    <h2 id="review-h">Your review</h2>
+
+    <% if editing %>
+      <form class="review review--form" method="post" action="/items/<%= @item.id %>/review">
+        <%= csrf_tag %>
+        <label for="review-text">Write a review</label>
+        <textarea class="textarea" id="review-text" name="review" rows="5" placeholder="What stuck with you? Favorite tracks, the mood, where you were…"><%= h(@user_item&.review) %></textarea>
+        <div class="review__foot">
+          <span>Only you can see this.</span>
+          <span>
+            <% unless @user_item.nil? || @user_item.review.to_s.empty? %>
+              <a class="btn btn--secondary" href="/items/<%= @item.id %>">Cancel</a>
+            <% end %>
+            <button class="btn btn--primary" type="submit">Save review</button>
+          </span>
+        </div>
+      </form>
+    <% else %>
+      <article class="review">
+        <div class="review__head">
+          <span class="review__meta">
+            <% if @user_item.rating %>
+              <span class="rating-readout__stars" role="img" aria-label="Rated <%= @user_item.rating %> of 5"><% (1..5).each do |n| %><svg<%= ' class="is-on"' if n <= @user_item.rating %> viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg><% end %></span>
+            <% end %>
+            <% if @user_item.review_created_at %>
+              <% created = @user_item.review_created_at %>
+              <% updated = @user_item.review_updated_at %>
+              <time datetime="<%= created.iso8601 %>">Reviewed <%= in_user_tz(created).strftime("%b %-d, %Y") %></time>
+              <% if updated && (updated.to_i - created.to_i) > 60 %>
+                · edited <time datetime="<%= updated.iso8601 %>"><%= in_user_tz(updated).strftime("%b %-d, %Y") %></time>
+              <% end %>
+            <% end %>
+          </span>
+          <span class="review__tools">
+            <a class="btn btn--secondary btn--sm" href="/items/<%= @item.id %>?editing=1">Edit</a>
+            <form method="post" action="/items/<%= @item.id %>/review">
+              <%= csrf_tag %>
+              <input type="hidden" name="review" value="">
+              <button class="btn btn--ghost btn--sm" type="submit">Delete</button>
+            </form>
+          </span>
+        </div>
+        <p class="review__text"><%= h(@user_item.review) %></p>
+      </article>
     <% end %>
   </section>
 </main>
