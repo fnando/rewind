@@ -345,10 +345,10 @@ button { font: inherit; color: inherit; }
 .avatar-wrap { position: relative; display: inline-flex; flex: none; }
 .avatar-wrap__dot {
   position: absolute;
-  top: -1px;
-  right: -1px;
-  width: 10px;
-  height: 10px;
+  top: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--danger-soft-fg);
   border: 2px solid var(--topbar);
