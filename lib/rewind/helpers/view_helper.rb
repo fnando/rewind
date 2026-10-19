@@ -90,13 +90,36 @@ module Rewind
         [item.media_type, external_id] unless external_id.empty?
       end
 
-      # The upstream CDN URL for an item's poster, or nil when it has no art.
+      # The upstream URL for an item's poster, or nil when it has no art.
+      # Jellyfin images re-resolve their host from the current source — the host
+      # isn't baked into poster_path, so it never goes stale across environments
+      # (e.g. a public URL in dev vs an internal docker name in prod).
       def remote_poster_url(item, size = "w185")
         path = item&.poster_path.to_s
         return if path.empty?
+
+        if (jf = jellyfin_image_path(path))
+          base = jellyfin_source_url
+          return base && "#{base}#{jf}"
+        end
         return path if path.start_with?("http://", "https://")
 
         "https://image.tmdb.org/t/p/#{size}#{path}"
+      end
+
+      # The "/Items/<id>/Images/...?tag=..." portion of a Jellyfin image
+      # reference (relative or absolute), so its host can be re-resolved from
+      # the current source. nil when the path isn't a Jellyfin image.
+      def jellyfin_image_path(path)
+        idx = path.index("/Items/")
+        path[idx..] if idx && path.include?("/Images/")
+      end
+
+      # Base URL of a configured Jellyfin source (enabled preferred), or nil.
+      def jellyfin_source_url
+        url = Rewind::Source.where(type: "jellyfin").exclude(url: nil)
+                            .order(Sequel.desc(:enabled)).get(:url)
+        url&.sub(%r{/+\z}, "")
       end
 
       def still_url(path, size: "w300")

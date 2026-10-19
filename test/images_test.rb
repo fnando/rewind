@@ -81,6 +81,61 @@ class ImagesProxyTest < Minitest::Test
     assert_includes last_response.headers["location"], "/poster-placeholder.svg"
   end
 
+  test "a relative jellyfin image resolves its host from the source" do
+    create_source(user_id: @user.id, url: "http://jellyfin:8096")
+    ep = create_item(media_type: "episode", external_id: "jellyfin:ep1",
+                     title: "Ep",
+                     poster_path: "/Items/ep1/Images/Primary?tag=t")
+    remote = "http://jellyfin:8096/Items/ep1/Images/Primary?tag=t"
+    WebMock.stub_request(:get, remote)
+           .to_return(status: 200, body: "EPIMG",
+                      headers: {"Content-Type" => "image/jpeg"})
+
+    get @helper.poster_url(ep)
+
+    assert_equal 200, last_response.status
+    assert_equal "EPIMG", last_response.body
+  end
+
+  test "a jellyfin image with a stale host is re-hosted to the source" do
+    # A poster_path pinned to another environment's host (e.g. restored across
+    # installs) must still serve — the host is re-resolved, not trusted.
+    create_source(user_id: @user.id, url: "http://jellyfin:8096")
+    ep = create_item(
+      media_type: "episode", external_id: "jellyfin:ep2", title: "Ep2",
+      poster_path: "https://old.example/Items/ep2/Images/Primary?tag=t"
+    )
+    remote = "http://jellyfin:8096/Items/ep2/Images/Primary?tag=t"
+    WebMock.stub_request(:get, remote)
+           .to_return(status: 200, body: "IMG2",
+                      headers: {"Content-Type" => "image/jpeg"})
+
+    get @helper.poster_url(ep)
+
+    assert_equal 200, last_response.status
+    assert_equal "IMG2", last_response.body
+  end
+
+  test "remote_poster_url re-hosts jellyfin images, leaving tmdb alone" do
+    create_source(user_id: @user.id, url: "http://jellyfin:8096/")
+    rel = create_item(media_type: "episode", external_id: "jellyfin:e1",
+                      title: "E1",
+                      poster_path: "/Items/e1/Images/Primary?tag=t")
+    abs = create_item(
+      media_type: "episode", external_id: "jellyfin:e2", title: "E2",
+      poster_path: "https://stale.example/Items/e2/Images/Primary?tag=t"
+    )
+    tmdb = create_item(media_type: "movie", external_id: "tmdb:1", title: "M",
+                       poster_path: "/p.jpg")
+
+    assert_equal "http://jellyfin:8096/Items/e1/Images/Primary?tag=t",
+                 @helper.remote_poster_url(rel)
+    assert_equal "http://jellyfin:8096/Items/e2/Images/Primary?tag=t",
+                 @helper.remote_poster_url(abs)
+    assert_equal "https://image.tmdb.org/t/p/w185/p.jpg",
+                 @helper.remote_poster_url(tmdb)
+  end
+
   test "tracks that share an album cover resolve to one proxied URL" do
     two = (1..2).map do |n|
       create_item(media_type: "track", external_id: "mbid:t#{n}",

@@ -491,11 +491,13 @@ module Rewind
           yt ? "youtube:#{yt}" : "jellyfin:#{item['Id']}"
         end
 
+        # A host-less Jellyfin image reference. The host is re-resolved from the
+        # current source at serve time (see ViewHelper#remote_poster_url), so a
+        # stored URL never goes stale across environments.
         private def primary_image_url(item_id, tag)
           return unless item_id && tag
 
-          base = @source.url.to_s.sub(%r{/+\z}, "")
-          "#{base}/Items/#{item_id}/Images/Primary?tag=#{tag}"
+          "/Items/#{item_id}/Images/Primary?tag=#{tag}"
         end
 
         private def premiere_date(item)
