@@ -106,7 +106,7 @@ class HistoryTest < Minitest::Test
     assert_includes last_response.body, "Yeah Yeah Yeahs · Fever to Tell"
   end
 
-  test "an episode links its title to the show and reads S#E#" do
+  test "an episode titles the episode and puts the show in the detail" do
     show = create_item(media_type: "series", title: "Ludwig",
                        external_id: "tmdb:9001")
     episode = create_item(media_type: "episode", title: "Pilot",
@@ -122,12 +122,12 @@ class HistoryTest < Minitest::Test
     assert_equal 200, last_response.status
     assert_includes last_response.body, ">Episode</span>"
     title_link =
-      %[<a class="cover-card__title" href="/items/#{show.id}">Ludwig</a>]
+      %[<a class="cover-card__title" href="/items/#{episode.id}">Pilot</a>]
 
     assert_includes last_response.body, title_link
-    # The detail reads "S1 · E2 — <linked episode title>".
+    # The detail reads "S1 · E2 — <linked show name>".
     assert_includes last_response.body, "S1 · E2 — "
-    assert_includes last_response.body, %[href="/items/#{episode.id}">Pilot</a>]
+    assert_includes last_response.body, %[href="/items/#{show.id}">Ludwig</a>]
   end
 
   test "a cover-less item falls back to the styled poster placeholder" do

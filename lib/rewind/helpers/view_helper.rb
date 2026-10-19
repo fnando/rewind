@@ -330,9 +330,9 @@ module Rewind
       end
 
       private def episode_cover_detail(card)
-        episode = item_link(card.item, card.item.title)
+        series = item_link(card.show, card.series_name)
         prefix = card.episode_prefix
-        prefix ? "#{h(prefix)} — #{episode}" : episode
+        prefix ? "#{h(prefix)} — #{series}" : series
       end
 
       # A link to an item's page, styled to read like body text. Falls back to

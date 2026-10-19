@@ -46,10 +46,10 @@ module Rewind
         @shows[@item.parent_external_id]
       end
 
-      # The item the title links to: the series for episodes, else the play's
-      # own item.
+      # The item the title links to — always the play's own item (the episode
+      # itself for episode plays; the series moves into the detail line).
       def link_item
-        kind == "episode" ? (show || @item) : @item
+        @item
       end
 
       # The item whose cover art the card shows: the series for episodes; the
@@ -58,11 +58,15 @@ module Rewind
         kind == "episode" ? (show || @item) : @item
       end
 
+      # The card's main title: the episode title for episodes, else the item's
+      # own title.
       def title
-        return @item.metadata["series_name"] || show&.title || @item.title if
-          kind == "episode"
-
         @item.title
+      end
+
+      # The show name behind an episode play, for its detail line.
+      def series_name
+        @item.metadata["series_name"] || show&.title || @item.title
       end
 
       def source_label
