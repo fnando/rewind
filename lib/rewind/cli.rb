@@ -5,8 +5,10 @@ require "dotenv"
 
 module Rewind
   class UsersCLI < Thor
-    class_option :env, type: :string,
-                       desc: "Path to a dotenv file to load before executing"
+    class_option :env_file, type: :string,
+                            desc: "Dotenv file to load before executing"
+    class_option :environment, aliases: "-e", type: :string,
+                               desc: "Run environment (default: production)"
 
     def self.exit_on_failure?
       true
@@ -16,7 +18,7 @@ module Rewind
     option :username, type: :string, required: true
     option :name, type: :string
     def new
-      Rewind::CLI.load_env!(options[:env])
+      Rewind::CLI.load_env!(options)
       Rewind::CLI.boot_db!
       password = Rewind::Services::PasswordGenerator.call
       user = Rewind::User.new(
@@ -47,7 +49,7 @@ module Rewind
     option :name, type: :string
     option :rating_style, type: :string, enum: %w[stars thumbs]
     def update
-      Rewind::CLI.load_env!(options[:env])
+      Rewind::CLI.load_env!(options)
       Rewind::CLI.boot_db!
       user = Rewind::User.where(username: options[:username]).first
       abort("User not found: #{options[:username]}") unless user
@@ -72,7 +74,7 @@ module Rewind
     option :username, type: :string, required: true
     option :yes, type: :boolean, default: false
     def delete
-      Rewind::CLI.load_env!(options[:env])
+      Rewind::CLI.load_env!(options)
       Rewind::CLI.boot_db!
       user = Rewind::User.where(username: options[:username]).first
       abort("User not found: #{options[:username]}") unless user
@@ -89,7 +91,7 @@ module Rewind
 
     desc "list", "List users"
     def list
-      Rewind::CLI.load_env!(options[:env])
+      Rewind::CLI.load_env!(options)
       Rewind::CLI.boot_db!
       rows = Rewind::User.order(:username).all
       if rows.empty?
@@ -122,8 +124,10 @@ module Rewind
   end
 
   class SourcesCLI < Thor
-    class_option :env, type: :string,
-                       desc: "Path to a dotenv file to load before executing"
+    class_option :env_file, type: :string,
+                            desc: "Dotenv file to load before executing"
+    class_option :environment, aliases: "-e", type: :string,
+                               desc: "Run environment (default: production)"
 
     def self.exit_on_failure?
       true
@@ -185,7 +189,7 @@ module Rewind
 
     no_commands do
       def boot!
-        Rewind::CLI.load_env!(options[:env])
+        Rewind::CLI.load_env!(options)
         Rewind::CLI.boot_db!
       end
 
@@ -204,8 +208,10 @@ module Rewind
   end
 
   class ImportCLI < Thor
-    class_option :env, type: :string,
-                       desc: "Path to a dotenv file to load before executing"
+    class_option :env_file, type: :string,
+                            desc: "Dotenv file to load before executing"
+    class_option :environment, aliases: "-e", type: :string,
+                               desc: "Run environment (default: production)"
 
     def self.exit_on_failure?
       true
@@ -217,7 +223,7 @@ module Rewind
     option :username, type: :string, required: true,
                       desc: "User the imported data belongs to"
     def trakt
-      Rewind::CLI.load_env!(options[:env])
+      Rewind::CLI.load_env!(options)
       Rewind::CLI.boot_db!
 
       archive = options[:archive]
@@ -255,11 +261,22 @@ module Rewind
       true
     end
 
-    def self.load_env!(path)
-      return unless path
+    # Loads an optional dotenv file, then resolves the run environment and
+    # exports it as APP_ENV/RACK_ENV so Sinatra, Puma, and the app's own env
+    # checks all agree — and so it applies before the app is loaded. The
+    # --environment flag wins, else a file/shell APP_ENV|RACK_ENV, else
+    # production. Runs for every command, not just `run`.
+    def self.load_env!(options)
+      path = options[:env_file]
+      if path
+        abort("env file not found: #{path}") unless File.exist?(path)
+        Dotenv.load(path)
+      end
 
-      abort("env file not found: #{path}") unless File.exist?(path)
-      Dotenv.load(path)
+      env = options[:environment] || ENV["APP_ENV"] || ENV["RACK_ENV"] ||
+            "production"
+      ENV["APP_ENV"] = env
+      ENV["RACK_ENV"] = env
       Rewind.config = Config.new
     end
 
@@ -281,8 +298,10 @@ module Rewind
       end
     end
 
-    class_option :env, type: :string,
-                       desc: "Path to a dotenv file to load before executing"
+    class_option :env_file, type: :string,
+                            desc: "Dotenv file to load before executing"
+    class_option :environment, aliases: "-e", type: :string,
+                               desc: "Run environment (default: production)"
 
     desc "run", "Start the Rewind web server"
     option :port, type: :numeric
@@ -295,8 +314,12 @@ module Rewind
                      desc: "Shortcut for --verbose-level=debug"
     option :image_storage_dir, type: :string,
                                desc: "Directory to cache proxied cover images"
+    option :workers, type: :numeric,
+                     desc: "Number of Puma worker processes (0 = single mode)"
+    option :threads, type: :numeric,
+                     desc: "Number of Puma threads per worker"
     def run_server
-      CLI.load_env!(options[:env])
+      CLI.load_env!(options)
       Rewind.logger.level = CLI.resolve_log_level(options)
       require_relative "migrator"
       if options[:migrate] || ENV["REWIND_AUTO_MIGRATE"] == "1"
@@ -307,6 +330,8 @@ module Rewind
       end
       Rewind.config.port = options[:port] if options[:port]
       Rewind.config.host = options[:host] if options[:host]
+      Rewind.config.workers = options[:workers] if options[:workers]
+      Rewind.config.threads = options[:threads] if options[:threads]
       Rewind.config.image_storage_dir = options[:image_storage_dir]
       app = Rewind.application
       Rewind::Services::Sync.start_thread
@@ -315,21 +340,32 @@ module Rewind
       display_host = wildcard ? "localhost" : Rewind.config.host
       say "Rewind listening on http://#{display_host}:#{Rewind.config.port}/"
 
-      require "puma"
-      require "puma/configuration"
+      conf = CLI.puma_configuration(app)
       require "puma/launcher"
-
-      plugins = %w[tmp_restart] | Rewind.config.puma_plugins
-      conf = Puma::Configuration.new do |c|
-        c.bind "tcp://#{Rewind.config.host}:#{Rewind.config.port}"
-        c.app app
-        plugins.each {|name| c.plugin(name) }
-      end
       # Pass the original ARGV so Puma's restart (tmp_restart) re-execs the full
       # `rewind run ...` command instead of a bare `rewind`.
       Puma::Launcher.new(conf, argv: ARGV).run
     end
     map "run" => :run_server
+
+    # Builds the Puma configuration from Rewind's config. workers/threads of 0
+    # are left at Puma's own defaults (single mode / default thread pool). We
+    # don't export the environment to ENV — Puma reads it from this config, and
+    # Sinatra reads APP_ENV/RACK_ENV on its own.
+    def self.puma_configuration(app, config: Rewind.config)
+      require "puma"
+      require "puma/configuration"
+
+      plugins = %w[tmp_restart] | config.puma_plugins
+      Puma::Configuration.new do |c|
+        c.bind "tcp://#{config.host}:#{config.port}"
+        c.app app
+        c.environment config.environment
+        c.workers config.workers if config.workers.positive?
+        c.threads config.threads, config.threads if config.threads.positive?
+        plugins.each {|name| c.plugin(name) }
+      end
+    end
 
     desc "restart", "Restart a running server (via Puma's tmp_restart plugin)"
     def restart
@@ -341,7 +377,7 @@ module Rewind
 
     desc "migrate", "Run all pending database migrations"
     def migrate
-      CLI.load_env!(options[:env])
+      CLI.load_env!(options)
       require_relative "migrator"
       Rewind::Migrator.migrate!
       say "Migrations complete."
@@ -358,7 +394,7 @@ module Rewind
                    desc: "Clear cursors and re-pull the full history, then " \
                          "rebuild streaks (non-destructive: deletes nothing)"
     def sync
-      CLI.load_env!(options[:env])
+      CLI.load_env!(options)
       CLI.boot_db!
       Rewind.logger.level = CLI.resolve_log_level(options)
 
@@ -406,7 +442,7 @@ module Rewind
 
     desc "console", "Launch an IRB console with models loaded"
     def console
-      CLI.load_env!(options[:env])
+      CLI.load_env!(options)
       CLI.boot_db!
       require "irb"
       ARGV.clear
@@ -420,7 +456,7 @@ module Rewind
 
     desc "config", "Print the resolved configuration"
     def config_show
-      CLI.load_env!(options[:env])
+      CLI.load_env!(options)
       Rewind.config.to_h.each do |k, v|
         display = v.nil? || (v.respond_to?(:empty?) && v.empty?) ? "(unset)" : v
         say format("  %-20s %s", "#{k}:", display)

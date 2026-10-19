@@ -5,7 +5,7 @@ module Rewind
     attr_accessor :data_dir, :tmdb_api_key, :fanart_api_key,
                   :session_secret, :host, :port, :keyring, :sync_interval,
                   :streak_rebuild_interval, :allowed_hosts, :puma_plugins,
-                  :db_busy_timeout
+                  :db_busy_timeout, :workers, :threads, :environment
     attr_writer :image_storage_dir
 
     def initialize
@@ -27,6 +27,13 @@ module Rewind
       @db_busy_timeout = (ENV["REWIND_DB_BUSY_TIMEOUT"] || 15_000).to_i
       @host = ENV["REWIND_HOST"] || "0.0.0.0"
       @port = (ENV["REWIND_PORT"] || 55_455).to_i
+      # Puma sizing. 0 means "leave Puma's own default" — workers 0 is single
+      # mode; threads 0 keeps Puma's default thread pool.
+      @workers = (ENV["REWIND_WORKERS"] || 0).to_i
+      @threads = (ENV["REWIND_THREADS"] || 0).to_i
+      # Rack/Puma run environment. Defaults to production; APP_ENV/RACK_ENV (the
+      # vars Sinatra and Puma read on their own) act as fallbacks.
+      @environment = ENV["APP_ENV"] || ENV["RACK_ENV"] || "production"
       @allowed_hosts =
         (ENV["REWIND_ALLOWED_HOSTS"] || "")
         .split(",").map(&:strip).reject(&:empty?)
