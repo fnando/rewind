@@ -25,8 +25,13 @@
     <section class="day" aria-labelledby="day-<%= day_id %>">
       <h2 class="day__title" id="day-<%= day_id %>">
         <% if day %>
-          <%= h(day_label(day)) %>
-          <span class="day__meta"><%= day.strftime("%A, %B %-d") %> · <%= pluralize(plays.size, "play") %></span>
+          <% label = day_label(day) %>
+          <%= h(label) %>
+          <span class="day__meta">
+            <%# Only prefix the date when the label is relative, so we don't
+                repeat "Saturday, October 17" on both lines. %>
+            <% if %w[Today Yesterday].include?(label) %><%= day.strftime("%A, %B %-d") %> · <% end %><%= pluralize(plays.size, "play") %>
+          </span>
         <% else %>
           Watched
           <span class="day__meta">date unknown · <%= pluralize(plays.size, "play") %></span>

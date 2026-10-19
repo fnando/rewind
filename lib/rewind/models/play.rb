@@ -6,6 +6,7 @@ module Rewind
 
     many_to_one :user
     many_to_one :item
+    many_to_one :user_timezone_entry
 
     # NB: no `many_to_one :source` association — the `source` column already
     # holds the play's origin kind ("manual"/"jellyfin"/"trakt"). The owning
@@ -51,6 +52,23 @@ module Rewind
 
     def self.skip_activity_tracking?
       Thread.current[:rewind_skip_activity_tracking] == true
+    end
+
+    # Freeze the timezone the play happened in, so history can group by local
+    # day in SQL and a later timezone change never rewrites this play's day.
+    # Runs for every insert path (manual, sync, import). Undated plays (no
+    # played_at) carry a null entry/local_date and render as just "Watched".
+    def before_create
+      if played_at && user_timezone_entry_id.nil? && (user = owner)
+        entry, date = UserTimezoneEntry.resolve(user, played_at)
+        self.user_timezone_entry_id = entry.id
+        self.local_date = date.iso8601
+      end
+      super
+    end
+
+    private def owner
+      User.where(id: user_id).first
     end
 
     # Keep user_day_activity in sync. These run inside Sequel's save/destroy

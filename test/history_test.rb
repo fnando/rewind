@@ -17,6 +17,17 @@ class HistoryTest < Minitest::Test
     end
   end
 
+  # Creates one play per day across +days+ distinct calendar days (today,
+  # yesterday, ...), returning them newest-first.
+  def create_plays_over_days(days, media_type: "movie")
+    base = Time.now.utc
+    Array.new(days) do |i|
+      item = create_item(media_type:, title: "Day #{i}")
+      Rewind::Play.create(user_id: @user.id, item_id: item.id,
+                          played_at: base - (i * 86_400), source: "manual")
+    end
+  end
+
   test "a dateless play renders as 'Watched' under an undated group" do
     item = create_item(media_type: "movie", title: "Adventure Time")
     Rewind::Play.create(user_id: @user.id, item_id: item.id,
@@ -30,8 +41,9 @@ class HistoryTest < Minitest::Test
     assert_includes last_response.body, "Watched · Jellyfin"
   end
 
-  test "no pagination nav when plays fit on one page" do
-    create_plays(3)
+  test "no pagination nav when plays fit within a page's worth of days" do
+    # Many plays, but spread over only two days (the page size).
+    create_plays_over_days(Rewind::Application::DAYS_PER_PAGE)
 
     get "/history"
 
@@ -40,7 +52,7 @@ class HistoryTest < Minitest::Test
   end
 
   test "first page shows Older link but no Newer link" do
-    create_plays(Rewind::Application::PLAYS_PER_PAGE + 1)
+    create_plays_over_days(Rewind::Application::DAYS_PER_PAGE + 1)
 
     get "/history"
 
@@ -50,8 +62,8 @@ class HistoryTest < Minitest::Test
     assert_includes last_response.body, %[href="/history?page=2"]
   end
 
-  test "second page shows Newer link and the oldest play" do
-    plays = create_plays(Rewind::Application::PLAYS_PER_PAGE + 1)
+  test "second page shows Newer link and the oldest day's play" do
+    plays = create_plays_over_days(Rewind::Application::DAYS_PER_PAGE + 1)
     oldest = plays.last
 
     get "/history?page=2"
@@ -62,8 +74,21 @@ class HistoryTest < Minitest::Test
     assert_includes last_response.body, %[href="/items/#{oldest.item_id}"]
   end
 
+  test "a page spans exactly DAYS_PER_PAGE days of activity" do
+    plays = create_plays_over_days(Rewind::Application::DAYS_PER_PAGE + 1)
+
+    get "/history"
+
+    assert_equal 200, last_response.status
+    # The two most recent days appear; the older day spills to page 2.
+    assert_includes last_response.body, %[href="/items/#{plays[0].item_id}"]
+    assert_includes last_response.body, %[href="/items/#{plays[1].item_id}"]
+    refute_includes last_response.body, %[href="/items/#{plays[2].item_id}"]
+  end
+
   test "pagination preserves the media type filter" do
-    create_plays(Rewind::Application::PLAYS_PER_PAGE + 1, media_type: "track")
+    create_plays_over_days(Rewind::Application::DAYS_PER_PAGE + 1,
+                           media_type: "track")
 
     get "/history?type=track"
 

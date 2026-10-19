@@ -373,6 +373,20 @@ module Rewind
         end
       end
 
+      # Loads the plays for a day-paginated window, filtering on the indexed
+      # frozen local_date. +days+ is the window's local dates ('YYYY-MM-DD');
+      # undated plays (null local_date) are included only when the window
+      # reaches the trailing group.
+      def plays_for_days(dataset, days, include_undated)
+        if days.empty?
+          return include_undated ? dataset.where(local_date: nil).all : []
+        end
+
+        query = dataset.where(local_date: days)
+        query = query.or(local_date: nil) if include_undated
+        query.all
+      end
+
       # Folds an ordered play list into display entries, collapsing consecutive
       # track plays from the same album into a single album group. Returns an
       # array of {type: :single, play:} or {type: :album, album_id:, plays:}.

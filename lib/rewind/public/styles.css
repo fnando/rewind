@@ -761,6 +761,18 @@ select.input::-ms-expand { display: none; }
 @media (max-width: 639px) {
   .cover-card { --h: 210px; }
   .cover-card__title { font-size: 14px; }
+
+  /* Scroll each day's cards in one horizontal row contained within the page
+     gutter, so the layout reads as [date] / [card] [card] [card] →. */
+  .cover-grid {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    padding-bottom: 4px;
+  }
+  .cover-card { scroll-snap-align: start; }
 }
 
 .cover-card__img {

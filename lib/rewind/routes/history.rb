@@ -2,7 +2,7 @@
 
 module Rewind
   class Application < Sinatra::Base
-    PLAYS_PER_PAGE = 200
+    DAYS_PER_PAGE = 2
 
     get "/" do
       redirect "/history"
@@ -11,18 +11,36 @@ module Rewind
     get "/history" do
       @type = params[:type]
       @page = [params[:page].to_i, 1].max
-      scope = Play.for_user(current_user)
-                  .order(Sequel.desc(:played_at))
-                  .eager(:item)
+
+      scope = Play.for_user(current_user).order(Sequel.desc(:played_at))
       scope = scope.for_media_type(@type) if @type && @type != "all"
-      rows = scope.limit(PLAYS_PER_PAGE + 1)
-                  .offset((@page - 1) * PLAYS_PER_PAGE).all
+
+      # Paginate by day of activity, not a fixed row count: each page spans
+      # DAYS_PER_PAGE days that had plays, however far apart they fall on the
+      # calendar. Grouping reads each play's frozen local_date, so it's a single
+      # indexed DISTINCT query — no per-row timezone math. Undated plays (null
+      # local_date) sort last and form a single trailing "day".
+      skip = (@page - 1) * DAYS_PER_PAGE
+      recent_days = scope.exclude(local_date: nil)
+                         .distinct
+                         .order(Sequel.desc(:local_date))
+                         .limit(DAYS_PER_PAGE + 1).offset(skip)
+                         .select_map(:local_date)
+      undated = scope.where(local_date: nil).get(1) ? true : false
+
+      window = recent_days.first(DAYS_PER_PAGE)
+      include_undated = window.size < DAYS_PER_PAGE && undated
       @has_prev = @page > 1
-      @has_next = rows.size > PLAYS_PER_PAGE
-      @plays = rows.first(PLAYS_PER_PAGE)
-      tz = TZInfo::Timezone.get(current_user.timezone || "UTC")
-      @plays_by_day = @plays.group_by do |p|
-        p.played_at ? tz.to_local(p.played_at.utc).to_date : nil
+      # A full window of real days may still have the undated group after it.
+      @has_next =
+        if recent_days.size > DAYS_PER_PAGE then true
+        elsif window.size == DAYS_PER_PAGE then undated
+        else false
+        end
+
+      @plays = plays_for_days(scope.eager(:item), window, include_undated)
+      @plays_by_day = @plays.group_by do |play|
+        play.local_date ? Date.parse(play.local_date) : nil
       end
       @shows_by_tmdb = load_shows_for(@plays)
       @music_parents = load_music_parents_for(@plays)
