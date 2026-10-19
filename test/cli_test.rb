@@ -47,6 +47,19 @@ class CLITest < Minitest::Test
     assert_equal 0, puma_options(config)[:workers] # single mode
   end
 
+  test "resolve_log_level maps verbose to info and defaults to error" do
+    resolve = ->(opts) { Rewind::CLI.resolve_log_level(opts) }
+
+    assert_equal Logger::INFO, resolve.call(verbose: true)
+    assert_equal Logger::INFO, resolve.call(verbose_level: "info")
+    assert_equal Logger::DEBUG, resolve.call(verbose_level: "debug")
+    # An explicit level wins over the --verbose shortcut.
+    both = resolve.call(verbose: true, verbose_level: "debug")
+
+    assert_equal Logger::DEBUG, both
+    assert_equal Logger::ERROR, resolve.call({})
+  end
+
   test "puma_configuration registers a before_fork hook only in cluster mode" do
     single = Rewind::Config.new
 

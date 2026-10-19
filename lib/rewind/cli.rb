@@ -287,10 +287,10 @@ module Rewind
     end
 
     # The Logger level for the verbose options. Default is ERROR — quiet, but
-    # failures still surface. --verbose-level raises it; --verbose/-v is a
-    # shortcut for the most detail (debug).
+    # failures still surface. --verbose-level sets it explicitly; --verbose/-v
+    # is a shortcut for info. An explicit --verbose-level wins over --verbose.
     def self.resolve_log_level(options)
-      level = options[:verbose] ? "debug" : options[:verbose_level]
+      level = options[:verbose_level] || (options[:verbose] && "info")
       case level
       when "debug" then Logger::DEBUG
       when "info" then Logger::INFO
@@ -311,7 +311,7 @@ module Rewind
     option :verbose_level, type: :string, enum: %w[info debug],
                            desc: "Log verbosity: info or debug"
     option :verbose, type: :boolean, aliases: "-v",
-                     desc: "Shortcut for --verbose-level=debug"
+                     desc: "Shortcut for --verbose-level=info"
     option :image_storage_dir, type: :string,
                                desc: "Directory to cache proxied cover images"
     option :workers, type: :numeric,
@@ -338,11 +338,21 @@ module Rewind
       display_host = wildcard ? "localhost" : Rewind.config.host
       say "Rewind listening on http://#{display_host}:#{Rewind.config.port}/"
 
-      conf = CLI.puma_configuration(app)
+      conf = CLI.puma_configuration(app) # requires "puma" before the launcher
       require "puma/launcher"
       # Pass the original ARGV so Puma's restart (tmp_restart) re-execs the full
       # `rewind run ...` command instead of a bare `rewind`.
-      Puma::Launcher.new(conf, argv: ARGV).run
+      launcher = Puma::Launcher.new(conf, argv: ARGV)
+      # Start background loops once, in the master, AFTER any workers fork — so
+      # forking never races a thread mid-write and they're never duplicated per
+      # worker. after_booted fires in both single and cluster mode, but only on
+      # the launcher's own events (config hooks target a different object).
+      launcher.events.after_booted do
+        Rewind::Services::Sync.start_thread
+        Rewind::Services::Streaks.start_thread
+        Rewind::Services::TimezoneData.start_thread
+      end
+      launcher.run
     end
     map "run" => :run_server
 
@@ -364,14 +374,6 @@ module Rewind
           # Drop the preloaded SQLite handle before forking so workers don't
           # share the master's connection; each reopens lazily on first query.
           c.before_fork { Rewind.db.disconnect }
-        end
-
-        # Background loops run once, in the master, AFTER workers fork — so
-        # forking never races a thread mid-write and they're never duplicated
-        # per worker. In single mode the master is the only process.
-        c.after_booted do
-          Rewind::Services::Sync.start_thread
-          Rewind::Services::Streaks.start_thread
         end
 
         plugins.each {|name| c.plugin(name) }
@@ -400,7 +402,7 @@ module Rewind
     option :verbose_level, type: :string, enum: %w[info debug],
                            desc: "Log verbosity: info or debug"
     option :verbose, type: :boolean, aliases: "-v",
-                     desc: "Shortcut for --verbose-level=debug"
+                     desc: "Shortcut for --verbose-level=info"
     option :reset, type: :boolean, default: false,
                    desc: "Clear cursors and re-pull the full history, then " \
                          "rebuild streaks (non-destructive: deletes nothing)"

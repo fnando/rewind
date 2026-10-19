@@ -75,6 +75,10 @@ module Rewind
 
     def boot!
       db
+      # Prefer synced tz data (if present and >= the gem) before anything loads
+      # TZInfo, so zone lookups use the freshest database available.
+      require_relative "rewind/services/timezone_data"
+      Services::TimezoneData.install_local_source!
       require_relative "rewind/boot"
     end
 

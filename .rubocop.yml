@@ -8,6 +8,8 @@ AllCops:
   Exclude:
     - vendor/**/*
     - gemfiles/**/*
+    - tmp/**/*
+    - data/**/*
 Naming/FileName:
   Exclude:
     - lib/rewind-app.rb
