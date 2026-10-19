@@ -337,7 +337,7 @@ class SourcesJellyfinTest < Minitest::Test
                      query: hash_including("ParentId" => "alb-1"))
   end
 
-  test "skips an audio scrobble that has no play date" do
+  test "skips a dateless audio track with no album session to anchor to" do
     stub_items([
       {
         "Id" => "a9", "Type" => "Audio", "Name" => "Ghost Play",
@@ -352,6 +352,61 @@ class SourcesJellyfinTest < Minitest::Test
     # The track is still catalogued; only the dateless play is dropped.
     refute_nil Rewind::Item.where(media_type: "track",
                                   title: "Ghost Play").first
+  end
+
+  def audio_dated(id:, name:, at:, parent_id: "alb-1")
+    {
+      "Id" => id, "Type" => "Audio", "Name" => name,
+      "Album" => "Dookie", "AlbumArtist" => "Green Day",
+      "ParentId" => parent_id, "UserData" => {"LastPlayedDate" => at}
+    }
+  end
+
+  def audio_dateless(id:, name:, parent_id: "alb-1", provider_ids: nil)
+    item = {
+      "Id" => id, "Type" => "Audio", "Name" => name,
+      "Album" => "Dookie", "AlbumArtist" => "Green Day",
+      "ParentId" => parent_id, "UserData" => {"Played" => true}
+    }
+    item["ProviderIds"] = provider_ids if provider_ids
+    item
+  end
+
+  test "anchors a dateless audio track onto its album's session" do
+    stub_items([
+      audio_dated(id: "d1", name: "Opener", at: "2026-10-18T20:00:00Z"),
+      audio_dated(id: "d2", name: "Middle", at: "2026-10-18T20:03:00Z"),
+      audio_dateless(id: "d3", name: "Closer")
+    ])
+
+    result = adapter.recent_plays(since: nil)
+    closer = Rewind::Item.where(title: "Closer").first
+    recovered = result[:plays].find {|p| p[:item_id] == closer.id }
+
+    assert_equal 3, result[:plays].size
+    refute_nil recovered
+    # Anchored to the album's earliest session time, with a stable event id.
+    assert_equal Time.parse("2026-10-18T20:00:00Z"), recovered[:played_at]
+    assert_equal "jellyfin:d3:played", recovered[:source_event_id]
+  end
+
+  test "does not recover a dateless track that already has a dated play" do
+    track = create_item(media_type: "track", external_id: "mbid:rec-xyz",
+                        title: "Rec")
+    Rewind::Play.create(
+      user_id: @user.id, item_id: track.id, source: "jellyfin",
+      source_event_id: "jellyfin:recA:2026-10-18T19:00:00Z",
+      played_at: Time.parse("2026-10-18T19:00:00Z")
+    )
+    stub_items([
+      audio_dated(id: "sess", name: "Session", at: "2026-10-18T20:00:00Z"),
+      audio_dateless(id: "recB", name: "Rec",
+                     provider_ids: {"MusicBrainzRecording" => "rec-xyz"})
+    ])
+
+    result = adapter.recent_plays(since: nil)
+
+    refute(result[:plays].any? {|p| p[:item_id] == track.id })
   end
 
   test "recent_plays re-scans the lookback window before the cursor" do

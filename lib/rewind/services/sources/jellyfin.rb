@@ -44,7 +44,12 @@ module Rewind
             "[sync/jellyfin] fetched #{items.size} played items since " \
             "#{fetch_since.inspect} (cursor #{since.inspect})"
           )
+          # First pass: dated items and non-audio. build_play returns nil for
+          # dateless audio (recovered below).
           plays = items.filter_map {|item| build_play(item) }
+          # Second pass: a track Jellyfin marks played but never dates still
+          # belongs to a session — recover it onto its album's play time.
+          plays += recover_dateless_audio(items, plays)
           # Advance to the newest real play date, but never behind the incoming
           # cursor (the lookback re-scans older items; it must not rewind us).
           latest = items.filter_map {|i| last_played(i) }.max
@@ -108,15 +113,11 @@ module Rewind
 
           # A genuine scrobble always carries a play date. A dateless Audio item
           # is a Jellyfin artifact — the IsPlayed flag set before the date is
-          # written (an eventual-consistency race mid-session), or a stale flag.
-          # Anchoring it to the file's import date would strand the play on the
-          # wrong day and can double a track that's also reported with a real
-          # date. Skip it; the lookback window re-catches it once Jellyfin dates
-          # it, landing it in the right session.
+          # written, or a stale flag. Anchoring it to the file's import date
+          # would strand it on the wrong day, so leave it to the second pass,
+          # which anchors it onto its album's session instead.
           played = last_played(item)
-          if played.nil? && item["Type"] == "Audio"
-            return log_skip(item, "audio scrobble has no play date")
-          end
+          return if played.nil? && item["Type"] == "Audio"
 
           # No real play date (movies/episodes)? Anchor to when it was added,
           # then when it aired, so it still lands on the timeline.
@@ -133,6 +134,65 @@ module Rewind
           }
         rescue Services::TMDB::Error, Services::Jellyfin::Error => error
           log_skip(item, error.message)
+        end
+
+        # Tracks Jellyfin reports as played-but-dateless (no LastPlayedDate)
+        # would otherwise vanish. Anchor each onto its album's session — the
+        # earliest real play time of a same-album track in this batch — so an
+        # album heard start-to-finish shows every track and groups as one.
+        # No same-album session to anchor to → skip. Guards the double-count the
+        # old import-date anchor caused: never add a dateless play for a track
+        # that already has a real-dated one (in this batch or already stored).
+        private def recover_dateless_audio(items, dated_plays)
+          sessions = album_sessions(items)
+          dated_item_ids = dated_plays.to_set {|p| p[:item_id] }
+
+          items.filter_map do |item|
+            next unless item["Type"] == "Audio" && last_played(item).nil?
+
+            anchor = sessions[presence(item["ParentId"])]
+            next log_skip(item, "no album session to anchor to") unless anchor
+
+            resolved = resolve(item)
+            next unless resolved
+            next if dated_item_ids.include?(resolved.id)
+            next if already_dated?(resolved.id)
+
+            Rewind.logger.info(
+              "[sync/jellyfin] recovered dateless #{describe(item)} -> " \
+              "item #{resolved.id} @ #{anchor.iso8601}"
+            )
+            {
+              item_id: resolved.id,
+              played_at: anchor,
+              source_event_id: "jellyfin:#{item['Id']}:played"
+            }
+          end
+        end
+
+        # album ParentId -> earliest real play time among this batch's dated
+        # audio, the anchor for that album's dateless tracks.
+        private def album_sessions(items)
+          items.each_with_object({}) do |item, sessions|
+            next unless item["Type"] == "Audio"
+
+            played = last_played(item)
+            parent = presence(item["ParentId"])
+            next unless played && parent
+
+            time = Time.parse(played)
+            current = sessions[parent]
+            sessions[parent] = time if current.nil? || time < current
+          end
+        end
+
+        # Does this item already have a real-dated play stored? Keeps a dateless
+        # recovery from doubling a track that synced with a date before.
+        private def already_dated?(item_id)
+          !Rewind::Play
+            .where(user_id: @source.user_id, item_id: item_id)
+            .exclude(Sequel.like(:source_event_id, "%:played"))
+            .empty?
         end
 
         # Logs why an item isn't being recorded and returns nil, so callers can
