@@ -34,5 +34,8 @@
     <span class="cover-card__titlewrap"><% if album_item %><a class="cover-card__title" href="/items/<%= album_item.id %>"><%= h(album_name) %></a><% else %><span class="cover-card__title"><%= h(album_name) %></span><% end %></span>
     <span class="cover-card__detail"><% if item.artist %><%= item_link(artist_item, item.artist) %> · <% end %><%= pluralize(count, "track") %></span>
     <span class="cover-card__meta"><%= time_label %> · <%= h(first.source.capitalize) %></span>
+    <% if album_item %>
+      <%= rating_input(album_item, @user_items_by_item[album_item.id], current_user, on_cover: true) %>
+    <% end %>
   </div>
 </li>

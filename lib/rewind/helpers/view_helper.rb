@@ -288,7 +288,13 @@ module Rewind
       # views. Looks them up by the items' stable rating_key underneath (ratings
       # no longer reference item ids), then maps each item id to its rating.
       def load_user_items_for(plays)
-        items = plays.map(&:item)
+        user_items_by_item_id(plays.map(&:item))
+      end
+
+      # Ratings for the given items, keyed by item id. Shared by the history
+      # cards so track plays and their album group cards both carry a rating.
+      def user_items_by_item_id(items)
+        items = items.compact
         keys = items.map(&:rating_key).uniq
         return {} if keys.empty?
 

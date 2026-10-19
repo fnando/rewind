@@ -24,9 +24,11 @@ module Rewind
       @plays_by_day = @plays.group_by do |p|
         p.played_at ? tz.to_local(p.played_at.utc).to_date : nil
       end
-      @user_items_by_item = load_user_items_for(@plays)
       @shows_by_tmdb = load_shows_for(@plays)
       @music_parents = load_music_parents_for(@plays)
+      album_items = @music_parents.values.select {|i| i.media_type == "album" }
+      @user_items_by_item = load_user_items_for(@plays)
+                            .merge(user_items_by_item_id(album_items))
       erb :"history/index"
     end
 

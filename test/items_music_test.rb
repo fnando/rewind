@@ -183,6 +183,31 @@ class ItemsMusicTest < Minitest::Test
     assert_includes last_response.body, "cover-card--in-album"
   end
 
+  test "an album group card carries the album's rating" do
+    # A second track from the same album forms a collapsible group.
+    track = create_item(
+      media_type: "track", external_id: "mbid:t2", title: "No Surprises",
+      parent_external_id: "mbid:rg:r1", runtime: 4,
+      metadata_json: {
+        "artist" => "Radiohead", "artist_external_id" => "mbid:artist:a1",
+        "album" => "OK Computer", "album_external_id" => "mbid:rg:r1"
+      }.to_json
+    )
+    Rewind::Play.create(user_id: @user.id, item_id: track.id,
+                        played_at: Time.now + 1, source: "jellyfin")
+    Rewind::UserItem.create(user_id: @user.id, item_key: @album.rating_key,
+                            rating: 4)
+
+    get "/history?type=track"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "cover-card--group"
+    assert_includes last_response.body, %[action="/items/#{@album.id}/rating"]
+    assert_includes last_response.body, "on-cover"
+    assert_includes last_response.body,
+                    'value="4" aria-label="4 stars" aria-pressed="true"'
+  end
+
   test "history has a music filter that lists only tracks" do
     movie = create_item(media_type: "movie", title: "Heat")
     Rewind::Play.create(user_id: @user.id, item_id: movie.id,
