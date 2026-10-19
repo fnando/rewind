@@ -15,8 +15,7 @@
 %>
 <li class="cover-card cover-card--track cover-card--group">
   <% if poster?(item) %>
-    <img class="cover-card__img" src="<%= poster_url(item, size: "w342") %>"
-         srcset="<%= poster_url(item, size: "w342") %> 1x, <%= poster_url(item, size: "w500") %> 2x"
+    <img class="cover-card__img" src="<%= poster_url(item) %>"
          alt="" loading="lazy" decoding="async">
   <% else %>
     <img class="cover-card__img cover-card__img--placeholder" src="/poster-placeholder.svg" alt="" loading="lazy" decoding="async">

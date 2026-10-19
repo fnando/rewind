@@ -12,7 +12,7 @@ class ImagesProxyTest < Minitest::Test
 
     @item = create_item(media_type: "movie", title: "Heat",
                         external_id: "tmdb:949", poster_path: "/heat.jpg")
-    @remote = "https://image.tmdb.org/t/p/w185/heat.jpg"
+    @remote = "https://image.tmdb.org/t/p/w500/heat.jpg"
     @url = @helper.poster_url(@item)
   end
 
@@ -27,7 +27,7 @@ class ImagesProxyTest < Minitest::Test
 
     get "/history"
 
-    assert_includes last_response.body, @helper.poster_url(@item, size: "w342")
+    assert_includes last_response.body, @helper.poster_url(@item)
   end
 
   test "a cache miss resolves the upstream, caches it, and serves bytes" do

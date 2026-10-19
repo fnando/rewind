@@ -1,7 +1,7 @@
 <% @page_title = @item.title %>
 <main class="page page--title">
   <section class="title-hero">
-    <img class="album-cover" src="<%= poster_url(@album || @item, size: "w342") %>" alt="">
+    <img class="album-cover" src="<%= poster_url(@album || @item) %>" alt="">
     <div class="title-hero__info">
       <div class="title-hero__heading">
         <span class="eyebrow">Track</span>

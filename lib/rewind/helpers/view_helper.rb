@@ -85,7 +85,7 @@ module Rewind
       # at sync time. Keyed by the art's owner (the album for its tracks, the
       # item itself otherwise), so everything sharing a cover resolves to one
       # URL and one cached file.
-      def poster_url(item, size: "w185")
+      def poster_url(item, size: "w500")
         owner_type, owner_id = poster_owner(item)
         return "/poster-placeholder.svg" unless owner_id
 

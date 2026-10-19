@@ -8,8 +8,7 @@
 %>
 <li class="cover-card cover-card--<%= card.kind %><%= " cover-card--in-album" if grouped %>"<% if grouped %> data-album-tracks="<%= group_key %>" hidden<% end %>>
   <% if poster?(cover) %>
-    <img class="cover-card__img" src="<%= poster_url(cover, size: "w342") %>"
-         srcset="<%= poster_url(cover, size: "w342") %> 1x, <%= poster_url(cover, size: "w500") %> 2x"
+    <img class="cover-card__img" src="<%= poster_url(cover) %>"
          alt="" loading="lazy" decoding="async">
   <% else %>
     <img class="cover-card__img cover-card__img--placeholder" src="/poster-placeholder.svg" alt="" loading="lazy" decoding="async">

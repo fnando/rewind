@@ -1,6 +1,6 @@
 <% latest = plays.first %>
 <li class="play-card">
-  <img class="play-card__still" src="<%= poster_url(ep, size: "w342") %>" alt="" loading="lazy" decoding="async">
+  <img class="play-card__still" src="<%= poster_url(ep) %>" alt="" loading="lazy" decoding="async">
   <div class="play-card__body">
     <a class="play-card__title" href="/items/<%= ep.id %>"><%= h(ep.title) %></a>
     <% if ep.release_date %><span class="play-card__detail"><%= h(format_date(ep.release_date)) %></span><% end %>
