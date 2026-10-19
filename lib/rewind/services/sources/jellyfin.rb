@@ -30,7 +30,8 @@ module Rewind
         def initialize(source)
           @source = source
           @client = Services::Jellyfin.new(source.url,
-                                           token: source.access_token)
+                                           token: source.access_token,
+                                           device_id: source.device_id)
           @series_tmdb = {}
           @folders = {}
           @albums_backfilled = {}

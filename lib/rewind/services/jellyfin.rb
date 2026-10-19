@@ -22,9 +22,12 @@ module Rewind
         new(url).public_users
       end
 
-      def initialize(url, token: nil, page_size: PAGE_SIZE)
+      def initialize(url, token: nil, device_id: nil, page_size: PAGE_SIZE)
         @url = self.class.normalize_url(url)
         @token = token
+        # A per-source device id keeps tokens from clobbering each other; falls
+        # back for callers that only read public/unauthenticated endpoints.
+        @device_id = device_id || "rewind"
         @page_size = page_size
       end
 
@@ -178,7 +181,7 @@ module Rewind
       end
 
       private def client_auth_header
-        device = %[Device="Rewind", DeviceId="rewind"]
+        device = %[Device="Rewind", DeviceId="#{@device_id}"]
         %[MediaBrowser Client="Rewind", #{device}, Version="#{Rewind::VERSION}"]
       end
 

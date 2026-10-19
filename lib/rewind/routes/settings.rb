@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "securerandom"
+
 module Rewind
   class Application < Sinatra::Base
     get "/settings" do
@@ -108,8 +110,12 @@ module Rewind
         fail_form.call("Enter your Jellyfin URL and username.")
       end
 
+      # A random device id per source so Jellyfin binds this connection's token
+      # to its own device, never clobbering another account's or environment's.
+      device_id = SecureRandom.hex(16)
+
       begin
-        auth = Services::Jellyfin.new(url).authenticate(
+        auth = Services::Jellyfin.new(url, device_id:).authenticate(
           username:, password:
         )
       rescue Services::Jellyfin::AuthError, Services::Jellyfin::Error => error
@@ -120,8 +126,8 @@ module Rewind
       end
 
       source = Source.new(
-        user_id: current_user.id, type: "jellyfin",
-        url:, external_user_id: auth[:user_id], instance_id: auth[:server_id]
+        user_id: current_user.id, type: "jellyfin", url:, device_id:,
+        external_user_id: auth[:user_id], instance_id: auth[:server_id]
       )
       source.credentials = {"access_token" => auth[:access_token]}
 

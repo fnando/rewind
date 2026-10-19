@@ -38,6 +38,19 @@ class SettingsSourcesTest < Minitest::Test
                     "secret-token"
   end
 
+  test "connecting assigns a random per-source device id" do
+    stub_auth(user_id: "jf-9", server_id: "srv-9")
+
+    post "/settings/sources",
+         {url: "https://jf.test", username: "fnando", password: "pw"}
+    follow_redirect!
+
+    source = @user.sources_dataset.first
+
+    refute_nil source.device_id
+    assert_equal 32, source.device_id.length
+  end
+
   test "re-adding the same account at a different URL is rejected" do
     stub_auth(user_id: "jf-1", server_id: "srv-1")
     post "/settings/sources",

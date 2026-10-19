@@ -75,6 +75,25 @@ class JellyfinServiceTest < Minitest::Test
     )
   end
 
+  test "authenticate sends the given device id in the auth header" do
+    WebMock.stub_request(:post, "https://jf.test/Users/AuthenticateByName")
+           .with(headers: {"Authorization" => /DeviceId="dev-123"/})
+           .to_return(
+             status: 200,
+             body: {
+               "AccessToken" => "t", "User" => {"Id" => "u"},
+               "ServerId" => "s"
+             }.to_json,
+             headers: {"Content-Type" => "application/json"}
+           )
+
+    client = Rewind::Services::Jellyfin.new("https://jf.test",
+                                            device_id: "dev-123")
+    result = client.authenticate(username: "a", password: "b")
+
+    assert_equal "t", result[:access_token]
+  end
+
   test "authenticate raises AuthError on invalid credentials" do
     WebMock.stub_request(:post, "https://jf.test/Users/AuthenticateByName")
            .to_return(status: 401)
