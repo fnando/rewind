@@ -60,7 +60,8 @@ class JellyfinServiceTest < Minitest::Test
              status: 200,
              body: {
                "AccessToken" => "tok-123",
-               "User" => {"Id" => "u-1"}
+               "User" => {"Id" => "u-1"},
+               "ServerId" => "srv-9"
              }.to_json,
              headers: {"Content-Type" => "application/json"}
            )
@@ -69,7 +70,9 @@ class JellyfinServiceTest < Minitest::Test
                                        .authenticate(username: "fnando",
                                                      password: "secret")
 
-    assert_equal({access_token: "tok-123", user_id: "u-1"}, result)
+    assert_equal(
+      {access_token: "tok-123", user_id: "u-1", server_id: "srv-9"}, result
+    )
   end
 
   test "authenticate raises AuthError on invalid credentials" do

@@ -66,7 +66,10 @@ module Rewind
         end
 
         data = JSON.parse(response.body.to_s)
-        {access_token: data["AccessToken"], user_id: data.dig("User", "Id")}
+        {
+          access_token: data["AccessToken"], user_id: data.dig("User", "Id"),
+          server_id: data["ServerId"]
+        }
       end
 
       # Every played Movie/Episode/Audio for a user, newest first, newer than

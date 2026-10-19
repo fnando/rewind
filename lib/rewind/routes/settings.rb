@@ -120,7 +120,7 @@ module Rewind
 
       source = Source.new(
         user_id: current_user.id, type: "jellyfin",
-        url:, external_user_id: auth[:user_id]
+        url:, external_user_id: auth[:user_id], instance_id: auth[:server_id]
       )
       source.credentials = {"access_token" => auth[:access_token]}
 

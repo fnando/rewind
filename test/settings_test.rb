@@ -8,15 +8,20 @@ class SettingsSourcesTest < Minitest::Test
     sign_in(@user)
   end
 
-  def stub_auth(status: 200, access_token: "tok-1", user_id: "u-1")
-    body = {"AccessToken" => access_token, "User" => {"Id" => user_id}}
+  def stub_auth(status: 200, access_token: "tok-1", user_id: "u-1",
+                server_id: "srv-1")
+    body = {
+      "AccessToken" => access_token, "User" => {"Id" => user_id},
+      "ServerId" => server_id
+    }
     WebMock.stub_request(:post, "https://jf.test/Users/AuthenticateByName")
            .to_return(status:, body: body.to_json,
                       headers: {"Content-Type" => "application/json"})
   end
 
   test "connecting a Jellyfin account creates an encrypted source" do
-    stub_auth(access_token: "secret-token", user_id: "jf-42")
+    stub_auth(access_token: "secret-token", user_id: "jf-42",
+              server_id: "srv-42")
 
     post "/settings/sources",
          {url: "https://jf.test", username: "fnando", password: "pw"}
@@ -27,6 +32,7 @@ class SettingsSourcesTest < Minitest::Test
     refute_nil source
     assert_equal "https://jf.test", source.url
     assert_equal "jf-42", source.external_user_id
+    assert_equal "srv-42", source.instance_id
     assert_equal "secret-token", source.access_token
     refute_includes Rewind.db[:sources].first[:encrypted_credentials].to_s,
                     "secret-token"

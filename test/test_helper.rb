@@ -85,7 +85,8 @@ module Minitest
         user_id: attrs[:user_id],
         type: "jellyfin",
         url: "https://jf-#{SecureRandom.hex(3)}.test",
-        external_user_id: "jf-#{SecureRandom.hex(3)}"
+        external_user_id: "jf-#{SecureRandom.hex(3)}",
+        instance_id: "srv-#{SecureRandom.hex(3)}"
       }.merge(attrs))
       source.credentials = {"access_token" => token}
       source.save

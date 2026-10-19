@@ -59,7 +59,10 @@ module Rewind
             else
               latest || since
             end
-          {plays: plays, cursor: cursor}
+          # Every Jellyfin payload carries the server's own id; grab it so plays
+          # can be keyed on the instance (stable when a source is re-added).
+          instance_id = items.filter_map {|i| presence(i["ServerId"]) }.first
+          {plays: plays, cursor: cursor, instance_id: instance_id}
         end
 
         # Shift the cursor back by the lookback window so late-dated plays are

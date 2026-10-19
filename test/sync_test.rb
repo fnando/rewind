@@ -65,6 +65,47 @@ class SyncTest < Minitest::Test
     assert_equal 1, Rewind::Play.count
   end
 
+  test "a re-added source dedupes existing plays by instance id" do
+    # A play from a source that was later deleted (source_id nulled) but still
+    # carries its instance id, as a re-added source for the same server would.
+    item = create_item(media_type: "movie", external_id: "tmdb:27205")
+    Rewind::Play.create(
+      user_id: @user.id, item_id: item.id, source_id: nil,
+      instance_id: @source.instance_id, source: "jellyfin",
+      source_event_id: "jellyfin:m1:2026-10-16T05:00:00Z",
+      played_at: Time.parse("2026-10-16T05:00:00Z")
+    )
+    stub_tmdb_movie(27_205)
+    stub_items([movie_item(id: "m1", last_played: "2026-10-16T05:00:00Z")])
+
+    Rewind::Services::Sync.run_once
+
+    assert_equal 1, Rewind::Play.count
+  end
+
+  test "sync adopts the ServerId from the payload and backfills old plays" do
+    # A legacy play with no instance id yet (predates the column).
+    item = create_item(media_type: "movie", external_id: "tmdb:27205")
+    orphan = Rewind::Play.create(
+      user_id: @user.id, item_id: item.id, source_id: nil, instance_id: nil,
+      source: "jellyfin", source_event_id: "jellyfin:old:1",
+      played_at: Time.now
+    )
+    @source.update(instance_id: nil)
+    stub_tmdb_movie(27_205)
+    stub_items(
+      [
+        movie_item(id: "m1", last_played: "2026-10-16T05:00:00Z")
+                .merge("ServerId" => "srv-77")
+      ]
+    )
+
+    Rewind::Services::Sync.run_once
+
+    assert_equal "srv-77", @source.refresh.instance_id
+    assert_equal "srv-77", orphan.refresh.instance_id
+  end
+
   test "an unauthorized response leaves the source enabled for next run" do
     WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
            .to_return(status: 401)
