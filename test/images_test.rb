@@ -27,7 +27,7 @@ class ImagesProxyTest < Minitest::Test
 
     get "/history"
 
-    assert_includes last_response.body, @url
+    assert_includes last_response.body, @helper.poster_url(@item, size: "w342")
   end
 
   test "a cache miss resolves the upstream, caches it, and serves bytes" do

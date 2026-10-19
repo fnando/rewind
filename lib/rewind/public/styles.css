@@ -718,6 +718,169 @@ select.input::-ms-expand { display: none; }
   gap: 14px;
 }
 
+/* History cover cards: full-bleed art at its real aspect ratio, white text
+   and controls over a dark scrim. All cards in a row share one height. */
+.cover-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.cover-card {
+  --h: 270px;
+  position: relative;
+  flex: 0 0 auto;
+  height: var(--h);
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1A1F27;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+  color: #fff;
+}
+.cover-card--track { aspect-ratio: 1 / 1; }
+/* Author display rules beat the UA [hidden] rule, so be explicit. */
+.cover-card[hidden] { display: none; }
+
+@media (max-width: 639px) {
+  .cover-card { --h: 210px; }
+  .cover-card__title { font-size: 14px; }
+}
+
+.cover-card__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform .2s ease-out;
+}
+/* The placeholder is already full-bleed art; don't zoom it on hover. */
+.cover-card__img--placeholder { object-fit: cover; }
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .cover-card:hover .cover-card__img:not(.cover-card__img--placeholder) {
+    transform: scale(1.03);
+  }
+}
+
+.cover-card__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg,
+    rgba(8, 10, 14, .35) 0%,
+    rgba(8, 10, 14, .15) 22%,
+    rgba(8, 10, 14, .55) 48%,
+    rgba(8, 10, 14, .92) 100%);
+}
+
+.cover-card__top {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.cover-card__badge {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .5);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.cover-card__remove {
+  width: 32px;
+  height: 32px;
+  margin-top: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, .85);
+  cursor: pointer;
+}
+.cover-card__remove:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+.cover-card__remove svg { width: 15px; height: 15px; }
+.cover-card form { margin: 0; }
+
+.cover-card__chevron { width: 18px; height: 18px; transition: transform .15s ease; }
+.cover-card__album-toggle[aria-expanded="true"] .cover-card__chevron { transform: rotate(180deg); }
+
+.cover-card__body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 12px 8px;
+}
+/* Clamp lives on the wrapper so the link itself stays inline — an inline
+   link only highlights its text, never the empty area a block would fill. */
+.cover-card__titlewrap {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cover-card__title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #fff;
+  text-decoration: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+}
+.cover-card__title:hover { color: #fff; text-decoration: underline; }
+.cover-card__detail {
+  font-size: 12px;
+  color: rgba(255, 255, 255, .86);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cover-card__detail a { color: inherit; text-decoration: none; }
+.cover-card__detail a:hover { text-decoration: underline; }
+.cover-card__meta { font-size: 12px; color: rgba(255, 255, 255, .7); }
+
+/* Keep overflow:hidden from clipping the global focus ring. */
+.cover-card a:focus-visible,
+.cover-card button:focus-visible { outline-offset: -2px; }
+
+/* Ratings restyled for a dark cover (same in light and dark themes). */
+.on-cover.stars { margin: 2px 0 0 -4px; }
+.on-cover.stars button { width: 22px; height: 32px; color: rgba(255, 255, 255, .6); }
+.on-cover.stars button svg { width: 18px; height: 18px; }
+.on-cover.stars button.is-on,
+.on-cover.stars button:hover { color: #FFC56E; }
+
+.on-cover.thumbs { margin: 4px 0 2px; }
+.on-cover.thumbs button {
+  width: 38px;
+  height: 30px;
+  background: rgba(255, 255, 255, .08);
+  border-color: rgba(255, 255, 255, .4);
+  color: #fff;
+}
+.on-cover.thumbs button svg { width: 15px; height: 15px; }
+.on-cover.thumbs button[value="up"][aria-pressed="true"] {
+  background: rgba(106, 155, 255, .45); border-color: #A9C4FF; color: #fff;
+}
+.on-cover.thumbs button[value="down"][aria-pressed="true"] {
+  background: rgba(240, 96, 84, .45); border-color: #FFB4AB; color: #fff;
+}
+
 .play-card {
   height: 156px;
   display: flex;

@@ -71,4 +71,85 @@ class HistoryTest < Minitest::Test
     assert_includes last_response.body, "type=track"
     assert_includes last_response.body, "page=2"
   end
+
+  test "a movie renders as a portrait cover card" do
+    item = create_item(media_type: "movie", title: "Whiplash",
+                       release_date: "2014-10-10")
+    Rewind::Play.create(user_id: @user.id, item_id: item.id,
+                        played_at: Time.now, source: "jellyfin")
+
+    get "/history"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "cover-card cover-card--movie"
+    assert_includes last_response.body, ">Movie</span>"
+    assert_includes last_response.body,
+                    %[<a class="cover-card__title" href="/items/#{item.id}">]
+    assert_includes last_response.body, "2014"
+    assert_includes last_response.body, "Jellyfin"
+  end
+
+  test "a track renders as a square cover card" do
+    item = create_item(media_type: "track", title: "Maps",
+                       metadata_json: {
+                         "artist" => "Yeah Yeah Yeahs",
+                         "album" => "Fever to Tell"
+                       }.to_json)
+    Rewind::Play.create(user_id: @user.id, item_id: item.id,
+                        played_at: Time.now, source: "jellyfin")
+
+    get "/history"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "cover-card cover-card--track"
+    assert_includes last_response.body, ">Track</span>"
+    assert_includes last_response.body, "Yeah Yeah Yeahs · Fever to Tell"
+  end
+
+  test "an episode links its title to the show and reads S#E#" do
+    show = create_item(media_type: "series", title: "Ludwig",
+                       external_id: "tmdb:9001")
+    episode = create_item(media_type: "episode", title: "Pilot",
+                          external_id: "tmdb:9002",
+                          parent_external_id: "tmdb:9001",
+                          season_number: 1, episode_number: 2,
+                          metadata_json: {"series_name" => "Ludwig"}.to_json)
+    Rewind::Play.create(user_id: @user.id, item_id: episode.id,
+                        played_at: Time.now, source: "manual")
+
+    get "/history"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, ">Episode</span>"
+    title_link =
+      %[<a class="cover-card__title" href="/items/#{show.id}">Ludwig</a>]
+
+    assert_includes last_response.body, title_link
+    # The detail reads "S1 · E2 — <linked episode title>".
+    assert_includes last_response.body, "S1 · E2 — "
+    assert_includes last_response.body, %[href="/items/#{episode.id}">Pilot</a>]
+  end
+
+  test "a cover-less item falls back to the styled poster placeholder" do
+    item = create_item(media_type: "movie", title: "No Art", external_id: "")
+    Rewind::Play.create(user_id: @user.id, item_id: item.id,
+                        played_at: Time.now, source: "manual")
+
+    get "/history"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "/poster-placeholder.svg"
+    assert_includes last_response.body, "cover-card__img--placeholder"
+  end
+
+  test "the rating control is rendered on the cover" do
+    item = create_item(media_type: "movie", title: "Rated")
+    Rewind::Play.create(user_id: @user.id, item_id: item.id,
+                        played_at: Time.now, source: "manual")
+
+    get "/history"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "on-cover"
+  end
 end

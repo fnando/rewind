@@ -77,6 +77,12 @@ module Rewind
         "/images/#{token}.jpg"
       end
 
+      # Whether an item has resolvable cover art (a poster owner). Drives the
+      # img-vs-gradient-fallback choice on history cover cards.
+      def poster?(item)
+        !poster_owner(item).nil?
+      end
+
       # [media_type, external_id] of the item that owns the cover art, or nil.
       def poster_owner(item)
         return unless item
@@ -301,6 +307,32 @@ module Rewind
         query[:type] = @type if @type && @type != "all"
         query[:page] = page if page > 1
         query.empty? ? "/history" : "/history?#{Rack::Utils.build_query(query)}"
+      end
+
+      # The detail line HTML for a history cover card, with links to the item's
+      # parents (artist/album for a track, the episode itself for an episode).
+      def cover_detail(card)
+        case card.kind
+        when "track" then track_cover_detail(card)
+        when "episode" then episode_cover_detail(card)
+        else h(card.movie_year)
+        end
+      end
+
+      private def track_cover_detail(card)
+        parts = []
+        if card.item.artist
+          parts << item_link(card.artist_item,
+                             card.item.artist)
+        end
+        parts << item_link(card.album_item, card.item.album) if card.item.album
+        parts.join(" · ")
+      end
+
+      private def episode_cover_detail(card)
+        episode = item_link(card.item, card.item.title)
+        prefix = card.episode_prefix
+        prefix ? "#{h(prefix)} — #{episode}" : episode
       end
 
       # A link to an item's page, styled to read like body text. Falls back to

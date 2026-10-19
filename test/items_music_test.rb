@@ -154,7 +154,7 @@ class ItemsMusicTest < Minitest::Test
     get "/history"
 
     assert_equal 200, last_response.status
-    refute_includes last_response.body, "play-card--album"
+    refute_includes last_response.body, "cover-card--group"
   end
 
   test "history collapses consecutive tracks from one album into a group" do
@@ -176,11 +176,11 @@ class ItemsMusicTest < Minitest::Test
 
     assert_equal 200, last_response.status
     # The group renders a collapsing summary card with a track count...
-    assert_includes last_response.body, "play-card--album"
+    assert_includes last_response.body, "cover-card--group"
     assert_includes last_response.body, "4 tracks"
     # ...and the individual tracks are present but hidden by default.
     assert_includes last_response.body, "data-album-tracks"
-    assert_includes last_response.body, "play-card--in-album"
+    assert_includes last_response.body, "cover-card--in-album"
   end
 
   test "history has a music filter that lists only tracks" do

@@ -10,6 +10,7 @@ require "erubi"
 require_relative "boot"
 require_relative "helpers/view_helper"
 require_relative "helpers/rating_helper"
+require_relative "presenters/play_card"
 require_relative "image_store"
 
 module Rewind

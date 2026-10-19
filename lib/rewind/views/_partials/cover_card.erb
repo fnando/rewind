@@ -1,0 +1,37 @@
+<%
+  card = defined?(card) && card ? card : Rewind::Presenters::PlayCard.new(
+    play, shows: @shows_by_tmdb, music_parents: @music_parents,
+    user_items: @user_items_by_item
+  )
+  grouped = defined?(grouped) && grouped
+  cover = card.cover_item
+%>
+<li class="cover-card cover-card--<%= card.kind %><%= " cover-card--in-album" if grouped %>"<% if grouped %> data-album-tracks="<%= group_key %>" hidden<% end %>>
+  <% if poster?(cover) %>
+    <img class="cover-card__img" src="<%= poster_url(cover, size: "w342") %>"
+         srcset="<%= poster_url(cover, size: "w342") %> 1x, <%= poster_url(cover, size: "w500") %> 2x"
+         alt="" loading="lazy" decoding="async">
+  <% else %>
+    <img class="cover-card__img cover-card__img--placeholder" src="/poster-placeholder.svg" alt="" loading="lazy" decoding="async">
+  <% end %>
+  <span class="cover-card__scrim" aria-hidden="true"></span>
+
+  <div class="cover-card__top">
+    <span class="cover-card__badge"><%= card.kind_label %></span>
+    <form method="post" action="/history/<%= card.id %>">
+      <%= csrf_tag %>
+      <input type="hidden" name="_method" value="delete">
+      <button class="cover-card__remove" type="submit" aria-label="Remove this play of <%= h(card.title) %>"><%= trash_svg %></button>
+    </form>
+  </div>
+
+  <div class="cover-card__body">
+    <span class="cover-card__titlewrap"><a class="cover-card__title" href="/items/<%= card.link_item.id %>"><%= h(card.title) %></a></span>
+    <% detail = cover_detail(card) %>
+    <% unless detail.to_s.empty? %>
+      <span class="cover-card__detail"><%= detail %></span>
+    <% end %>
+    <span class="cover-card__meta"><%= play_time_html(card.play) %> · <%= h(card.source_label) %></span>
+    <%= rating_input(card.item, card.user_item, current_user, on_cover: true) %>
+  </div>
+</li>

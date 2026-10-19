@@ -22,13 +22,13 @@ module Rewind
                        "14l4 7a2 2 0 0 0 2-2v-4h5.5a2 2 0 0 0 " \
                        '2-2.3l-1.3-7a2 2 0 0 0-2-1.7H7"/></svg>'
 
-      def rating_input(item, user_item, user)
+      def rating_input(item, user_item, user, on_cover: false)
         style = (user || current_user)&.rating_style || "stars"
         current = user_item&.rating
         action = "/items/#{item.id}/rating"
-        return thumbs_input(action, current) if style == "thumbs"
+        return thumbs_input(action, current, on_cover:) if style == "thumbs"
 
-        stars_input(action, current)
+        stars_input(action, current, on_cover:)
       end
 
       def rating_display(user_item, user)
@@ -78,7 +78,7 @@ module Rewind
         end
       end
 
-      private def stars_input(action, current)
+      private def stars_input(action, current, on_cover: false)
         current ||= 0
         buttons = (1..5).map do |value|
           on = value <= current
@@ -90,18 +90,18 @@ module Rewind
             %[#{STAR_SVG}</button>]
         end.join
         <<~HTML
-          <form class="stars" method="post" action="#{action}" aria-label="Rate">
+          <form class="stars#{' on-cover' if on_cover}" method="post" action="#{action}" aria-label="Rate">
             #{csrf_tag}
             #{buttons}
           </form>
         HTML
       end
 
-      private def thumbs_input(action, current)
+      private def thumbs_input(action, current, on_cover: false)
         up_pressed = current && current >= 3
         down_pressed = current && current < 3
         <<~HTML
-          <form class="thumbs" method="post" action="#{action}" aria-label="Rate">
+          <form class="thumbs#{' on-cover' if on_cover}" method="post" action="#{action}" aria-label="Rate">
             #{csrf_tag}
             <button name="rating" value="up" aria-label="Thumbs up" aria-pressed="#{up_pressed}">#{THUMB_UP_SVG}</button>
             <button name="rating" value="down" aria-label="Thumbs down" aria-pressed="#{down_pressed}">#{THUMB_DOWN_SVG}</button>

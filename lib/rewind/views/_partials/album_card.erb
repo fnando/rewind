@@ -13,20 +13,26 @@
       "#{format_time(times[1])} – #{format_time(times[0])}"
     end
 %>
-<li class="play-card play-card--album">
-  <img class="play-card__poster" src="<%= poster_url(item) %>" alt="" width="104" height="156" loading="lazy" decoding="async">
-  <div class="play-card__body">
-    <% if album_item %>
-      <a class="play-card__title" href="/items/<%= album_item.id %>"><%= h(album_name) %></a>
-    <% else %>
-      <span class="play-card__title"><%= h(album_name) %></span>
-    <% end %>
-    <span class="play-card__detail">
-      <% if item.artist %><%= item_link(artist_item, item.artist) %> · <% end %><%= pluralize(count, "track") %>
-    </span>
-    <span class="play-card__meta"><%= time_label %> · <%= h(first.source.capitalize) %></span>
+<li class="cover-card cover-card--track cover-card--group">
+  <% if poster?(item) %>
+    <img class="cover-card__img" src="<%= poster_url(item, size: "w342") %>"
+         srcset="<%= poster_url(item, size: "w342") %> 1x, <%= poster_url(item, size: "w500") %> 2x"
+         alt="" loading="lazy" decoding="async">
+  <% else %>
+    <img class="cover-card__img cover-card__img--placeholder" src="/poster-placeholder.svg" alt="" loading="lazy" decoding="async">
+  <% end %>
+  <span class="cover-card__scrim" aria-hidden="true"></span>
+
+  <div class="cover-card__top">
+    <span class="cover-card__badge">Album</span>
+    <button type="button" class="cover-card__remove cover-card__album-toggle" data-album-toggle="<%= group_key %>" aria-expanded="false" aria-label="Show tracks">
+      <svg class="cover-card__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
   </div>
-  <button type="button" class="play-card__album-toggle" data-album-toggle="<%= group_key %>" aria-expanded="false" aria-label="Show tracks">
-    <svg class="play-card__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-  </button>
+
+  <div class="cover-card__body">
+    <span class="cover-card__titlewrap"><% if album_item %><a class="cover-card__title" href="/items/<%= album_item.id %>"><%= h(album_name) %></a><% else %><span class="cover-card__title"><%= h(album_name) %></span><% end %></span>
+    <span class="cover-card__detail"><% if item.artist %><%= item_link(artist_item, item.artist) %> · <% end %><%= pluralize(count, "track") %></span>
+    <span class="cover-card__meta"><%= time_label %> · <%= h(first.source.capitalize) %></span>
+  </div>
 </li>
