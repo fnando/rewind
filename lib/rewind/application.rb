@@ -58,7 +58,7 @@ module Rewind
 
     before do
       path = request.path_info
-      public_paths = ["/login", "/logout"]
+      public_paths = ["/login", "/logout", "/info"]
       next if public_paths.include?(path)
       next if path.start_with?("/assets", "/public", "/images")
 
@@ -88,6 +88,7 @@ module Rewind
     end
 
     require_relative "routes/auth"
+    require_relative "routes/info"
     require_relative "routes/items"
     require_relative "routes/history"
     require_relative "routes/images"

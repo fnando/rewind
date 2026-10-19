@@ -9,6 +9,15 @@ module Rewind
         Rack::Utils.escape_html(value.to_s)
       end
 
+      # The version of the time zone database currently loaded — the synced copy
+      # when present, otherwise the bundled gem. See Services::TimezoneData.
+      def tzdata_version
+        require "tzinfo/data"
+        TZInfo::Data::VERSION
+      rescue StandardError, LoadError
+        nil
+      end
+
       def current_user
         @current_user
       end
