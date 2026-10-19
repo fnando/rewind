@@ -132,8 +132,9 @@ module Rewind
         end
 
         private def upsert_user_item(item)
-          ui = UserItem.where(user_id: @user.id, item_id: item.id).first ||
-               UserItem.new(user_id: @user.id, item_id: item.id)
+          key = item.rating_key
+          ui = UserItem.where(user_id: @user.id, item_key: key).first ||
+               UserItem.new(user_id: @user.id, item_key: key)
           yield ui
           ui.save
           ui

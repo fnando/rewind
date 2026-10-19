@@ -29,12 +29,13 @@ module Rewind
       def resolve(title:, artist:, album:, recording_mbid: nil,
                   release_group_mbid: nil, artist_mbid: nil, length_ms: nil,
                   track_number: nil, disc_number: nil, release_date: nil,
-                  genres: nil)
+                  genres: nil, jellyfin_id: nil, album_jellyfin_id: nil)
         return if presence(title).nil?
 
         artist_item = ensure_artist(artist_mbid, artist)
         album_item = ensure_album(release_group_mbid, album, artist_item,
-                                  release_date:, genres:)
+                                  release_date:, genres:,
+                                  jellyfin_id: album_jellyfin_id)
         external_id =
           if presence(recording_mbid)
             "mbid:#{recording_mbid}"
@@ -42,7 +43,7 @@ module Rewind
             synthetic_id("track", "#{artist}/#{album}/#{title}")
           end
 
-        upsert(external_id, "track") do
+        upsert(external_id, "track") do |existing|
           {
             media_type: "track",
             external_id: external_id,
@@ -50,6 +51,7 @@ module Rewind
             title: title,
             runtime: ms_to_minutes(length_ms),
             poster_path: album_item.poster_path,
+            jellyfin_id: presence(jellyfin_id) || existing&.jellyfin_id,
             metadata: track_metadata(artist_item, album_item,
                                      length_ms: length_ms,
                                      track_number: track_number,
@@ -76,7 +78,7 @@ module Rewind
       end
 
       private def ensure_album(mbid, title, artist, release_date: nil,
-                               genres: nil)
+                               genres: nil, jellyfin_id: nil)
         title = presence(title) || "Unknown Album"
         external_id =
           if presence(mbid)
@@ -93,9 +95,10 @@ module Rewind
             external_id: external_id,
             parent_external_id: artist.external_id,
             title: title,
-            # Tracks on an album share its year/genres; keep any we already have
-            # when a given track's payload is missing them.
+            # Tracks on an album share its year/genres/id; keep any we already
+            # have when a given track's payload is missing them.
             release_date: presence(release_date) || existing&.release_date,
+            jellyfin_id: presence(jellyfin_id) || existing&.jellyfin_id,
             poster_path: (cover_art_url(mbid) if presence(mbid)),
             metadata: {
               "artist" => artist.title,

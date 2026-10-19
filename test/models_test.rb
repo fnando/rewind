@@ -119,19 +119,43 @@ class PlayModelTest < Minitest::Test
   end
 end
 
+class ItemRatingKeyTest < Minitest::Test
+  test "rating_key uses the jellyfin id when present" do
+    item = create_item(media_type: "movie", external_id: "tmdb:9",
+                       jellyfin_id: "jf-1")
+
+    assert_equal "jellyfin:jf-1", item.rating_key
+  end
+
+  test "rating_key falls back to media_type and external_id" do
+    item = create_item(media_type: "movie", external_id: "tmdb:9")
+
+    assert_equal "movie:tmdb:9", item.rating_key
+  end
+
+  test "a re-tag (new external_id, same jellyfin id) keeps the same key" do
+    a = create_item(media_type: "album", external_id: "mbid:rg:OLD",
+                    jellyfin_id: "jf-album")
+    b = create_item(media_type: "album", external_id: "mbid:rg:NEW",
+                    jellyfin_id: "jf-album")
+
+    assert_equal a.rating_key, b.rating_key
+  end
+end
+
 class UserItemModelTest < Minitest::Test
   test "rating must be 1..5" do
     user = create_user
-    item = create_item
-    ui = Rewind::UserItem.new(user_id: user.id, item_id: item.id, rating: 7)
+    ui = Rewind::UserItem.new(user_id: user.id, item_key: "movie:tmdb:1",
+                              rating: 7)
 
     refute ui.valid?
   end
 
   test "nil rating is valid" do
     user = create_user
-    item = create_item
-    ui = Rewind::UserItem.new(user_id: user.id, item_id: item.id, review: "ok")
+    ui = Rewind::UserItem.new(user_id: user.id, item_key: "movie:tmdb:1",
+                              review: "ok")
 
     assert ui.valid?
   end

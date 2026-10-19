@@ -427,6 +427,28 @@ class SourcesJellyfinTest < Minitest::Test
     assert_equal "2026-10-18T12:00:00Z", result[:cursor]
   end
 
+  test "stamps the jellyfin id on a played movie" do
+    stub_tmdb_movie(27_205)
+    stub_items([movie_item(id: "m1")])
+
+    adapter.recent_plays(since: nil)
+    movie = Rewind::Item.where(media_type: "movie",
+                               external_id: "tmdb:27205").first
+
+    assert_equal "m1", movie.jellyfin_id
+  end
+
+  test "stamps jellyfin ids on a played audio track and its album" do
+    stub_items([audio_item(id: "a1", name: "Burnout", index: 1)])
+
+    adapter.recent_plays(since: nil)
+    track = Rewind::Item.where(media_type: "track", title: "Burnout").first
+    album = Rewind::Item.where(media_type: "album").first
+
+    assert_equal "a1", track.jellyfin_id
+    assert_equal "alb-1", album.jellyfin_id
+  end
+
   test "recent_plays builds plays with a stable source_event_id and cursor" do
     stub_tmdb_movie(27_205)
     stub_items([movie_item(id: "m1", last_played: "2026-10-16T05:00:00Z")])

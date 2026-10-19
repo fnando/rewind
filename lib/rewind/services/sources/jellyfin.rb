@@ -111,6 +111,11 @@ module Rewind
           resolved = resolve(item)
           return log_skip(item, "no TMDB/MusicBrainz match") unless resolved
 
+          # Stamp the stable Jellyfin id so ratings can key off it. Audio gets
+          # it through MusicBrainz (so unplayed siblings do too); everything
+          # else is stamped here, its single choke point.
+          stamp_jellyfin_id(resolved, item)
+
           # A genuine scrobble always carries a play date. A dateless Audio item
           # is a Jellyfin artifact — the IsPlayed flag set before the date is
           # written, or a stale flag. Anchoring it to the file's import date
@@ -134,6 +139,18 @@ module Rewind
           }
         rescue Services::TMDB::Error, Services::Jellyfin::Error => error
           log_skip(item, error.message)
+        end
+
+        # Record the Jellyfin id on a non-audio item (movie/episode/generic) so
+        # its rating keys off a stable identity. Audio is handled in the music
+        # path so unplayed album siblings get ids too.
+        private def stamp_jellyfin_id(resolved, item)
+          return if item["Type"] == "Audio"
+
+          id = presence(item["Id"])
+          return if id.nil? || resolved.jellyfin_id == id
+
+          resolved.update(jellyfin_id: id)
         end
 
         # Tracks Jellyfin reports as played-but-dateless (no LastPlayedDate)
@@ -258,7 +275,9 @@ module Rewind
             track_number: positive_int(item["IndexNumber"]),
             disc_number: positive_int(item["ParentIndexNumber"]),
             release_date: premiere_date(item),
-            genres: item["Genres"]
+            genres: item["Genres"],
+            jellyfin_id: presence(item["Id"]),
+            album_jellyfin_id: presence(item["ParentId"])
           )
         end
 

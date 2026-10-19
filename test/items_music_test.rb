@@ -78,10 +78,26 @@ class ItemsMusicTest < Minitest::Test
     post "/items/#{@album.id}/rating", {rating: "4"}
     post "/items/#{@album.id}/review", {review: "A classic."}
 
-    ui = Rewind::UserItem.where(user_id: @user.id, item_id: @album.id).first
+    ui = Rewind::UserItem.where(user_id: @user.id,
+                                item_key: @album.rating_key).first
 
     assert_equal 4, ui.rating
     assert_equal "A classic.", ui.review
+  end
+
+  test "an album rating survives a re-tag that changes its mbid" do
+    @album.update(jellyfin_id: "jf-album-1")
+    post "/items/#{@album.id}/rating", {rating: "5"}
+
+    # Re-tag in Jellyfin -> a fresh album row, new mbid, same jellyfin id.
+    retagged = create_item(media_type: "album", external_id: "mbid:rg:new",
+                           title: "OK Computer", jellyfin_id: "jf-album-1")
+    get "/items/#{retagged.id}"
+
+    assert_equal 200, last_response.status
+    # The 5-star rating is found for the new row via the shared jellyfin id.
+    assert_includes last_response.body,
+                    'value="5" aria-label="5 stars" aria-pressed="true"'
   end
 
   test "album page orders tracks by track number, including unplayed ones" do

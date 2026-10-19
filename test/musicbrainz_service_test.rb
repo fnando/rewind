@@ -75,6 +75,15 @@ class MusicBrainzServiceTest < Minitest::Test
     assert_equal "https://fanart.example/a.jpg", artist.poster_path
   end
 
+  test "resolve stores the jellyfin ids on the track and album" do
+    track = resolve(jellyfin_id: "jf-track", album_jellyfin_id: "jf-album")
+
+    assert_equal "jf-track", track.jellyfin_id
+    album = Rewind::Item.where(media_type: "album").first
+
+    assert_equal "jf-album", album.jellyfin_id
+  end
+
   test "resolve stores the track and disc numbers in metadata" do
     track = resolve(track_number: 3, disc_number: 2)
 

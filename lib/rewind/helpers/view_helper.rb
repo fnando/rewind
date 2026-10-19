@@ -255,13 +255,19 @@ module Rewind
         "https://www.themoviedb.org/person/#{person_id}"
       end
 
+      # Ratings/reviews for the given plays' items, keyed by item id for the
+      # views. Looks them up by the items' stable rating_key underneath (ratings
+      # no longer reference item ids), then maps each item id to its rating.
       def load_user_items_for(plays)
-        ids = plays.map(&:item_id).uniq
-        return {} if ids.empty?
+        items = plays.map(&:item)
+        keys = items.map(&:rating_key).uniq
+        return {} if keys.empty?
 
-        UserItem.where(user_id: current_user.id,
-                       item_id: ids).all.each_with_object({}) do |ui, h|
-          h[ui.item_id] = ui
+        rows = UserItem.where(user_id: current_user.id, item_key: keys).all
+        by_key = rows.each_with_object({}) {|ui, h| h[ui.item_key] = ui }
+        items.each_with_object({}) do |item, result|
+          ui = by_key[item.rating_key]
+          result[item.id] = ui if ui
         end
       end
 

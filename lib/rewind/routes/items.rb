@@ -30,11 +30,12 @@ module Rewind
           (1..5).cover?(value) ? value : nil
         end
 
-      ui = UserItem.where(user_id: current_user.id, item_id: item.id).first
+      ui = UserItem.where(user_id: current_user.id,
+                          item_key: item.rating_key).first
       if ui
         ui.update(rating: rating)
       else
-        UserItem.create(user_id: current_user.id, item_id: item.id,
+        UserItem.create(user_id: current_user.id, item_key: item.rating_key,
                         rating: rating)
       end
 
@@ -47,7 +48,8 @@ module Rewind
 
       review = params[:review].to_s
       review = nil if review.strip.empty?
-      ui = UserItem.where(user_id: current_user.id, item_id: item.id).first
+      ui = UserItem.where(user_id: current_user.id,
+                          item_key: item.rating_key).first
       now = Time.now
 
       attrs = {review: review}
@@ -64,7 +66,7 @@ module Rewind
       else
         UserItem.create({
           user_id: current_user.id,
-          item_id: item.id
+          item_key: item.rating_key
         }.merge(attrs))
       end
 
@@ -114,7 +116,7 @@ module Rewind
       @item = Item[params[:id].to_i]
       halt 404 unless @item
       @user_item = UserItem.where(user_id: current_user.id,
-                                  item_id: @item.id).first
+                                  item_key: @item.rating_key).first
 
       case @item.media_type
       when "episode"
@@ -181,12 +183,13 @@ module Rewind
         @plays_by_episode = @episode_plays.group_by {|p| p.item.episode_number }
 
         @user_items_by_episode = {}
-        episode_item_ids = @episode_plays.map(&:item_id).uniq
-        unless episode_item_ids.empty?
+        episodes = @episode_plays.map(&:item).uniq(&:id)
+        by_key = episodes.each_with_object({}) {|e, h| h[e.rating_key] = e }
+        unless by_key.empty?
           UserItem.where(user_id: current_user.id,
-                         item_id: episode_item_ids).each do |ui|
-            item = @episode_plays.find {|p| p.item_id == ui.item_id }&.item
-            @user_items_by_episode[item.episode_number] = ui if item
+                         item_key: by_key.keys).each do |ui|
+            episode = by_key[ui.item_key]
+            @user_items_by_episode[episode.episode_number] = ui if episode
           end
         end
 

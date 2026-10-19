@@ -47,6 +47,13 @@ module Rewind
       metadata["album"]
     end
 
+    # A stable key for ratings/reviews that survives rebuilding `items`. The
+    # Jellyfin id (stable across re-tagging) when present, else the
+    # deterministic (media_type, external_id) — which a rebuild reproduces.
+    def rating_key
+      jellyfin_id ? "jellyfin:#{jellyfin_id}" : "#{media_type}:#{external_id}"
+    end
+
     def track_number
       metadata["track_number"]
     end

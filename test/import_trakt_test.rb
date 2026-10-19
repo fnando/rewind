@@ -125,7 +125,8 @@ class ImportTraktTest < Minitest::Test
 
     item = Rewind::Item.where(external_id: "tmdb:#{MOVIE_TMDB}",
                               media_type: "movie").first
-    ui = Rewind::UserItem.where(user_id: @user.id, item_id: item.id).first
+    ui = Rewind::UserItem.where(user_id: @user.id,
+                                item_key: item.rating_key).first
 
     assert_equal 4, ui.rating
   end
@@ -150,7 +151,8 @@ class ImportTraktTest < Minitest::Test
 
     item = Rewind::Item.where(external_id: "tmdb:#{SHOW_TMDB}",
                               media_type: "series").first
-    ui = Rewind::UserItem.where(user_id: @user.id, item_id: item.id).first
+    ui = Rewind::UserItem.where(user_id: @user.id,
+                                item_key: item.rating_key).first
 
     assert_equal "So much fun!", ui.review
     assert_equal Time.parse("2026-10-16T00:19:50.000Z").to_i,
@@ -183,7 +185,8 @@ class ImportTraktTest < Minitest::Test
 
     item = Rewind::Item.where(external_id: "tmdb:#{SHOW_TMDB}",
                               media_type: "series").first
-    rows = Rewind::UserItem.where(user_id: @user.id, item_id: item.id).all
+    rows = Rewind::UserItem.where(user_id: @user.id,
+                                  item_key: item.rating_key).all
 
     assert_equal 1, rows.length
     assert_equal 5, rows.first.rating
