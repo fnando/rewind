@@ -38,6 +38,49 @@ class SettingsSourcesTest < Minitest::Test
                     "secret-token"
   end
 
+  test "re-adding the same account at a different URL is rejected" do
+    stub_auth(user_id: "jf-1", server_id: "srv-1")
+    post "/settings/sources",
+         {url: "https://jf.test", username: "fnando", password: "pw"}
+    follow_redirect!
+
+    assert_equal 1, @user.sources_dataset.count
+
+    # Same account on the same server, reached at a different URL (e.g. an
+    # internal host). Keyed on instance_id now, so it's a duplicate.
+    WebMock.stub_request(:post, "https://jf.internal/Users/AuthenticateByName")
+           .to_return(
+             status: 200,
+             body: {
+               "AccessToken" => "tok-2", "User" => {"Id" => "jf-1"},
+               "ServerId" => "srv-1"
+             }.to_json,
+             headers: {"Content-Type" => "application/json"}
+           )
+    post "/settings/sources",
+         {url: "https://jf.internal", username: "fnando", password: "pw"}
+
+    assert_equal 1, @user.sources_dataset.count
+    assert_includes last_response.body, "already connected"
+  end
+
+  test "a second Jellyfin account on the same server is its own source" do
+    stub_auth(user_id: "jf-1", server_id: "srv-1")
+    post "/settings/sources",
+         {url: "https://jf.test", username: "a", password: "pw"}
+    follow_redirect!
+
+    stub_auth(user_id: "jf-2", server_id: "srv-1")
+    post "/settings/sources",
+         {url: "https://jf.test", username: "b", password: "pw"}
+    follow_redirect!
+
+    assert_equal 2, @user.sources_dataset.count
+    assert_equal %w[jf-1 jf-2],
+                 @user.sources_dataset.order(:external_user_id)
+                      .select_map(:external_user_id)
+  end
+
   test "bad credentials show an error and create no source" do
     stub_auth(status: 401)
 

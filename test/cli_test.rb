@@ -57,7 +57,7 @@ class CLITest < Minitest::Test
     user.password = "a-secure-password-123"
     user.save
     source = Rewind::Source.new(user_id: user.id, type: "jellyfin", url:,
-                                external_user_id: "jf-1")
+                                external_user_id: "jf-1", instance_id: "srv-1")
     source.credentials = {"access_token" => "tok"}
     source.save
     source

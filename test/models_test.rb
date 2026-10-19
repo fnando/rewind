@@ -36,7 +36,7 @@ class SourceModelTest < Minitest::Test
   def build_source(**attrs)
     source = Rewind::Source.new({
       user_id: create_user.id, type: "jellyfin", url: "https://jf.test",
-      external_user_id: "jf-1"
+      external_user_id: "jf-1", instance_id: "srv-1"
     }.merge(attrs))
     source.credentials = {"access_token" => "secret-token"}
     source
@@ -46,13 +46,29 @@ class SourceModelTest < Minitest::Test
     refute build_source(type: "zorg").valid?
   end
 
-  test "requires a url, external_user_id and credentials" do
+  test "requires url, external_user_id, instance_id and credentials" do
     source = Rewind::Source.new(user_id: create_user.id, type: "jellyfin")
 
     refute source.valid?
     assert_includes source.errors[:url], "is required"
     assert_includes source.errors[:external_user_id], "is required"
+    assert_includes source.errors[:instance_id], "is required"
     assert_includes source.errors[:credentials], "is required"
+  end
+
+  test "the same server and account is allowed under different users" do
+    attrs = {
+      url: "https://jf.test", external_user_id: "jf-1",
+      instance_id: "srv-1"
+    }
+    build_source(**attrs).save
+
+    other = build_source(user_id: create_user.id, **attrs)
+
+    assert other.valid?
+    other.save # scoped per user, so no unique-index clash
+
+    assert_equal 2, Rewind::Source.where(instance_id: "srv-1").count
   end
 
   test "normalizes the url by stripping trailing slashes" do

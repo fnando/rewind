@@ -42,6 +42,7 @@ module Rewind
       if external_user_id.to_s.strip.empty?
         errors.add(:external_user_id, "is required")
       end
+      errors.add(:instance_id, "is required") if instance_id.to_s.strip.empty?
       errors.add(:credentials, "is required") if access_token.to_s.empty?
     end
   end

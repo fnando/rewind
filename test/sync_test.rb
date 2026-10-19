@@ -91,7 +91,8 @@ class SyncTest < Minitest::Test
       source: "jellyfin", source_event_id: "jellyfin:old:1",
       played_at: Time.now
     )
-    @source.update(instance_id: nil)
+    # A legacy source predating the instance_id column (bypass validation).
+    Rewind.db[:sources].where(id: @source.id).update(instance_id: nil)
     stub_tmdb_movie(27_205)
     stub_items(
       [

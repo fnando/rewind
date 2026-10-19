@@ -37,7 +37,9 @@ module Rewind
         end
 
         new_plays = result[:plays].count {|play| record_play(source, play) }
-        source.update(cursor: result[:cursor], last_synced_at: Time.now)
+        # Bump the cursor directly: it's derived sync state, and a legacy source
+        # still missing its instance_id would otherwise fail model validation.
+        source.this.update(cursor: result[:cursor], last_synced_at: Time.now)
         Rewind.logger.info(
           "[sync] source #{source.id}: #{result[:plays].size} resolved, " \
           "#{new_plays} new"
