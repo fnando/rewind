@@ -107,13 +107,53 @@ class SyncTest < Minitest::Test
     assert_equal "srv-77", orphan.refresh.instance_id
   end
 
-  test "an unauthorized response leaves the source enabled for next run" do
+  test "an unauthorized response leaves the source enabled and logs it" do
     WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
            .to_return(status: 401)
 
     Rewind::Services::Sync.run_once
 
     assert @source.refresh.enabled?
+    assert_equal 1, Rewind::SourceError.where(source_id: @source.id).count
+    refute_nil @source.refresh.last_error_id
+  end
+
+  test "a failed sync logs the error and points the source at it" do
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
+           .to_return(status: 500)
+
+    Rewind::Services::Sync.run_once
+
+    assert @source.refresh.enabled?
+    err = Rewind::SourceError.where(source_id: @source.id).first
+
+    refute_nil err
+    assert_equal err.id, @source.refresh.last_error_id
+  end
+
+  test "a successful sync clears the pointer but keeps the error log" do
+    err_id = Rewind.db[:source_errors].insert(
+      source_id: @source.id, message: "boom", created_at: Time.now
+    )
+    Rewind.db[:sources].where(id: @source.id).update(last_error_id: err_id)
+    stub_tmdb_movie(27_205)
+    stub_items([movie_item(id: "m1", last_played: "2026-10-16T05:00:00Z")])
+
+    Rewind::Services::Sync.run_once
+
+    assert_nil @source.refresh.last_error_id
+    assert_equal 1, Rewind::SourceError.where(source_id: @source.id).count
+  end
+
+  test "a missing ServerId logs an error and skips the plays" do
+    Rewind.db[:sources].where(id: @source.id).update(instance_id: nil)
+    stub_tmdb_movie(27_205)
+    stub_items([movie_item(id: "m1", last_played: "2026-10-16T05:00:00Z")])
+
+    Rewind::Services::Sync.run_once
+
+    assert_equal 0, Rewind::Play.count
+    refute_nil @source.refresh.last_error_id
   end
 
   test "a disabled source is skipped" do

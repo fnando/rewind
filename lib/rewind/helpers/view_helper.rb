@@ -13,6 +13,14 @@ module Rewind
         @current_user
       end
 
+      # Whether the signed-in user has any source with an unresolved sync error.
+      # Drives the topbar avatar alert dot. One small, user-scoped query.
+      def sync_errors?
+        return false unless current_user
+
+        !current_user.sources_dataset.exclude(last_error_id: nil).empty?
+      end
+
       def current_path
         request.path_info
       end

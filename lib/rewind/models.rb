@@ -8,5 +8,6 @@ Sequel::Model.plugin :timestamps, update_on_create: true
 require_relative "models/user"
 require_relative "models/item"
 require_relative "models/source"
+require_relative "models/source_error"
 require_relative "models/play"
 require_relative "models/user_item"

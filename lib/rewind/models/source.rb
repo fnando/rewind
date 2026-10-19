@@ -14,11 +14,24 @@ module Rewind
 
     many_to_one :user
     one_to_many :plays
+    one_to_many :source_errors
+    many_to_one :last_error, class: :"Rewind::SourceError", key: :last_error_id
 
     TYPES = %w[jellyfin].freeze
 
     def enabled?
       !!enabled
+    end
+
+    # The current, unresolved sync error, or nil when the last sync succeeded.
+    def current_error
+      last_error
+    end
+
+    # The most recent error ever recorded (resolved or not), for the
+    # "See previous error" affordance once the current error is cleared.
+    def latest_error
+      source_errors_dataset.order(Sequel.desc(:created_at)).first
     end
 
     # Decrypted access token used to call the provider API.

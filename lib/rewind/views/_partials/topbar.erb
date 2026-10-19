@@ -15,8 +15,11 @@
     </span>
     <input class="topsearch__input" type="search" name="q" value="<%= h(@query) %>" placeholder="Search movies and series…" aria-label="Search movies and series">
   </form>
-  <a class="avatar" href="/settings" aria-label="Settings (signed in as <%= h(current_user.username) %>)">
-    <% url = avatar_url(current_user) %>
-    <% if url %><img src="<%= url %>" alt=""><% else %><%= h(avatar_letter(current_user)) %><% end %>
-  </a>
+  <span class="avatar-wrap">
+    <a class="avatar" href="/settings" aria-label="Settings (signed in as <%= h(current_user.username) %>)<%= " — sync error" if sync_errors? %>">
+      <% url = avatar_url(current_user) %>
+      <% if url %><img src="<%= url %>" alt=""><% else %><%= h(avatar_letter(current_user)) %><% end %>
+    </a>
+    <% if sync_errors? %><span class="avatar-wrap__dot" aria-hidden="true"></span><% end %>
+  </span>
 </header>

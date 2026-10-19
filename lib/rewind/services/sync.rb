@@ -29,21 +29,40 @@ module Rewind
         adopt_instance_id(source, result[:instance_id])
 
         if result[:plays].any? && source.instance_id.nil?
-          Rewind.logger.error(
-            "[sync] source #{source.id}: no Jellyfin ServerId in the " \
-            "response; skipping #{result[:plays].size} plays to avoid dupes"
-          )
+          message = "No Jellyfin ServerId in the response; " \
+                    "skipped #{result[:plays].size} plays to avoid duplicates"
+          Rewind.logger.error("[sync] source #{source.id}: #{message}")
+          # Records (doesn't raise), so it won't be cleared until a later run
+          # actually reaches the success path below.
+          record_error(source, message)
           return
         end
 
         new_plays = result[:plays].count {|play| record_play(source, play) }
         # Bump the cursor directly: it's derived sync state, and a legacy source
         # still missing its instance_id would otherwise fail model validation.
-        source.this.update(cursor: result[:cursor], last_synced_at: Time.now)
+        # Clearing the error here treats a past failure as transient.
+        source.this.update(cursor: result[:cursor], last_synced_at: Time.now,
+                           last_error_id: nil)
         Rewind.logger.info(
           "[sync] source #{source.id}: #{result[:plays].size} resolved, " \
           "#{new_plays} new"
         )
+      rescue StandardError => error
+        record_error(source, error.message)
+        raise # let run_once / sync_one keep their existing logging and abort
+      end
+
+      # Append a sync failure to the source's error log and point the source at
+      # it. Dataset insert/update (no model validation) so it can't itself raise
+      # and mask the original error. The row is kept after the error resolves.
+      module_function def record_error(source, message)
+        id = Rewind.db[:source_errors].insert(
+          source_id: source.id,
+          message: message.to_s[0, 500],
+          created_at: Time.now
+        )
+        source.this.update(last_error_id: id)
       end
 
       # Adopt the source's stable instance id (the ServerId that comes on every

@@ -81,6 +81,70 @@ class SettingsSourcesTest < Minitest::Test
                       .select_map(:external_user_id)
   end
 
+  # Records a current (unresolved) error for a source.
+  def set_current_error(source, message)
+    id = Rewind.db[:source_errors].insert(
+      source_id: source.id, message:, created_at: Time.now
+    )
+    source.this.update(last_error_id: id)
+  end
+
+  # Records a resolved error: a log row exists, but no current-error pointer.
+  def set_resolved_error(source, message)
+    Rewind.db[:source_errors].insert(
+      source_id: source.id, message:, created_at: Time.now
+    )
+  end
+
+  test "a source with a current error shows the message and the dot" do
+    source = create_source(user_id: @user.id)
+    set_current_error(source, "Token expired")
+
+    get "/settings"
+
+    assert_includes last_response.body, "Sync error"
+    assert_includes last_response.body, "Token expired"
+    assert_includes last_response.body, "avatar-wrap__dot"
+  end
+
+  test "a clean source shows no error and no dot" do
+    create_source(user_id: @user.id)
+
+    get "/settings"
+
+    refute_includes last_response.body, "Sync error"
+    refute_includes last_response.body, "avatar-wrap__dot"
+  end
+
+  test "a resolved error offers 'See previous error' and no dot" do
+    source = create_source(user_id: @user.id)
+    set_resolved_error(source, "Token expired")
+
+    get "/settings"
+
+    assert_includes last_response.body, "See previous error"
+    refute_includes last_response.body, "avatar-wrap__dot"
+    refute_includes last_response.body, "Token expired"
+  end
+
+  test "show_previous_error reveals the resolved message" do
+    source = create_source(user_id: @user.id)
+    set_resolved_error(source, "Token expired")
+
+    get "/settings?show_previous_error=true"
+
+    assert_includes last_response.body, "Token expired"
+    assert_includes last_response.body, "resolved"
+  end
+
+  test "another user's sync error does not show a dot" do
+    set_current_error(create_source(user_id: create_user.id), "boom")
+
+    get "/settings"
+
+    refute_includes last_response.body, "avatar-wrap__dot"
+  end
+
   test "bad credentials show an error and create no source" do
     stub_auth(status: 401)
 

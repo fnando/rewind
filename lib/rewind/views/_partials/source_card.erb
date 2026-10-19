@@ -18,4 +18,23 @@
       </form>
     </div>
   </div>
+  <% if (err = source.current_error) %>
+    <div class="integration__error" role="alert">
+      <span class="pill pill--danger">Sync error</span>
+      <span class="integration__error-msg"><%= h(err.message) %></span>
+      <span class="integration__error-time"><%= format_datetime(err.created_at) %></span>
+    </div>
+  <% elsif (prev = source.latest_error) %>
+    <% if @show_previous_error %>
+      <div class="integration__error integration__error--resolved">
+        <span class="pill pill--muted">Last error (resolved)</span>
+        <span class="integration__error-msg"><%= h(prev.message) %></span>
+        <span class="integration__error-time"><%= format_datetime(prev.created_at) %></span>
+      </div>
+    <% else %>
+      <div class="integration__error-prev">
+        <a href="/settings?show_previous_error=true">See previous error</a>
+      </div>
+    <% end %>
+  <% end %>
 </li>

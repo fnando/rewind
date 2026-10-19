@@ -4,6 +4,7 @@ module Rewind
   class Application < Sinatra::Base
     get "/settings" do
       @sources = current_user.sources_dataset.order(:created_at).all
+      @show_previous_error = params[:show_previous_error] == "true"
       erb :"settings/index"
     end
 
