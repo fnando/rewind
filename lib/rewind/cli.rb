@@ -334,8 +334,6 @@ module Rewind
       Rewind.config.threads = options[:threads] if options[:threads]
       Rewind.config.image_storage_dir = options[:image_storage_dir]
       app = Rewind.application
-      Rewind::Services::Sync.start_thread
-      Rewind::Services::Streaks.start_thread
       wildcard = %w[0.0.0.0 ::].include?(Rewind.config.host)
       display_host = wildcard ? "localhost" : Rewind.config.host
       say "Rewind listening on http://#{display_host}:#{Rewind.config.port}/"
@@ -349,9 +347,7 @@ module Rewind
     map "run" => :run_server
 
     # Builds the Puma configuration from Rewind's config. workers/threads of 0
-    # are left at Puma's own defaults (single mode / default thread pool). We
-    # don't export the environment to ENV — Puma reads it from this config, and
-    # Sinatra reads APP_ENV/RACK_ENV on its own.
+    # are left at Puma's own defaults (single mode / default thread pool).
     def self.puma_configuration(app, config: Rewind.config)
       require "puma"
       require "puma/configuration"
@@ -361,8 +357,23 @@ module Rewind
         c.bind "tcp://#{config.host}:#{config.port}"
         c.app app
         c.environment config.environment
-        c.workers config.workers if config.workers.positive?
         c.threads config.threads, config.threads if config.threads.positive?
+
+        if config.workers.positive?
+          c.workers config.workers
+          # Drop the preloaded SQLite handle before forking so workers don't
+          # share the master's connection; each reopens lazily on first query.
+          c.before_fork { Rewind.db.disconnect }
+        end
+
+        # Background loops run once, in the master, AFTER workers fork — so
+        # forking never races a thread mid-write and they're never duplicated
+        # per worker. In single mode the master is the only process.
+        c.after_booted do
+          Rewind::Services::Sync.start_thread
+          Rewind::Services::Streaks.start_thread
+        end
+
         plugins.each {|name| c.plugin(name) }
       end
     end

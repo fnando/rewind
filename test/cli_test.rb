@@ -47,6 +47,17 @@ class CLITest < Minitest::Test
     assert_equal 0, puma_options(config)[:workers] # single mode
   end
 
+  test "puma_configuration registers a before_fork hook only in cluster mode" do
+    single = Rewind::Config.new
+
+    assert_empty Array(puma_options(single)[:before_fork])
+
+    clustered = Rewind::Config.new
+    clustered.workers = 2
+
+    assert_equal 1, Array(puma_options(clustered)[:before_fork]).size
+  end
+
   test "puma_configuration passes the environment through" do
     config = Rewind::Config.new
     config.environment = "staging"
