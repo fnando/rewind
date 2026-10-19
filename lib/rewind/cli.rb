@@ -248,119 +248,6 @@ module Rewind
     end
   end
 
-  class StreaksCLI < Thor
-    class_option :env, type: :string,
-                       desc: "Path to a dotenv file to load before executing"
-
-    def self.exit_on_failure?
-      true
-    end
-
-    desc "rebuild", "Rebuild the play-streak activity table from plays"
-    option :user, type: :numeric,
-                  desc: "Only rebuild this user id (default: all users)"
-    option :verify, type: :boolean, default: false,
-                    desc: "Report differences without writing"
-    def rebuild
-      Rewind::CLI.load_env!(options[:env])
-      Rewind::CLI.boot_db!
-
-      users = target_users
-      abort("No users found.") if users.empty?
-
-      options[:verify] ? verify_users(users) : rebuild_users(users)
-    end
-
-    no_commands do
-      def target_users
-        if options[:user]
-          user = Rewind::User[options[:user].to_i]
-          abort("User not found: #{options[:user]}") unless user
-          [user]
-        else
-          Rewind::User.order(:id).all
-        end
-      end
-
-      def rebuild_users(users)
-        users.each do |user|
-          Rewind::Services::Streaks.rebuild_user(user)
-          say "Rebuilt streaks for user #{user.id} (#{user.username})."
-        end
-      end
-
-      def verify_users(users)
-        differences = 0
-        users.each do |user|
-          diffs = Rewind::Services::Streaks.verify(user)
-          differences += diffs.size
-          next if diffs.empty?
-
-          say "User #{user.id} (#{user.username}): #{diffs.size} difference(s)"
-          diffs.each do |d|
-            say format("  %-8s %s expected=%d actual=%d",
-                       d[:media_group], d[:day], d[:expected], d[:actual])
-          end
-        end
-        say(differences.zero? ? "No differences." : "#{differences} diff(s).")
-        abort if differences.positive?
-      end
-    end
-  end
-
-  class HistoryCLI < Thor
-    class_option :env, type: :string,
-                       desc: "Path to a dotenv file to load before executing"
-
-    def self.exit_on_failure?
-      true
-    end
-
-    desc "rebuild", "Re-sync plays from enabled sources right now"
-    option :source, type: :numeric,
-                    desc: "Only sync this source id (default: all enabled)"
-    option :verbose, type: :boolean, default: true, aliases: "-v",
-                     desc: "Log per-source sync activity"
-    option :reset, type: :boolean, default: false,
-                   desc: "Clear each source's cursor first, refetching history"
-    def rebuild
-      Rewind::CLI.load_env!(options[:env])
-      Rewind::CLI.boot_db!
-      Rewind.logger.level = Logger::INFO if options[:verbose]
-
-      options[:source] ? sync_one(options[:source]) : sync_all
-    end
-
-    no_commands do
-      def sync_one(id)
-        source = Rewind::Source[id.to_i]
-        abort("Source not found: #{id}") unless source
-        reset_cursors(Rewind::Source.where(id: source.id))
-        Rewind::Services::Sync.sync_source(source)
-        say "Synced source #{source.id} (#{source.url})."
-      rescue StandardError => error
-        abort("Sync failed for source #{source.id}: #{error.message}")
-      end
-
-      def sync_all
-        scope = Rewind::Source.where(enabled: true)
-        count = scope.count
-        abort("No enabled sources to sync.") if count.zero?
-
-        reset_cursors(scope)
-        Rewind::Services::Sync.run_once
-        say "Synced #{count} #{count == 1 ? 'source' : 'sources'}."
-      end
-
-      def reset_cursors(scope)
-        return unless options[:reset]
-
-        reset = scope.update(cursor: nil)
-        say "Reset cursor on #{reset} #{reset == 1 ? 'source' : 'sources'}."
-      end
-    end
-  end
-
   class CLI < Thor
     check_unknown_options!
 
@@ -446,6 +333,79 @@ module Rewind
       say "Migrations complete."
     end
 
+    desc "sync", "Sync plays from enabled sources"
+    option :source, type: :numeric,
+                    desc: "Only sync this source id (default: all enabled)"
+    option :verbose, type: :boolean, default: true, aliases: "-v",
+                     desc: "Log per-source sync activity"
+    option :reset, type: :boolean, default: false,
+                   desc: "Delete synced + derived data and rebuild from " \
+                         "scratch (ratings and reviews are kept)"
+    option :yes, type: :boolean, default: false, aliases: "-y",
+                 desc: "Skip the --reset confirmation prompt"
+    def sync
+      CLI.load_env!(options[:env])
+      CLI.boot_db!
+      Rewind.logger.level = Logger::INFO if options[:verbose]
+
+      options[:reset] ? resync : sync_sources
+    end
+
+    no_commands do
+      def sync_sources
+        return sync_one(options[:source]) if options[:source]
+
+        scope = Rewind::Source.where(enabled: true)
+        count = scope.count
+        abort("No enabled sources to sync.") if count.zero?
+
+        Rewind::Services::Sync.run_once
+        say "Synced #{count} #{count == 1 ? 'source' : 'sources'}."
+      end
+
+      def sync_one(id)
+        source = Rewind::Source[id.to_i]
+        abort("Source not found: #{id}") unless source
+
+        Rewind::Services::Sync.sync_source(source)
+        say "Synced source #{source.id} (#{source.url})."
+      rescue StandardError => error
+        abort("Sync failed for source #{source.id}: #{error.message}")
+      end
+
+      # --reset: wipe the synced + derived data and rebuild from scratch. Only
+      # data we can re-fetch from Jellyfin is touched — ratings and reviews
+      # (user_items) are never deleted.
+      def resync
+        scope = Rewind::Source.where(enabled: true)
+        abort("No enabled sources to sync.") if scope.empty?
+        confirm_reset!
+
+        purge_synced_data
+        scope.update(cursor: nil)
+        Rewind::Services::Sync.run_once
+        Rewind::Services::Streaks.rebuild_all
+        say "Rebuilt from scratch. Ratings and reviews were kept."
+      end
+
+      def confirm_reset!
+        return if options[:yes]
+
+        say "This deletes all synced plays, items and streak data, then " \
+            "re-syncs from your sources."
+        say "Ratings and reviews are kept."
+        abort("Aborted.") unless yes?("Continue? [y/N]")
+      end
+
+      def purge_synced_data
+        Rewind.db.transaction do
+          Rewind.db[:user_day_activity].delete
+          Rewind::Play.dataset.delete
+          Rewind::Item.dataset.delete
+        end
+      end
+    end
+
     desc "console", "Launch an IRB console with models loaded"
     def console
       CLI.load_env!(options[:env])
@@ -479,12 +439,6 @@ module Rewind
 
     desc "import SUBCOMMAND", "Import data from other services (trakt)"
     subcommand "import", ImportCLI
-
-    desc "history SUBCOMMAND", "Maintain play history (rebuild)"
-    subcommand "history", HistoryCLI
-
-    desc "streaks SUBCOMMAND", "Maintain play streaks (rebuild)"
-    subcommand "streaks", StreaksCLI
 
     def self.start(given_args = ARGV, config = {})
       # Allow colon form: users:new -> users new
