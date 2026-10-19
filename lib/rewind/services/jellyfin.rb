@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "httpx"
+require "securerandom"
 
 module Rewind
   module Services
@@ -25,9 +26,10 @@ module Rewind
       def initialize(url, token: nil, device_id: nil, page_size: PAGE_SIZE)
         @url = self.class.normalize_url(url)
         @token = token
-        # A per-source device id keeps tokens from clobbering each other; falls
-        # back for callers that only read public/unauthenticated endpoints.
-        @device_id = device_id || "rewind"
+        # A per-source device id keeps tokens from clobbering each other.
+        # Default to a random one (not a shared constant) so we can never emit a
+        # colliding device id even if a caller forgets to pass one.
+        @device_id = device_id || SecureRandom.hex(16)
         @page_size = page_size
       end
 
