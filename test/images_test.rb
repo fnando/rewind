@@ -233,6 +233,47 @@ class ImagesProxyTest < Minitest::Test
     assert_includes last_response.headers["location"], "/poster-placeholder.svg"
   end
 
+  test "a synthetic music item falls back to its Jellyfin artwork" do
+    # No MusicBrainz match (synthetic id) means no Cover Art Archive entry and
+    # no poster_path; the item's own Jellyfin image is the only source.
+    create_source(user_id: @user.id, url: "http://jellyfin:8096")
+    album = create_item(media_type: "album", title: "B-Sides",
+                        external_id: "mbid:synthetic:album:abc",
+                        jellyfin_id: "jf-album-1")
+    remote = "http://jellyfin:8096/Items/jf-album-1/Images/Primary"
+    WebMock.stub_request(:get, remote)
+           .to_return(status: 200, body: "ALBUMART",
+                      headers: {"Content-Type" => "image/jpeg"})
+
+    get @helper.poster_url(album)
+
+    assert_equal 200, last_response.status
+    assert_equal "ALBUMART", last_response.body
+    assert_equal remote, album.refresh.poster_path # backfilled, self-heals
+  end
+
+  test "a dead Cover Art Archive cover heals to the Jellyfin artwork" do
+    # A real release-group id whose Cover Art Archive entry 404s: the stored
+    # URL fails, so we fall through to the album's own Jellyfin image and heal
+    # poster_path to it.
+    create_source(user_id: @user.id, url: "http://jellyfin:8096")
+    dead = "https://coverartarchive.org/release-group/rg-1/front-250"
+    album = create_item(media_type: "album", title: "B-Sides",
+                        external_id: "mbid:rg:rg-1", poster_path: dead,
+                        jellyfin_id: "jf-dead-1")
+    jelly = "http://jellyfin:8096/Items/jf-dead-1/Images/Primary"
+    WebMock.stub_request(:get, dead).to_return(status: 404)
+    WebMock.stub_request(:get, jelly)
+           .to_return(status: 200, body: "JELLYART",
+                      headers: {"Content-Type" => "image/jpeg"})
+
+    get @helper.poster_url(album)
+
+    assert_equal 200, last_response.status
+    assert_equal "JELLYART", last_response.body
+    assert_equal jelly, album.refresh.poster_path # healed off the dead URL
+  end
+
   test "image requests do not require authentication" do
     File.binwrite(File.join(@image_dir, File.basename(@url)), "CACHED")
     clear_cookies

@@ -5,10 +5,12 @@ require "base64"
 module Rewind
   class Application < Sinatra::Base
     # Cache miss for a cover image: the path encodes the art owner, so every
-    # item sharing a cover resolves here identically. Resolve the upstream URL
-    # (stored, else re-derived), fetch it, store it under the image storage dir
-    # so ImageStore serves it from disk next time, backfill the item so it
-    # self-heals, and return the bytes. Placeholder on any failure.
+    # item sharing a cover resolves here identically. Try each candidate
+    # upstream in turn (stored poster_path, source-derived art, the item's own
+    # Jellyfin artwork) until one returns bytes — a stored URL that 404s (e.g. a
+    # release group with no Cover Art Archive cover) falls through to art that
+    # does exist. Store the winner under the image dir so ImageStore serves it
+    # from disk next time, heal poster_path to it, and return the bytes.
     get %r{/images/([A-Za-z0-9_-]+)\.jpg} do
       name = File.basename(request.path_info)
       media_type, external_id, size =
@@ -17,31 +19,51 @@ module Rewind
 
       if media_type == "season"
         item = nil
-        remote = season_poster_remote(external_id, size)
+        stored = nil
+        sources = [-> { season_poster_remote(external_id, size) }]
       else
         item = Item.where(media_type:, external_id:).first
-        remote = item && resolve_poster_remote(item, size)
+        stored = item && remote_poster_url(item, size)
+        # Lazy so derived art (a Fanart API call) only fires when the earlier
+        # sources came up empty.
+        sources = item ? poster_sources(item, stored) : []
       end
-      unless remote
-        unknown = media_type != "season" && item.nil?
-        reason = unknown ? "unknown item" : "no cover source"
+
+      remote = nil
+      data = nil
+      tried = false
+      sources.each do |source|
+        url = source.call
+        next unless url
+
+        tried = true
+        Rewind.logger.info(
+          "[images] miss #{media_type}:#{external_id}, downloading #{url}"
+        )
+        data = Services::ImageCache.fetch(url)
+        if data
+          remote = url
+          break
+        end
+      end
+
+      unless data
+        reason =
+          if tried then "no working cover source"
+          elsif media_type != "season" && item.nil? then "unknown item"
+          else "no cover source"
+          end
         Rewind.logger.info("[images] miss #{media_type}:#{external_id} — " \
                            "#{reason}, serving placeholder")
         next placeholder_redirect
       end
 
-      Rewind.logger.info(
-        "[images] miss #{media_type}:#{external_id}, downloading #{remote}"
-      )
-      data = Services::ImageCache.fetch(remote)
-      unless data
-        Rewind.logger.info("[images] #{media_type}:#{external_id} fetch " \
-                           "failed, serving placeholder")
-        next placeholder_redirect
-      end
-
       store_image(name, data)
-      item.update(poster_path: remote) if item && item.poster_path.to_s.empty?
+      # Persist the URL that actually served so a dead/empty poster_path heals
+      # and the fast path skips the failing fetch next time.
+      if item && (item.poster_path.to_s.empty? || remote != stored)
+        item.update(poster_path: remote)
+      end
       Rewind.logger.info("[images] stored #{media_type}:#{external_id} " \
                          "(#{data.bytesize} bytes)")
 
@@ -50,13 +72,20 @@ module Rewind
       data
     end
 
-    # The upstream URL for an item's cover: its stored poster_path if present,
-    # otherwise re-derived from the source (Cover Art Archive / fanart.tv) so a
-    # late-arriving key or image is picked up without a re-sync.
-    private def resolve_poster_remote(item, size)
-      stored = remote_poster_url(item, size)
-      return stored if stored
+    # Ordered, lazily-evaluated upstream candidates for an item's cover, best
+    # first: its stored poster_path, then source-derived art (Cover Art Archive
+    # / fanart.tv) for a late-arriving key, then the item's own Jellyfin artwork
+    # — the only source for music that never matched MusicBrainz (synthetic ids)
+    # or whose release group has no Cover Art Archive cover.
+    private def poster_sources(item, stored)
+      [
+        -> { stored },
+        -> { derived_poster_url(item) },
+        -> { jellyfin_poster_url(item) }
+      ]
+    end
 
+    private def derived_poster_url(item)
       case item.media_type
       when "artist"
         mbid = strip_mbid(item.external_id, "mbid:artist:")
@@ -65,6 +94,17 @@ module Rewind
         mbid = strip_mbid(item.external_id, "mbid:rg:")
         mbid && "https://coverartarchive.org/release-group/#{mbid}/front-250"
       end
+    end
+
+    # The item's primary image on the configured Jellyfin source, by its stable
+    # Jellyfin id. The host is resolved from the source (not baked in), matching
+    # how remote_poster_url re-hosts Jellyfin paths.
+    private def jellyfin_poster_url(item)
+      id = item.jellyfin_id.to_s
+      return if id.empty?
+
+      base = jellyfin_source_url
+      base && "#{base}/Items/#{id}/Images/Primary"
     end
 
     # The upstream URL for a TV season's poster, which lives in its series'
