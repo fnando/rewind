@@ -337,6 +337,33 @@ class SourcesJellyfinTest < Minitest::Test
                      query: hash_including("ParentId" => "alb-1"))
   end
 
+  test "an unchanged Etag skips the re-resolve and re-backfill next run" do
+    stub_album_tracks("alb-1", [])
+    tagged = audio_item(id: "a1", name: "Burnout",
+                        index: 1).merge("Etag" => "v1")
+
+    first = adapter.resolve(tagged) # run 1: resolves + backfills + stores Etag
+    second = adapter.resolve(tagged) # run 2: same Etag -> cached, no backfill
+
+    assert_equal first.id, second.id
+    assert_equal "v1", first.refresh.source_etag
+    assert_requested(:get, %r{https://jf\.test/Users/u-1/Items},
+                     times: 1,
+                     query: hash_including("ParentId" => "alb-1"))
+  end
+
+  test "a changed Etag re-resolves and re-backfills" do
+    stub_album_tracks("alb-1", [])
+    adapter.resolve(audio_item(id: "a1", name: "Burnout", index: 1)
+                      .merge("Etag" => "v1"))
+    adapter.resolve(audio_item(id: "a1", name: "Burnout", index: 1)
+                      .merge("Etag" => "v2"))
+
+    assert_requested(:get, %r{https://jf\.test/Users/u-1/Items},
+                     times: 2,
+                     query: hash_including("ParentId" => "alb-1"))
+  end
+
   def stub_artist_albums(artist_id, items)
     WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
            .with(query: hash_including("AlbumArtistIds" => artist_id,

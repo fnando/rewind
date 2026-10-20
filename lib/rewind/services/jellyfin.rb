@@ -194,7 +194,7 @@ module Rewind
           SortBy: "ParentIndexNumber,IndexNumber,SortName",
           SortOrder: "Ascending",
           Fields: "ProviderIds,ParentIndexNumber,IndexNumber,RunTimeTicks," \
-                  "PremiereDate,ProductionYear,Genres",
+                  "PremiereDate,ProductionYear,Genres,Etag",
           Limit: 500
         )
         Array(JSON.parse(response.body.to_s)["Items"])
@@ -213,7 +213,7 @@ module Rewind
           Recursive: true,
           SortBy: "PremiereDate,ProductionYear,SortName",
           SortOrder: "Descending",
-          Fields: "ProviderIds,PremiereDate,ProductionYear,Genres",
+          Fields: "ProviderIds,PremiereDate,ProductionYear,Genres,Etag",
           Limit: 500
         )
         Array(JSON.parse(response.body.to_s)["Items"])
@@ -230,7 +230,8 @@ module Rewind
           SortBy: "DatePlayed",
           SortOrder: order,
           Fields: "ProviderIds,ParentIndexNumber,IndexNumber,SeriesId," \
-                  "ParentId,DateCreated,PremiereDate,ProductionYear,Genres",
+                  "ParentId,DateCreated,PremiereDate,ProductionYear,Genres," \
+                  "Etag",
           Limit: @page_size,
           StartIndex: start_index
         )

@@ -81,21 +81,51 @@ module Rewind
         # building it straight from Jellyfin's own metadata (e.g. YouTube videos
         # imported by Pinchflat have no external ids). Audio always resolves via
         # MusicBrainz (synthetic ids), so it needs no fallback.
+        #
+        # Short-circuits when Jellyfin's Etag is unchanged: the stored item is
+        # already current, so we skip the match, the re-write, and — for audio —
+        # the album/artist backfill that lives in resolve_audio. A changed or
+        # absent Etag falls through and re-resolves, so edits still land.
         def resolve(item)
-          case item["Type"]
-          when "Movie"
-            try_match { resolve_movie(item) } || generic_video(item, "movie")
-          when "Episode"
-            try_match { resolve_episode(item) } ||
+          unchanged_item(item) || resolve_fresh(item)
+        end
+
+        private def resolve_fresh(item)
+          resolved =
+            case item["Type"]
+            when "Movie"
+              try_match { resolve_movie(item) } || generic_video(item, "movie")
+            when "Episode"
+              try_match { resolve_episode(item) } ||
               generic_episode(item) || generic_video(item, "movie")
-          when "Audio"
-            resolve_audio(item)
-          when "Video", "MusicVideo"
-            # Loose videos (e.g. YouTube downloads) carry no external ids. If
-            # they sit in a folder, treat the folder as a series; otherwise
-            # keep them as standalone movies.
-            generic_folder_episode(item) || generic_video(item, "movie")
-          end
+            when "Audio"
+              resolve_audio(item)
+            when "Video", "MusicVideo"
+              # Loose videos (e.g. YouTube downloads) carry no external ids. If
+              # they sit in a folder, treat the folder as a series; otherwise
+              # keep them as standalone movies.
+              generic_folder_episode(item) || generic_video(item, "movie")
+            end
+          stamp_source_etag(resolved, item)
+          resolved
+        end
+
+        # The stored item for this Jellyfin payload when its Etag is unchanged,
+        # so callers can skip re-resolving it. nil when new or changed.
+        private def unchanged_item(item)
+          id = presence(item["Id"])
+          etag = presence(item["Etag"])
+          return unless id && etag
+
+          existing = Rewind::Item.where(jellyfin_id: id).first
+          existing if existing && existing.source_etag == etag
+        end
+
+        private def stamp_source_etag(resolved, item)
+          etag = presence(item["Etag"])
+          return unless resolved && etag && resolved.source_etag != etag
+
+          resolved.update(source_etag: etag)
         end
 
         # Runs a TMDB/MusicBrainz match but swallows lookup errors so a flaky
@@ -316,13 +346,18 @@ module Rewind
         end
 
         # The shared Jellyfin-Audio -> MusicBrainz track resolution, used both
-        # for the played track and for each of its album siblings.
+        # for the played track and for each of its album siblings. Skips the
+        # re-resolve when the Etag is unchanged, so a backfill that re-lists an
+        # album doesn't re-write every sibling.
         private def music_item(item)
+          cached = unchanged_item(item)
+          return cached if cached
+
           title = presence(item["Name"])
           return unless title
 
           ids = item["ProviderIds"] || {}
-          MusicBrainz.new.resolve(
+          track = MusicBrainz.new.resolve(
             title: title,
             artist: presence(item["AlbumArtist"]) ||
                     presence(Array(item["Artists"]).first),
@@ -339,6 +374,8 @@ module Rewind
             jellyfin_id: presence(item["Id"]),
             album_jellyfin_id: presence(item["ParentId"])
           )
+          stamp_source_etag(track, item)
+          track
         end
 
         # Pull every track on the played track's album (even unplayed ones) so
