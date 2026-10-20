@@ -5,6 +5,11 @@ module Rewind
     # Wraps a Play with its preloaded relations and derives everything a
     # History cover card needs, keeping the per-kind branching out of the ERB.
     class PlayCard
+      # A season's cover art, which has no Item of its own: it stands in for
+      # the series on an episode card when that season carries its own poster.
+      # Quacks like an item for poster_owner (media_type + external_id only).
+      SeasonCover = Data.define(:media_type, :external_id)
+
       attr_reader :play, :item
 
       def initialize(play, shows: {}, music_parents: {}, user_items: {})
@@ -52,10 +57,27 @@ module Rewind
         @item
       end
 
-      # The item whose cover art the card shows: the series for episodes; the
-      # album resolves underneath poster_url for tracks.
+      # The item whose cover art the card shows. Episodes prefer their season's
+      # poster, falling back to the series (then the episode itself); the album
+      # resolves underneath poster_url for tracks.
       def cover_item
-        kind == "episode" ? (show || @item) : @item
+        return @item unless kind == "episode"
+
+        season_cover || show || @item
+      end
+
+      # A SeasonCover when the series carries a poster for this episode's
+      # season, else nil so cover_item falls back to the show's own art.
+      private def season_cover
+        return unless (series = show)
+
+        season = Array(series.metadata["seasons"]).find do |s|
+          s["season_number"].to_i == @item.season_number.to_i
+        end
+        return if season.nil? || season["poster_path"].to_s.empty?
+
+        id = "#{series.external_id}:#{@item.season_number}"
+        SeasonCover.new("season", id)
       end
 
       # The card's main title: the episode title for episodes, else the item's

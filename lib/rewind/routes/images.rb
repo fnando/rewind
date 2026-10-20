@@ -15,10 +15,16 @@ module Rewind
         decode_image_token(params[:captures].first)
       pass unless external_id
 
-      item = Item.where(media_type:, external_id:).first
-      remote = item && resolve_poster_remote(item, size)
+      if media_type == "season"
+        item = nil
+        remote = season_poster_remote(external_id, size)
+      else
+        item = Item.where(media_type:, external_id:).first
+        remote = item && resolve_poster_remote(item, size)
+      end
       unless remote
-        reason = item ? "no cover source" : "unknown item"
+        unknown = media_type != "season" && item.nil?
+        reason = unknown ? "unknown item" : "no cover source"
         Rewind.logger.info("[images] miss #{media_type}:#{external_id} — " \
                            "#{reason}, serving placeholder")
         next placeholder_redirect
@@ -35,7 +41,7 @@ module Rewind
       end
 
       store_image(name, data)
-      item.update(poster_path: remote) if item.poster_path.to_s.empty?
+      item.update(poster_path: remote) if item && item.poster_path.to_s.empty?
       Rewind.logger.info("[images] stored #{media_type}:#{external_id} " \
                          "(#{data.bytesize} bytes)")
 
@@ -59,6 +65,27 @@ module Rewind
         mbid = strip_mbid(item.external_id, "mbid:rg:")
         mbid && "https://coverartarchive.org/release-group/#{mbid}/front-250"
       end
+    end
+
+    # The upstream URL for a TV season's poster, which lives in its series'
+    # stored metadata rather than an Item of its own. The season has no row to
+    # backfill, so it re-resolves from that metadata on each miss and persists
+    # only as the cached file. external_id is "<series external_id>:<number>".
+    private def season_poster_remote(external_id, size)
+      series_external_id, _, number = external_id.rpartition(":")
+      return if series_external_id.empty?
+
+      series = Item.where(media_type: "series",
+                          external_id: series_external_id).first
+      return unless series
+
+      season = Array(series.metadata["seasons"]).find do |s|
+        s["season_number"].to_i == number.to_i
+      end
+      path = season && season["poster_path"].to_s
+      return if path.to_s.empty?
+
+      "https://image.tmdb.org/t/p/#{size}#{path}"
     end
 
     private def strip_mbid(external_id, prefix)

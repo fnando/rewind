@@ -196,6 +196,43 @@ class ImagesProxyTest < Minitest::Test
     assert_includes io.string, "[images] hit #{File.basename(@url)}"
   end
 
+  test "a season cover resolves its poster from the series metadata" do
+    create_item(
+      media_type: "series", external_id: "tmdb:1399", title: "GoT",
+      metadata_json: {
+        "seasons" => [
+          {"season_number" => 1, "poster_path" => "/s1.jpg"},
+          {"season_number" => 2, "poster_path" => "/s2.jpg"}
+        ]
+      }.to_json
+    )
+    cover = Rewind::Presenters::PlayCard::SeasonCover.new("season",
+                                                          "tmdb:1399:2")
+    remote = "https://image.tmdb.org/t/p/w500/s2.jpg"
+    WebMock.stub_request(:get, remote)
+           .to_return(status: 200, body: "S2IMG",
+                      headers: {"Content-Type" => "image/jpeg"})
+
+    get @helper.poster_url(cover)
+
+    assert_equal 200, last_response.status
+    assert_equal "S2IMG", last_response.body
+  end
+
+  test "a season with no stored poster falls back to the placeholder" do
+    create_item(
+      media_type: "series", external_id: "tmdb:1399", title: "GoT",
+      metadata_json: {"seasons" => [{"season_number" => 1}]}.to_json
+    )
+    cover = Rewind::Presenters::PlayCard::SeasonCover.new("season",
+                                                          "tmdb:1399:1")
+
+    get @helper.poster_url(cover)
+
+    assert_equal 302, last_response.status
+    assert_includes last_response.headers["location"], "/poster-placeholder.svg"
+  end
+
   test "image requests do not require authentication" do
     File.binwrite(File.join(@image_dir, File.basename(@url)), "CACHED")
     clear_cookies

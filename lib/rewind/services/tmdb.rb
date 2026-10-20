@@ -49,7 +49,8 @@ module Rewind
               "credits" => data["credits"],
               "number_of_seasons" => data["number_of_seasons"],
               "seasons" => Array(data["seasons"]).map do |s|
-                s.slice("season_number", "name", "episode_count")
+                s.slice("season_number", "name", "episode_count",
+                        "poster_path")
               end
             }
           }
