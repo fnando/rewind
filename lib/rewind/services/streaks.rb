@@ -74,17 +74,31 @@ module Rewind
 
         # --- Rebuild / verify (safety net, backfill, tz changes) -----------
 
+        # Heal drift between the derived table and `plays` with the fewest
+        # writes possible: compare read-only (verify), then correct only the
+        # day-rows that actually differ, each as its own small committed write.
+        # In steady state the hooks have kept everything in sync, so verify
+        # finds nothing and we take no write lock at all — the rebuild thread
+        # stops competing with sync for the single SQLite writer.
         def rebuild_user(user)
-          counts = computed_counts(user)
+          verify(user).each do |diff|
+            correct_activity(user.id, diff)
+          end
+        end
 
-          Rewind.db.transaction do
-            activity.where(user_id: user.id).delete
-            next if counts.empty?
+        # Bring one drifted day-row to its expected count: delete it when it
+        # shouldn't exist, else upsert the right count. One statement, one
+        # commit — never a table-wide delete-and-reinsert.
+        private def correct_activity(user_id, diff)
+          key = {user_id:, media_group: diff[:media_group], day: diff[:day]}
 
-            rows = counts.map do |(media_group, day), play_count|
-              {user_id: user.id, media_group:, day:, play_count:}
-            end
-            activity.multi_insert(rows)
+          if diff[:expected].zero?
+            activity.where(key).delete
+          else
+            activity
+              .insert_conflict(target: %i[user_id media_group day],
+                               update: {play_count: diff[:expected]})
+              .insert(**key, play_count: diff[:expected])
           end
         end
 

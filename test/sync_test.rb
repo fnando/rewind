@@ -207,4 +207,64 @@ class SyncTest < Minitest::Test
       capture_io { Rewind::CLI.start(["sync", "--no-verbose"]) }
     end
   end
+
+  # --- Locked-write resilience ---------------------------------------------
+
+  def locked_error
+    Sequel::DatabaseError.new("SQLite3::BusyException: database is locked")
+  end
+
+  def fake_adapter(plays:, cursor:)
+    adapter = Object.new
+    adapter.define_singleton_method(:recent_plays) do |**|
+      {plays:, cursor:, instance_id: nil}
+    end
+    adapter
+  end
+
+  test "record_play defers a locked write instead of raising" do
+    item = create_item(media_type: "movie")
+    play = {
+      item_id: item.id, played_at: Time.now,
+      source_event_id: "jellyfin:x:1"
+    }
+    Rewind::Play.stubs(:create).raises(locked_error)
+
+    assert_equal :deferred, Rewind::Services::Sync.record_play(@source, play)
+    assert_equal 0, Rewind::Play.count
+  end
+
+  test "record_play re-raises a non-lock database error" do
+    item = create_item(media_type: "movie")
+    play = {
+      item_id: item.id, played_at: Time.now,
+      source_event_id: "jellyfin:x:1"
+    }
+    Rewind::Play.stubs(:create).raises(Sequel::DatabaseError, "disk I/O error")
+
+    assert_raises(Sequel::DatabaseError) do
+      Rewind::Services::Sync.record_play(@source, play)
+    end
+  end
+
+  test "a deferred play holds the cursor and still attempts the whole batch" do
+    assert_nil @source.cursor # precondition: fresh source, no cursor yet
+    adapter = fake_adapter(
+      plays: [
+        {item_id: 1, played_at: Time.now, source_event_id: "jellyfin:a:1"},
+        {item_id: 2, played_at: Time.now, source_event_id: "jellyfin:b:1"}
+      ],
+      cursor: "2026-10-16T06:00:00Z"
+    )
+    Rewind::Services::Sources.stubs(:adapter_for).returns(adapter)
+    # First write lands, second is deferred by a lock. Expecting exactly two
+    # calls proves the lock on the first-processed play didn't skip the rest.
+    Rewind::Services::Sync.expects(:record_play).twice
+                          .returns(:written, :deferred)
+
+    Rewind::Services::Sync.sync_source(@source)
+
+    assert_nil @source.refresh.cursor # held, not advanced
+    refute_nil @source.refresh.last_error_id
+  end
 end

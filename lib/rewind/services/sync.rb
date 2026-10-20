@@ -38,7 +38,22 @@ module Rewind
           return
         end
 
-        new_plays = result[:plays].count {|play| record_play(source, play) }
+        # Record each play independently so one locked write can't skip the
+        # rest of the batch. A play SQLite was too busy to take is deferred (not
+        # raised): we hold the cursor so the lookback re-offers it next run,
+        # rather than stepping past it and losing it.
+        outcomes = result[:plays].map {|play| record_play(source, play) }
+        new_plays = outcomes.count(:written)
+        deferred = outcomes.count(:deferred)
+
+        if deferred.positive?
+          message = "#{deferred} of #{result[:plays].size} plays deferred " \
+                    "(database locked); cursor held for retry"
+          Rewind.logger.warn("[sync] source #{source.id}: #{message}")
+          record_error(source, message)
+          return
+        end
+
         # Bump the cursor directly: it's derived sync state, and a legacy source
         # still missing its instance_id would otherwise fail model validation.
         # Clearing the error here treats a past failure as transient.
@@ -86,11 +101,15 @@ module Rewind
         )
       end
 
+      # Records one play as its own committed write. Returns :written on a new
+      # play, :duplicate when it was already recorded, or :deferred when SQLite
+      # was too busy to take the write (so the caller holds the cursor and the
+      # lookback retries it next run). Any other error propagates.
       def self.record_play(source, play)
         # Both the pull and the webhook key a Jellyfin play on the same identity
         # (jellyfin:<ItemId>:<LastPlayedDate>), so whichever lands second trips
         # the (user_id, instance_id, source_event_id) unique index and is caught
-        # by the rescue below — no explicit dedup needed here.
+        # below — no explicit dedup needed here.
         Rewind::Play.create(
           user_id: source.user_id,
           item_id: play[:item_id],
@@ -100,8 +119,26 @@ module Rewind
           source_event_id: play[:source_event_id],
           played_at: play[:played_at]
         )
+        :written
       rescue Sequel::UniqueConstraintViolation
-        nil # already recorded on a previous sync
+        :duplicate # already recorded on a previous sync
+      rescue Sequel::DatabaseError => error
+        raise unless database_locked?(error)
+
+        Rewind.logger.warn(
+          "[sync] source #{source.id}: deferred #{play[:source_event_id]} — " \
+          "database locked"
+        )
+        :deferred
+      end
+
+      LOCK_PATTERN = /database is locked|SQLite3::BusyException/
+
+      # A transient "database is locked" from SQLite's single-writer contention,
+      # as opposed to a real database fault we must surface.
+      def self.database_locked?(error)
+        LOCK_PATTERN.match?(error.message.to_s) ||
+          LOCK_PATTERN.match?(error.cause&.message.to_s)
       end
 
       # Daemon thread that syncs forever. Started by `rewind run` only.

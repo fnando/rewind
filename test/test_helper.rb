@@ -36,6 +36,7 @@ Rewind.application
 
 require "minitest/utils"
 require "minitest/autorun"
+require "mocha/minitest"
 require "rack/test"
 require "webmock/minitest"
 
