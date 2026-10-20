@@ -40,11 +40,7 @@
       <ul class="cover-grid">
         <% group_day_plays(plays).each do |entry| %>
           <% if entry[:type] == :album %>
-            <% group_key = "group-#{entry[:plays].first.id}" %>
-            <%= erb :"_partials/album_card", locals: {plays: entry[:plays], group_key: group_key} %>
-            <% entry[:plays].each do |play| %>
-              <%= erb :"_partials/cover_card", locals: {play: play, grouped: true, group_key: group_key} %>
-            <% end %>
+            <%= erb :"_partials/history_album_group", locals: {plays: entry[:plays], group_key: "group-#{entry[:plays].first.id}"} %>
           <% else %>
             <%= erb :"_partials/cover_card", locals: {play: entry[:play]} %>
           <% end %>

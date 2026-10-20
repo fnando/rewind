@@ -138,6 +138,21 @@ class ItemsMusicTest < Minitest::Test
     assert_includes last_response.body, "/items/#{@album.id}"
   end
 
+  test "artist page albums use the history cover-card design" do
+    @album.update(release_date: "1997-05-21")
+
+    get "/items/#{@artist.id}"
+
+    # Same shell as the History album card: a square cover card with the Album
+    # badge, a title link, the year, and an on-cover rating control.
+    assert_includes last_response.body, "cover-card cover-card--track"
+    assert_includes last_response.body, ">Album</span>"
+    assert_includes last_response.body,
+                    %[<a class="cover-card__title" href="/items/#{@album.id}">]
+    assert_includes last_response.body, "1997"
+    assert_includes last_response.body, "on-cover"
+  end
+
   test "history shows the track with links to its artist and album" do
     get "/history"
 

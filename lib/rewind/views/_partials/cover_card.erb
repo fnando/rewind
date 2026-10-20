@@ -7,12 +7,7 @@
   cover = card.cover_item
 %>
 <li class="cover-card cover-card--<%= card.kind %><%= " cover-card--in-album" if grouped %>"<% if grouped %> data-album-tracks="<%= group_key %>" hidden<% end %>>
-  <% if poster?(cover) %>
-    <img class="cover-card__img" src="<%= poster_url(cover) %>"
-         alt="" loading="lazy" decoding="async">
-  <% else %>
-    <img class="cover-card__img cover-card__img--placeholder" src="/poster-placeholder.svg" alt="" loading="lazy" decoding="async">
-  <% end %>
+  <%= erb :"_partials/cover_poster", locals: {item: cover} %>
   <span class="cover-card__scrim" aria-hidden="true"></span>
 
   <div class="cover-card__top">

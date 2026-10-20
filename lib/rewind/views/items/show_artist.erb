@@ -18,16 +18,13 @@
     <% if @albums.empty? %>
       <p class="muted">No albums tracked for this artist yet.</p>
     <% else %>
-      <ul class="search-grid">
+      <ul class="cover-grid">
         <% @albums.each do |album| %>
-          <li class="search-card">
-            <a href="/items/<%= album.id %>">
-              <img class="search-card__poster" src="<%= poster_url(album) %>" alt="" loading="lazy" decoding="async">
-            </a>
-            <div class="search-card__body">
-              <a href="/items/<%= album.id %>"><%= h(album.title) %></a>
-            </div>
-          </li>
+          <%= erb :"_partials/album_card", locals: {
+            album:,
+            detail: album.release_date.to_s[0, 4],
+            user_item: @user_items_by_item[album.id]
+          } %>
         <% end %>
       </ul>
     <% end %>

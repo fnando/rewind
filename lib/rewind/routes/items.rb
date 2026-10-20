@@ -262,6 +262,7 @@ module Rewind
         @albums = Item.where(media_type: "album",
                              parent_external_id: @item.external_id)
                       .order(:title).all
+        @user_items_by_item = user_items_by_item_id(@albums)
         erb :"items/show_artist"
       else
         @plays = Play.where(user_id: current_user.id, item_id: @item.id)

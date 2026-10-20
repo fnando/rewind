@@ -1,0 +1,33 @@
+<%#
+  One History entry for a run of track plays off the same album: the album
+  header card (expandable) followed by its hidden track cards.
+  locals: plays, group_key
+%>
+<%
+  first = plays.first
+  track = first.item
+  artist_item = @music_parents && @music_parents[track.metadata["artist_external_id"]]
+  album_item = @music_parents && @music_parents[track.metadata["album_external_id"]]
+  album = album_item || track
+  count = plays.size
+  times = plays.map(&:played_at).compact.minmax
+  time_label =
+    if format_time(times[0]) == format_time(times[1])
+      format_time(first.played_at)
+    else
+      "#{format_time(times[1])} – #{format_time(times[0])}"
+    end
+  detail = +""
+  detail << "#{item_link(artist_item, track.artist)} · " if track.artist
+  detail << pluralize(count, "track")
+%>
+<%= erb :"_partials/album_card", locals: {
+  album:,
+  detail:,
+  meta: "#{time_label} · #{h(first.source.capitalize)}",
+  group_key:,
+  user_item: album_item && @user_items_by_item[album_item.id]
+} %>
+<% plays.each do |play| %>
+  <%= erb :"_partials/cover_card", locals: {play:, grouped: true, group_key:} %>
+<% end %>
