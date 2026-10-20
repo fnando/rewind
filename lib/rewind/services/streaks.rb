@@ -178,16 +178,18 @@ module Rewind
       def get_streaks(today: nil)
         today ||= self.class.today_for(@user)
 
-        Rewind.db.transaction do
-          groups = group_islands
-          by_media_group = {}
-          MEDIA_GROUPS.values.uniq.each do |g|
-            by_media_group[g] = summarize(groups[g] || [], today)
-          end
-          overall = summarize(overall_islands, today)
-
-          {overall:, by_media_group:}
+        # No transaction: this only reads. Under the global :immediate mode a
+        # transaction here would grab the write lock and hold it through the
+        # query loop on every page render, starving the sync thread into
+        # "database is locked". A play landing mid-computation is harmless.
+        groups = group_islands
+        by_media_group = {}
+        MEDIA_GROUPS.values.uniq.each do |g|
+          by_media_group[g] = summarize(groups[g] || [], today)
         end
+        overall = summarize(overall_islands, today)
+
+        {overall:, by_media_group:}
       end
 
       # Every run of consecutive days across all media types, as
