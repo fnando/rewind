@@ -7,7 +7,7 @@ module Rewind
     # each source tracks a cursor, and plays dedupe on
     # (source_id, source_event_id).
     module Sync
-      module_function def run_once
+      def self.run_once
         Rewind::Source.where(enabled: true).each do |source|
           sync_source(source)
         rescue Services::Jellyfin::AuthError => error
@@ -23,7 +23,7 @@ module Rewind
         end
       end
 
-      module_function def sync_source(source)
+      def self.sync_source(source)
         adapter = Sources.adapter_for(source)
         result = adapter.recent_plays(since: source.cursor)
         adopt_instance_id(source, result[:instance_id])
@@ -56,7 +56,7 @@ module Rewind
       # Append a sync failure to the source's error log and point the source at
       # it. Dataset insert/update (no model validation) so it can't itself raise
       # and mask the original error. The row is kept after the error resolves.
-      module_function def record_error(source, message)
+      def self.record_error(source, message)
         id = Rewind.db[:source_errors].insert(
           source_id: source.id,
           message: message.to_s[0, 500],
@@ -69,7 +69,7 @@ module Rewind
       # Jellyfin payload) the first time we see it, and stamp any of this
       # instance's existing plays that predate the column. Keyed on instance_id,
       # plays then dedupe even after a source is deleted and re-added.
-      module_function def adopt_instance_id(source, instance_id)
+      def self.adopt_instance_id(source, instance_id)
         return if source.instance_id || instance_id.nil?
 
         source.update(instance_id:)
@@ -86,7 +86,7 @@ module Rewind
         )
       end
 
-      module_function def record_play(source, play)
+      def self.record_play(source, play)
         # Both the pull and the webhook key a Jellyfin play on the same identity
         # (jellyfin:<ItemId>:<LastPlayedDate>), so whichever lands second trips
         # the (user_id, instance_id, source_event_id) unique index and is caught
@@ -105,7 +105,7 @@ module Rewind
       end
 
       # Daemon thread that syncs forever. Started by `rewind run` only.
-      module_function def start_thread(interval: Rewind.config.sync_interval)
+      def self.start_thread(interval: Rewind.config.sync_interval)
         Thread.new do
           loop do
             begin

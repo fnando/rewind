@@ -9,7 +9,7 @@ module Rewind
       SIZE = 250
       Error = Class.new(Rewind::Error)
 
-      module_function def write(user, uploaded)
+      def self.write(user, uploaded)
         raise Error, "No file uploaded" unless uploaded && uploaded[:tempfile]
 
         FileUtils.mkdir_p(Rewind.config.avatars_dir)
@@ -37,12 +37,12 @@ module Rewind
         raise Error, "Could not process image: #{error.message}"
       end
 
-      module_function def delete(user)
+      def self.delete(user)
         path = Rewind.config.avatar_path(user.id)
         FileUtils.rm_f(path)
       end
 
-      module_function def path_for(user)
+      def self.path_for(user)
         path = Rewind.config.avatar_path(user.id)
         File.exist?(path) ? path : nil
       end

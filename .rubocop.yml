@@ -13,3 +13,6 @@ AllCops:
 Naming/FileName:
   Exclude:
     - lib/rewind-app.rb
+
+Style/ModuleFunction:
+  EnforcedStyle: forbidden

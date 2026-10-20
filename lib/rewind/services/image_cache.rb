@@ -14,7 +14,7 @@ module Rewind
       TIMEOUT = 8
       MAX_BYTES = 5 * 1024 * 1024
 
-      module_function def fetch(url)
+      def self.fetch(url)
         uri = URI.parse(url.to_s)
         return unless uri.is_a?(URI::HTTP) || uri.is_a?(URI::HTTPS)
         return unless allowed_host?(uri)
@@ -32,7 +32,7 @@ module Rewind
         nil
       end
 
-      module_function def client
+      def self.client
         HTTPX
           .plugin(:follow_redirects)
           .with(timeout: {connect_timeout: TIMEOUT, operation_timeout: TIMEOUT})
@@ -41,13 +41,13 @@ module Rewind
       # Static image CDNs are always allowed (https only); configured sources
       # (e.g. Jellyfin, possibly on a LAN over http) are allowed too, so their
       # thumbnails can be proxied.
-      module_function def allowed_host?(uri)
+      def self.allowed_host?(uri)
         return true if uri.is_a?(URI::HTTPS) && ALLOWED_HOSTS.include?(uri.host)
 
         source_hosts.include?(uri.host)
       end
 
-      module_function def source_hosts
+      def self.source_hosts
         Rewind::Source.select_map(:url).filter_map do |url|
           URI.parse(url).host
         rescue URI::InvalidURIError

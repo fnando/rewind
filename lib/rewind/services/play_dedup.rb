@@ -15,7 +15,7 @@ module Rewind
       FALLBACK = 600 # seconds, when a track's length is unknown
 
       # Removes the webhook duplicates and returns how many it destroyed.
-      module_function def run
+      def self.run
         jellyfin = Play.where(source: "jellyfin").exclude(played_at: nil)
         pulls = jellyfin.exclude(source_id: nil).order(:played_at).all
         webhooks = jellyfin.where(source_id: nil).order(:played_at).all
@@ -42,7 +42,7 @@ module Rewind
       end
 
       # item_id -> playback length in seconds (track length, else runtime).
-      module_function def runtimes_for(plays)
+      def self.runtimes_for(plays)
         ids = plays.map(&:item_id).uniq
         Item.where(id: ids).each_with_object({}) do |item, result|
           ms = item.metadata["length_ms"]
