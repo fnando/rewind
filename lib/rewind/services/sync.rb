@@ -8,7 +8,9 @@ module Rewind
     # (source_id, source_event_id).
     module Sync
       def self.run_once
-        Rewind::Source.where(enabled: true).each do |source|
+        started = Rewind.clock
+        sources = Rewind::Source.where(enabled: true)
+        sources.each do |source|
           sync_source(source)
         rescue Services::Jellyfin::AuthError => error
           # Leave the source enabled: a failure is often transient (expired
@@ -21,9 +23,14 @@ module Rewind
           Rewind.logger.error("[sync] source #{source.id} failed: " \
                               "#{error.message}")
         end
+        Rewind.logger.info(
+          "[sync] run done: #{sources.count} sources in " \
+          "#{Rewind.format_duration(Rewind.clock - started)}"
+        )
       end
 
       def self.sync_source(source)
+        started = Rewind.clock
         adapter = Sources.adapter_for(source)
         result = adapter.recent_plays(since: source.cursor)
         adopt_instance_id(source, result[:instance_id])
@@ -61,7 +68,8 @@ module Rewind
                            last_error_id: nil)
         Rewind.logger.info(
           "[sync] source #{source.id}: #{result[:plays].size} resolved, " \
-          "#{new_plays} new"
+          "#{new_plays} new in " \
+          "#{Rewind.format_duration(Rewind.clock - started)}"
         )
       rescue StandardError => error
         record_error(source, error.message)

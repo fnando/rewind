@@ -73,6 +73,19 @@ module Rewind
       @root ||= File.expand_path("..", __dir__)
     end
 
+    # Monotonic seconds, for timing work without wall-clock skew.
+    def clock
+      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
+
+    # Human-friendly elapsed time: "843ms", "4.2s", "1m12s".
+    def format_duration(seconds)
+      return "#{(seconds * 1000).round}ms" if seconds < 1
+      return format("%.1fs", seconds) if seconds < 60
+
+      "#{(seconds / 60).floor}m#{(seconds % 60).round}s"
+    end
+
     def boot!
       db
       # Prefer synced tz data (if present and >= the gem) before anything loads

@@ -40,18 +40,25 @@ module Rewind
 
         def recent_plays(since:)
           fetch_since = lookback(since)
+          fetch_started = Rewind.clock
           items = @client.played_items(user_id: @source.external_user_id,
                                        since: fetch_since)
           Rewind.logger.info(
-            "[sync/jellyfin] fetched #{items.size} played items since " \
+            "[sync/jellyfin] fetched #{items.size} played items in " \
+            "#{Rewind.format_duration(Rewind.clock - fetch_started)} since " \
             "#{fetch_since.inspect} (cursor #{since.inspect})"
           )
           # First pass: dated items and non-audio. build_play returns nil for
           # dateless audio (recovered below).
+          resolve_started = Rewind.clock
           plays = items.filter_map {|item| build_play(item) }
           # Second pass: a track Jellyfin marks played but never dates still
           # belongs to a session — recover it onto its album's play time.
           plays += recover_dateless_audio(items, plays)
+          Rewind.logger.info(
+            "[sync/jellyfin] resolved #{items.size} items into #{plays.size} " \
+            "plays in #{Rewind.format_duration(Rewind.clock - resolve_started)}"
+          )
           # Advance to the newest real play date, but never behind the incoming
           # cursor (the lookback re-scans older items; it must not rewind us).
           latest = items.filter_map {|i| last_played(i) }.max
@@ -194,9 +201,10 @@ module Rewind
         # session, so an album heard start-to-finish shows every track. With no
         # dated same-album track to anchor to we can't know when it played, so
         # record it undated — it still counts toward all-time play totals
-        # without inventing a day. Guards the double-count the old import-date
-        # anchor caused: never add a dateless play for a track that already has
-        # a real-dated one (in this batch or already stored).
+        # without inventing a day. Skips a track we already recorded (dated this
+        # batch, or any play already stored including a prior recovery), so the
+        # dateless pull — which returns these forever — doesn't re-recover and
+        # re-log them every sync.
         private def recover_dateless_audio(items, dated_plays)
           sessions = album_sessions(items)
           timelines = album_timelines(items)
@@ -208,7 +216,7 @@ module Rewind
             resolved = resolve(item)
             next unless resolved
             next if dated_item_ids.include?(resolved.id)
-            next if already_dated?(resolved.id)
+            next if already_recorded?(resolved.id)
 
             # Interpolate between the album's dated neighbours by track number,
             # else its earliest session time, else nil (undated play).
@@ -292,12 +300,13 @@ module Rewind
           end
         end
 
-        # Does this item already have a real-dated play stored? Keeps a dateless
-        # recovery from doubling a track that synced with a date before.
-        private def already_dated?(item_id)
+        # Have we already stored any play for this track — a real-dated one, or
+        # a previously-recovered dateless ":played" one? Once we have, stop
+        # re-recovering it: the dateless pull returns these forever, so without
+        # this they'd be re-processed and re-logged on every sync.
+        private def already_recorded?(item_id)
           !Rewind::Play
             .where(user_id: @source.user_id, item_id: item_id)
-            .exclude(Sequel.like(:source_event_id, "%:played"))
             .empty?
         end
 
