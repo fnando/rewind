@@ -27,10 +27,13 @@ module Rewind
       @db_busy_timeout = (ENV["REWIND_DB_BUSY_TIMEOUT"] || 15_000).to_i
       @host = ENV["REWIND_HOST"] || "0.0.0.0"
       @port = (ENV["REWIND_PORT"] || 55_455).to_i
-      # Puma sizing. 0 means "leave Puma's own default" — workers 0 is single
-      # mode; threads 0 keeps Puma's default thread pool.
+      # Puma sizing. SQLite allows a single writer, so more concurrency just
+      # adds contenders for the one write lock — not throughput. We default to
+      # single mode (workers 0) to avoid cross-process lock fights, and a small
+      # thread pool — enough for WAL's concurrent reads without piling writers.
+      # 0 means "leave Puma's own default".
       @workers = (ENV["REWIND_WORKERS"] || 0).to_i
-      @threads = (ENV["REWIND_THREADS"] || 0).to_i
+      @threads = (ENV["REWIND_THREADS"] || 4).to_i
       # Rack/Puma run environment. Defaults to production; APP_ENV/RACK_ENV (the
       # vars Sinatra and Puma read on their own) act as fallbacks.
       @environment = ENV["APP_ENV"] || ENV["RACK_ENV"] || "production"
