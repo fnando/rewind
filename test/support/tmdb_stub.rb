@@ -22,12 +22,14 @@ module TMDBStub
   end
 
   def stub_tmdb_tv(id, name: "Game of Thrones",
-                   genres: [{"name" => "Fantasy"}], run_time: [60])
+                   genres: [{"name" => "Fantasy"}], run_time: [60],
+                   seasons: [])
     body = {
       "id" => id,
       "name" => name,
       "genres" => genres,
       "episode_run_time" => run_time,
+      "seasons" => seasons,
       "credits" => {
         "crew" => [
           {

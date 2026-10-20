@@ -189,4 +189,43 @@ class CLITest < Minitest::Test
 
     assert_nil Rewind::Source[source.id]
   end
+
+  test "backfill-series-posters refreshes season posters from TMDB" do
+    original_config = Rewind.config
+    series = create_item(media_type: "series", external_id: "tmdb:1399",
+                         title: "GoT",
+                         metadata_json: {"seasons" => []}.to_json)
+    stub_tmdb_tv(1399, seasons: [
+      {
+        "season_number" => 1, "name" => "S1", "episode_count" => 10,
+        "poster_path" => "/s1.jpg"
+      }
+    ])
+
+    out, = with_env("TMDB_API_KEY" => "test-key") do
+      capture { Rewind::CLI.start(["backfill-series-posters"]) }
+    end
+
+    assert_includes out, "Refreshed 1 series."
+    posters = series.refresh.metadata["seasons"]
+
+    assert_equal "/s1.jpg", posters.first["poster_path"]
+  ensure
+    Rewind.config = original_config
+  end
+
+  test "backfill-series-posters aborts without a TMDB key" do
+    original_config = Rewind.config
+    _out, err = with_env("TMDB_API_KEY" => "") do
+      capture do
+        assert_raises(SystemExit) do
+          Rewind::CLI.start(["backfill-series-posters"])
+        end
+      end
+    end
+
+    assert_includes err, "TMDB_API_KEY not configured"
+  ensure
+    Rewind.config = original_config
+  end
 end

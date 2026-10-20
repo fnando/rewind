@@ -477,6 +477,35 @@ module Rewind
       say "Removed #{removed} duplicate #{removed == 1 ? 'play' : 'plays'}."
     end
 
+    # TEMPORARY: season posters were added to series metadata after most
+    # libraries were already synced, so existing TMDB series carry no season
+    # art until their 7-day cache expires. This forces a refresh now. Remove
+    # once every library has been backfilled.
+    desc "backfill-series-posters",
+         "Refresh TMDB series metadata so season posters appear. Temporary."
+    def backfill_series_posters
+      CLI.load_env!(options)
+      CLI.boot_db!
+      if Rewind.config.tmdb_api_key.to_s.empty?
+        abort("TMDB_API_KEY not configured; nothing to backfill.")
+      end
+
+      tmdb = Rewind::Services::TMDB.new
+      scope = Rewind::Item.where(media_type: "series")
+                          .where(Sequel.like(:external_id, "tmdb:%"))
+      done = 0
+      scope.each do |series|
+        # Backdate so tv_item re-fetches instead of returning the cached row.
+        series.update(fetched_at: Time.at(0))
+        tmdb.tv_item(series.tmdb_id)
+        done += 1
+      rescue StandardError => error
+        warn "Skipped #{series.external_id}: #{error.message}"
+      end
+
+      say "Refreshed #{done} series."
+    end
+
     desc "sync", "Sync plays from enabled sources"
     option :source, type: :numeric,
                     desc: "Only sync this source id (default: all enabled)"
