@@ -119,6 +119,67 @@ class JellyfinServiceTest < Minitest::Test
     assert_equal(%w[a], items.map {|i| i["Id"] })
   end
 
+  def undated(id, parent: nil)
+    item = {
+      "Id" => id, "ItemType" => "Audio", "Name" => id,
+      "UserData" => {"Played" => true}
+    }
+    item["ParentId"] = parent if parent
+    item
+  end
+
+  def dated(id, played, parent: nil)
+    item = item(id, played)
+    item["ParentId"] = parent if parent
+    item
+  end
+
+  test "played_items catches undated IsPlayed tracks on a played album" do
+    # Descending scan early-returns at the cursor, before any undated tail.
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
+           .with(query: hash_including("SortOrder" => "Descending"))
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {
+                        "Items" => [
+                          dated("new", "2026-10-16T05:00:00Z", parent: "alb"),
+                          dated("old", "2026-10-16T03:00:00Z", parent: "alb")
+                        ], "TotalRecordCount" => 2
+                      }.to_json)
+    # Ascending scan: undated IsPlayed items sort first, then a dated one. "u3"
+    # is on an album not in this batch, so it's left for a full scan.
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
+           .with(query: hash_including("SortOrder" => "Ascending"))
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {
+                        "Items" => [
+                          undated("u1", parent: "alb"),
+                          undated("u2", parent: "alb"),
+                          undated("u3", parent: "other"),
+                          dated("d", "2026-10-16T02:00:00Z", parent: "alb")
+                        ], "TotalRecordCount" => 4
+                      }.to_json)
+
+    client = Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
+    items = client.played_items(user_id: "u-1", since: "2026-10-16T04:00:00Z")
+
+    assert_equal(%w[new u1 u2], items.map {|i| i["Id"] })
+  end
+
+  test "played_items skips the undated query on a full scan" do
+    stub_items({
+                 "Items" => [item("a", "2026-10-16T05:00:00Z")],
+                 "TotalRecordCount" => 1
+               })
+
+    Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
+                              .played_items(user_id: "u-1")
+
+    refute_requested(:get, %r{https://jf\.test/Users/u-1/Items},
+                     query: hash_including("SortOrder" => "Ascending"))
+  end
+
   test "album_tracks lists the audio children of an album" do
     WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
            .with(query: hash_including("ParentId" => "alb-1",

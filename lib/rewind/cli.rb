@@ -531,6 +531,34 @@ module Rewind
       say "Backfilled albums for #{done} artists."
     end
 
+    # TEMPORARY: music clients that flip Jellyfin's Played flag without a play
+    # date left holes in the history before the undated-IsPlayed pull existed.
+    # This re-pulls each source's full history (now including those undated
+    # tracks) and records the missing plays. Idempotent. Remove once every
+    # library has been backfilled.
+    desc "backfill-undated-plays",
+         "Record played-but-undated tracks the pull used to miss. Temporary."
+    def backfill_undated_plays
+      CLI.load_env!(options)
+      CLI.boot_db!
+
+      sources = Rewind::Source.where(type: "jellyfin", enabled: true)
+      abort("No enabled Jellyfin sources.") if sources.empty?
+
+      recovered = 0
+      sources.each do |source|
+        adapter = Rewind::Services::Sources::Jellyfin.new(source)
+        adapter.recent_plays(since: nil)[:plays].each do |play|
+          recovered += 1 if Rewind::Services::Sync.record_play(source, play) ==
+                            :written
+        end
+      rescue StandardError => error
+        warn "Source #{source.id} failed: #{error.message}"
+      end
+
+      say "Recorded #{recovered} missing #{recovered == 1 ? 'play' : 'plays'}."
+    end
+
     desc "sync", "Sync plays from enabled sources"
     option :source, type: :numeric,
                     desc: "Only sync this source id (default: all enabled)"

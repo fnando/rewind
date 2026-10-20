@@ -160,30 +160,35 @@ module Rewind
         end
 
         # Tracks Jellyfin reports as played-but-dateless (no LastPlayedDate)
-        # would otherwise vanish. Anchor each onto its album's session — the
-        # earliest real play time of a same-album track in this batch — so an
-        # album heard start-to-finish shows every track and groups as one.
-        # No same-album session to anchor to → skip. Guards the double-count the
-        # old import-date anchor caused: never add a dateless play for a track
-        # that already has a real-dated one (in this batch or already stored).
+        # would otherwise vanish. Place each where it belongs in its album's
+        # session, so an album heard start-to-finish shows every track. With no
+        # dated same-album track to anchor to we can't know when it played, so
+        # record it undated — it still counts toward all-time play totals
+        # without inventing a day. Guards the double-count the old import-date
+        # anchor caused: never add a dateless play for a track that already has
+        # a real-dated one (in this batch or already stored).
         private def recover_dateless_audio(items, dated_plays)
           sessions = album_sessions(items)
+          timelines = album_timelines(items)
           dated_item_ids = dated_plays.to_set {|p| p[:item_id] }
 
           items.filter_map do |item|
             next unless item["Type"] == "Audio" && last_played(item).nil?
-
-            anchor = sessions[presence(item["ParentId"])]
-            next log_skip(item, "no album session to anchor to") unless anchor
 
             resolved = resolve(item)
             next unless resolved
             next if dated_item_ids.include?(resolved.id)
             next if already_dated?(resolved.id)
 
+            # Interpolate between the album's dated neighbours by track number,
+            # else its earliest session time, else nil (undated play).
+            parent = presence(item["ParentId"])
+            anchor = interpolated_time(item, timelines[parent]) ||
+                     sessions[parent]
+            when_at = anchor ? "@ #{anchor.iso8601}" : "(date unknown)"
             Rewind.logger.info(
               "[sync/jellyfin] recovered dateless #{describe(item)} -> " \
-              "item #{resolved.id} @ #{anchor.iso8601}"
+              "item #{resolved.id} #{when_at}"
             )
             {
               item_id: resolved.id,
@@ -206,6 +211,54 @@ module Rewind
             time = Time.parse(played)
             current = sessions[parent]
             sessions[parent] = time if current.nil? || time < current
+          end
+        end
+
+        # album ParentId -> sorted [[track number, play time], ...] for this
+        # batch's dated audio, so a dateless track can be slotted between its
+        # neighbours by track number instead of all sharing the session start.
+        private def album_timelines(items)
+          timelines = {}
+          items.each do |item|
+            next unless item["Type"] == "Audio"
+
+            played = last_played(item)
+            parent = presence(item["ParentId"])
+            index = positive_int(item["IndexNumber"])
+            next unless played && parent && index
+
+            (timelines[parent] ||= []) << [index, Time.parse(played)]
+          end
+          timelines.each_value(&:sort!)
+          timelines
+        end
+
+        # Interpolate a dateless track's play time from its dated neighbours on
+        # the same album, by track number. nil when we can't place it (no
+        # timeline, or the track has no number) so the caller falls back to the
+        # session start.
+        private def interpolated_time(item, pairs)
+          return if pairs.nil? || pairs.empty?
+
+          index = positive_int(item["IndexNumber"])
+          return if index.nil?
+
+          # pairs is sorted by track number: the nearest lower neighbour is the
+          # last one at/under index, the nearest higher is the first one above.
+          before = after = nil
+          pairs.each do |pair|
+            if pair.first <= index
+              before = pair
+            else
+              after ||= pair
+            end
+          end
+          if before && after && before.first != after.first
+            a, ta = before
+            b, tb = after
+            ta + ((tb - ta) * (index - a) / (b - a).to_f)
+          else
+            (before || after).last
           end
         end
 

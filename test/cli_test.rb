@@ -228,4 +228,33 @@ class CLITest < Minitest::Test
   ensure
     Rewind.config = original_config
   end
+
+  test "backfill-undated-plays records plays the full pull returns" do
+    original_config = Rewind.config
+    create_source("https://undated.test")
+    stub_tmdb_movie(27_205)
+    WebMock.stub_request(:get, %r{https://undated\.test/Users/jf-1/Items})
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {
+                        "Items" => [
+                          {
+                            "Id" => "m1", "Type" => "Movie",
+                            "Name" => "Inception",
+                            "ProviderIds" => {"Tmdb" => "27205"},
+                            "ServerId" => "srv-1",
+                            "UserData" => {
+                              "LastPlayedDate" => "2026-10-16T05:00:00Z"
+                            }
+                          }
+                        ], "TotalRecordCount" => 1
+                      }.to_json)
+
+    out, = capture { Rewind::CLI.start(["backfill-undated-plays"]) }
+
+    assert_includes out, "Recorded 1 missing play."
+    assert_equal 1, Rewind::Play.count
+  ensure
+    Rewind.config = original_config
+  end
 end

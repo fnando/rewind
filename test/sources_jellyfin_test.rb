@@ -432,7 +432,7 @@ class SourcesJellyfinTest < Minitest::Test
                      query: hash_including("AlbumArtistIds" => "jf-artist-1"))
   end
 
-  test "skips a dateless audio track with no album session to anchor to" do
+  test "records a dateless audio track with no session as a null-dated play" do
     stub_items([
       {
         "Id" => "a9", "Type" => "Audio", "Name" => "Ghost Play",
@@ -442,11 +442,12 @@ class SourcesJellyfinTest < Minitest::Test
     ])
 
     result = adapter.recent_plays(since: nil)
+    play = result[:plays].first
 
-    assert_empty result[:plays]
-    # The track is still catalogued; only the dateless play is dropped.
-    refute_nil Rewind::Item.where(media_type: "track",
-                                  title: "Ghost Play").first
+    # No session to date it, but the play still counts — just without a day.
+    refute_nil play
+    assert_nil play[:played_at]
+    assert_equal "jellyfin:a9:played", play[:source_event_id]
   end
 
   def audio_dated(id:, name:, at:, parent_id: "alb-1")
@@ -483,6 +484,35 @@ class SourcesJellyfinTest < Minitest::Test
     # Anchored to the album's earliest session time, with a stable event id.
     assert_equal Time.parse("2026-10-18T20:00:00Z"), recovered[:played_at]
     assert_equal "jellyfin:d3:played", recovered[:source_event_id]
+  end
+
+  def audio_indexed(id:, name:, index:, at: nil)
+    {
+      "Id" => id, "Type" => "Audio", "Name" => name, "Album" => "Dookie",
+      "AlbumArtist" => "Green Day", "ParentId" => "alb-1",
+      "IndexNumber" => index,
+      "UserData" => at ? {"LastPlayedDate" => at} : {"Played" => true}
+    }
+  end
+
+  test "slots a dateless track between its dated neighbours by track number" do
+    stub_album_tracks("alb-1", [])
+    stub_items([
+      audio_indexed(id: "t1", name: "One", index: 1,
+                    at: "2026-10-18T20:00:00Z"),
+      audio_indexed(id: "t3", name: "Three", index: 3,
+                    at: "2026-10-18T20:06:00Z"),
+      audio_indexed(id: "t2", name: "Two", index: 2)
+    ])
+
+    result = adapter.recent_plays(since: nil)
+    two = Rewind::Item.where(title: "Two").first
+    recovered = result[:plays].find {|p| p[:item_id] == two.id }
+
+    refute_nil recovered
+    # Track 2 lands halfway between track 1 (20:00) and track 3 (20:06).
+    assert_equal Time.parse("2026-10-18T20:03:00Z"), recovered[:played_at]
+    assert_equal "jellyfin:t2:played", recovered[:source_event_id]
   end
 
   test "does not recover a dateless track that already has a dated play" do

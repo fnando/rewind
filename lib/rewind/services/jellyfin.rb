@@ -81,6 +81,33 @@ module Rewind
       # `since` (a LastPlayedDate string cursor; nil = full history).
       def played_items(user_id:, since: nil)
         cutoff = parse_time(since)
+        collected = dated_played_items(user_id, cutoff)
+
+        # On an incremental sync the descending scan stops at the cutoff, before
+        # it reaches IsPlayed items that have no DatePlayed (they sort last).
+        # Pull those too so played-but-undated tracks aren't stranded — but only
+        # ones on an album also played in this batch, so we have a session to
+        # place them in and don't re-resolve the whole undated backlog every
+        # sync. A full scan (no cutoff) already pages all the way down to them.
+        if cutoff
+          albums = {}
+          seen = {}
+          collected.each do |item|
+            seen[item["Id"]] = true
+            albums[item["ParentId"]] = true if item["ParentId"]
+          end
+          undated_played_items(user_id:).each do |item|
+            next unless albums[item["ParentId"]]
+
+            collected << item unless seen[item["Id"]]
+          end
+        end
+
+        collected
+      end
+
+      # The descending-by-DatePlayed scan: newest first, stopping at the cutoff.
+      private def dated_played_items(user_id, cutoff)
         collected = []
         start = 0
 
@@ -95,6 +122,38 @@ module Rewind
 
             collected << item
           end
+
+          start += items.size
+          break if start >= page["TotalRecordCount"].to_i
+          break if items.size < @page_size
+        end
+
+        collected
+      end
+
+      # IsPlayed items Jellyfin never stamped with a DatePlayed (e.g. clients
+      # that set the played flag but skip the progress API). Ascending by
+      # DatePlayed puts the undated rows first, so we collect the leading run
+      # and stop at the first dated row — bounded by the number of undated
+      # items, not the whole history.
+      def undated_played_items(user_id:)
+        collected = []
+        start = 0
+
+        loop do
+          page = get_items(user_id, start, order: "Ascending")
+          items = Array(page["Items"])
+          break if items.empty?
+
+          stop = false
+          items.each do |item|
+            if parse_time(item.dig("UserData", "LastPlayedDate"))
+              stop = true
+              break
+            end
+            collected << item
+          end
+          break if stop
 
           start += items.size
           break if start >= page["TotalRecordCount"].to_i
@@ -162,14 +221,14 @@ module Rewind
         []
       end
 
-      private def get_items(user_id, start_index)
+      private def get_items(user_id, start_index, order: "Descending")
         response = get(
           "#{@url}/Users/#{user_id}/Items",
           IncludeItemTypes: PLAYED_TYPES,
           Recursive: true,
           Filters: "IsPlayed",
           SortBy: "DatePlayed",
-          SortOrder: "Descending",
+          SortOrder: order,
           Fields: "ProviderIds,ParentIndexNumber,IndexNumber,SeriesId," \
                   "ParentId,DateCreated,PremiereDate,ProductionYear,Genres",
           Limit: @page_size,
