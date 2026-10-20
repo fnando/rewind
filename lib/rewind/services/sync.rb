@@ -87,17 +87,10 @@ module Rewind
       end
 
       module_function def record_play(source, play)
-        # The webhook usually settles a Jellyfin play before this minute's pull
-        # sees it, under a different source_event_id (its stop time vs our
-        # LastPlayedDate), so the unique index can't catch it — skip if the
-        # webhook (or a prior sync) already recorded this completion.
-        if source.type == "jellyfin" && Rewind::Play.jellyfin_recorded_near?(
-          user_id: source.user_id, item_id: play[:item_id],
-          played_at: play[:played_at]
-        )
-          return
-        end
-
+        # Both the pull and the webhook key a Jellyfin play on the same identity
+        # (jellyfin:<ItemId>:<LastPlayedDate>), so whichever lands second trips
+        # the (user_id, instance_id, source_event_id) unique index and is caught
+        # by the rescue below — no explicit dedup needed here.
         Rewind::Play.create(
           user_id: source.user_id,
           item_id: play[:item_id],

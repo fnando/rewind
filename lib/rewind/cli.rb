@@ -468,6 +468,15 @@ module Rewind
       say "Migrations complete."
     end
 
+    desc "dedupe-plays", "Collapse Jellyfin plays recorded by both the pull " \
+                         "sync and the webhook (start vs stop). Idempotent."
+    def dedupe_plays
+      CLI.load_env!(options)
+      CLI.boot_db!
+      removed = Rewind::Services::PlayDedup.run
+      say "Removed #{removed} duplicate #{removed == 1 ? 'play' : 'plays'}."
+    end
+
     desc "sync", "Sync plays from enabled sources"
     option :source, type: :numeric,
                     desc: "Only sync this source id (default: all enabled)"

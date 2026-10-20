@@ -7,15 +7,29 @@ module Rewind
     module Webhooks
       # Records plays from Jellyfin's generic webhook plugin — a push fallback
       # for the pull sync, which can miss a track when a client (e.g. Discrete)
-      # never settles its LastPlayedDate. We act only on a completed playback,
-      # resolve the track straight from the payload's MusicBrainz ids, and dedup
-      # against an overlapping pull play with a tight time window.
+      # never settles its LastPlayedDate. We act only on a completed playback
+      # (PlayedToCompletion) and resolve the track from the payload's
+      # MusicBrainz ids.
+      #
+      # Dedup is by identity, not time: the PlaybackStop payload carries the
+      # track's stop time but not its LastPlayedDate, so we re-fetch that date
+      # from Jellyfin and key the play on jellyfin:<ItemId>:<LastPlayedDate> —
+      # exactly how the pull keys it. The unique index then collapses the two
+      # into one row, immune to pauses. When Jellyfin never settled a date, we
+      # fall back to the stop time; the pull can't key such a play either, so
+      # there's nothing to collide with.
       module Jellyfin
         # Media types we record. Audio is the proven gap; widen as needed.
         SUPPORTED_TYPES = %w[Audio].freeze
 
         # Returns the created Play, or nil when the event is ignored/deduped.
         def self.record(payload)
+          # Dump the raw payload (debug only — it's noisy), whatever the type or
+          # outcome. Mirrors the pull sync's per-item dump, and shows which
+          # fields Jellyfin actually sends (e.g. LastPlayedDate, PlayCount).
+          Rewind.logger.debug(
+            "[webhook/jellyfin] payload: #{JSON.generate(payload)}"
+          )
           return unless actionable?(payload)
 
           source = source_for(payload)
@@ -24,22 +38,45 @@ module Rewind
           item = resolve(payload)
           return log_skip(payload, "could not resolve track") unless item
 
-          played_at = parse_time(payload["UtcTimestamp"])
+          # Prefer the track's LastPlayedDate (re-fetched from Jellyfin) so this
+          # play keys the same as the pull's; fall back to the stop time when
+          # Jellyfin never settled a date.
+          jellyfin_id = presence(payload["ItemId"])
+          last_played = fetch_last_played(source, jellyfin_id)
+          anchor = last_played || payload["UtcTimestamp"]
+          played_at = parse_time(anchor)
           return log_skip(payload, "no usable timestamp") unless played_at
-          if Play.jellyfin_recorded_near?(user_id: source.user_id,
-                                          item_id: item.id, played_at:)
-            return log_skip(payload, "pull already recorded it " \
-                                     "(within #{Play::JELLYFIN_DEDUP_WINDOW}s)")
-          end
 
-          play = create_play(source, item, payload, played_at)
+          event_id = "jellyfin:#{jellyfin_id}:#{anchor}"
+          play = create_play(source, item, event_id, played_at)
           Rewind.logger.info(
             "[webhook/jellyfin] recorded #{payload['Name'].inspect} -> " \
             "item #{item.id} @ #{played_at.utc.iso8601}"
           )
           play
         rescue Sequel::UniqueConstraintViolation
-          nil # exact re-delivery of the same event
+          nil # the pull (or a re-delivery) already recorded this play
+        end
+
+        # The track's LastPlayedDate as Jellyfin stores it (the raw string, so
+        # it matches the pull's key byte-for-byte), or nil when absent/missing.
+        # A re-fetch hiccup must never drop a play — we fall back to the stop
+        # time — so every failure degrades to nil.
+        def self.fetch_last_played(source, jellyfin_id)
+          return unless jellyfin_id && presence(source.access_token)
+
+          client = Services::Jellyfin.new(source.url,
+                                          token: source.access_token,
+                                          device_id: source.device_id)
+          item = client.item(user_id: source.external_user_id,
+                             item_id: jellyfin_id)
+          presence(item.dig("UserData", "LastPlayedDate"))
+        rescue StandardError => error
+          Rewind.logger.debug(
+            "[webhook/jellyfin] LastPlayedDate re-fetch failed: " \
+            "#{error.message}"
+          )
+          nil
         end
 
         def self.actionable?(payload)
@@ -83,14 +120,16 @@ module Rewind
           )
         end
 
-        def self.create_play(source, item, payload, played_at)
+        def self.create_play(source, item, event_id, played_at)
           Play.create(
             user_id: source.user_id,
             item_id: item.id,
             source: "jellyfin",
-            instance_id: presence(payload["ServerId"]),
-            source_event_id: "jellyfin:#{payload['ItemId']}:" \
-                             "#{payload['UtcTimestamp']}",
+            # The source's instance_id, not the payload's ServerId, so it
+            # matches the pull's key under the (user_id, instance_id,
+            # source_event_id) unique index (same server id, but guaranteed).
+            instance_id: source.instance_id,
+            source_event_id: event_id,
             played_at:
           )
         end
