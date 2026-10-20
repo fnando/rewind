@@ -337,6 +337,101 @@ class SourcesJellyfinTest < Minitest::Test
                      query: hash_including("ParentId" => "alb-1"))
   end
 
+  def stub_artist_albums(artist_id, items)
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
+           .with(query: hash_including("AlbumArtistIds" => artist_id,
+                                       "IncludeItemTypes" => "MusicAlbum"))
+           .to_return(status: 200,
+                      body: {"Items" => items}.to_json,
+                      headers: {"Content-Type" => "application/json"})
+  end
+
+  def album_item(id:, name:, mbid:)
+    {
+      "Id" => id, "Type" => "MusicAlbum", "Name" => name,
+      "AlbumArtist" => "Green Day",
+      "ProviderIds" => {
+        "MusicBrainzReleaseGroup" => mbid,
+        "MusicBrainzAlbumArtist" => "art-1"
+      }
+    }
+  end
+
+  # A played track carrying its MusicBrainz ids and the artist's Jellyfin id,
+  # so the artist resolves to the same mbid-based id as the backfilled albums.
+  def tagged_track(id: "a1", name: "Burnout")
+    audio_item(id:, name:, index: 1).merge(
+      "ProviderIds" => {
+        "MusicBrainzRecording" => "rec-#{id}",
+        "MusicBrainzReleaseGroup" => "rg-1",
+        "MusicBrainzAlbumArtist" => "art-1"
+      },
+      "AlbumArtists" => [{"Name" => "Green Day", "Id" => "jf-artist-1"}]
+    )
+  end
+
+  test "backfills an artist's unplayed albums from a played track" do
+    stub_album_tracks("alb-1", []) # the played track's own album backfill
+    stub_artist_albums("jf-artist-1", [
+      album_item(id: "alb-1", name: "Dookie", mbid: "rg-1"),
+      album_item(id: "alb-2", name: "Insomniac", mbid: "rg-2"),
+      album_item(id: "alb-3", name: "Nimrod", mbid: "rg-3")
+    ])
+
+    adapter.resolve(tagged_track)
+
+    artist = Rewind::Item.where(media_type: "artist").first
+    albums = Rewind::Item.where(media_type: "album").order(:title).all
+
+    assert_equal %w[Dookie Insomniac Nimrod], albums.map(&:title)
+    assert(albums.all? {|a| a.parent_external_id == artist.external_id })
+    # Backfilled albums carry no plays — plays come from recent_plays.
+    assert_equal 0, Rewind::Play.count
+  end
+
+  test "backfill_known_artists_albums fills a tracked artist's discography" do
+    artist = create_item(media_type: "artist", external_id: "mbid:artist:art-1",
+                         title: "Green Day")
+    # One album we already have, carrying the Jellyfin id we read the artist's
+    # own Jellyfin id from.
+    create_item(media_type: "album", external_id: "mbid:rg:rg-1",
+                parent_external_id: artist.external_id, title: "Dookie",
+                jellyfin_id: "alb-1")
+    stub_item("alb-1", "Type" => "MusicAlbum", "Name" => "Dookie",
+                       "AlbumArtists" => [
+                         {
+                           "Name" => "Green Day",
+                           "Id" => "jf-artist-1"
+                         }
+                       ])
+    stub_artist_albums("jf-artist-1", [
+      album_item(id: "alb-1", name: "Dookie", mbid: "rg-1"),
+      album_item(id: "alb-2", name: "Insomniac", mbid: "rg-2")
+    ])
+
+    count = adapter.backfill_known_artists_albums
+
+    assert_equal 1, count
+    albums = Rewind::Item.where(media_type: "album").order(:title)
+
+    assert_equal %w[Dookie Insomniac], albums.map(:title)
+    assert(albums.all? {|a| a.parent_external_id == artist.external_id })
+  end
+
+  test "fetches an artist's albums at most once per run" do
+    stub_album_tracks("alb-1", [])
+    stub_artist_albums("jf-artist-1",
+                       [album_item(id: "alb-1", name: "Dookie", mbid: "rg-1")])
+
+    client = adapter
+    client.resolve(tagged_track(id: "a1", name: "Burnout"))
+    client.resolve(tagged_track(id: "a2", name: "Chump"))
+
+    assert_requested(:get, %r{https://jf\.test/Users/u-1/Items},
+                     times: 1,
+                     query: hash_including("AlbumArtistIds" => "jf-artist-1"))
+  end
+
   test "skips a dateless audio track with no album session to anchor to" do
     stub_items([
       {

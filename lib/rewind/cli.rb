@@ -506,6 +506,31 @@ module Rewind
       say "Refreshed #{done} series."
     end
 
+    # TEMPORARY: artist pages list every album an artist is credited on, but
+    # existing libraries only have albums from tracks that were played. This
+    # pulls each known artist's full discography now. Remove once every library
+    # has been backfilled.
+    desc "backfill-artist-albums",
+         "Fill in every known artist's full album list from Jellyfin. " \
+         "Temporary."
+    def backfill_artist_albums
+      CLI.load_env!(options)
+      CLI.boot_db!
+
+      sources = Rewind::Source.where(type: "jellyfin", enabled: true)
+      abort("No enabled Jellyfin sources.") if sources.empty?
+
+      done = 0
+      sources.each do |source|
+        adapter = Rewind::Services::Sources::Jellyfin.new(source)
+        done += adapter.backfill_known_artists_albums
+      rescue StandardError => error
+        warn "Source #{source.id} failed: #{error.message}"
+      end
+
+      say "Backfilled albums for #{done} artists."
+    end
+
     desc "sync", "Sync plays from enabled sources"
     option :source, type: :numeric,
                     desc: "Only sync this source id (default: all enabled)"

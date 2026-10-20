@@ -60,6 +60,19 @@ module Rewind
         end
       end
 
+      # Build the artist -> album chain from an album payload alone (no track),
+      # so an artist's full discography can be listed even for albums the user
+      # never played. Returns the album Item, or nil without a title.
+      def resolve_album(title:, artist:, release_group_mbid: nil,
+                        artist_mbid: nil, release_date: nil, genres: nil,
+                        jellyfin_id: nil)
+        return if presence(title).nil?
+
+        artist_item = ensure_artist(artist_mbid, artist)
+        ensure_album(release_group_mbid, title, artist_item,
+                     release_date:, genres:, jellyfin_id:)
+      end
+
       private def ensure_artist(mbid, name)
         name = presence(name) || "Unknown Artist"
         external_id =

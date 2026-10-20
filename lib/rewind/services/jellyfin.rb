@@ -143,6 +143,25 @@ module Rewind
         []
       end
 
+      # Every album credited to an artist (by the artist's Jellyfin id), so an
+      # artist's full discography can be backfilled from one played track. Empty
+      # list on failure.
+      def artist_albums(user_id:, artist_id:)
+        response = get(
+          "#{@url}/Users/#{user_id}/Items",
+          AlbumArtistIds: artist_id,
+          IncludeItemTypes: "MusicAlbum",
+          Recursive: true,
+          SortBy: "PremiereDate,ProductionYear,SortName",
+          SortOrder: "Descending",
+          Fields: "ProviderIds,PremiereDate,ProductionYear,Genres",
+          Limit: 500
+        )
+        Array(JSON.parse(response.body.to_s)["Items"])
+      rescue Error
+        []
+      end
+
       private def get_items(user_id, start_index)
         response = get(
           "#{@url}/Users/#{user_id}/Items",

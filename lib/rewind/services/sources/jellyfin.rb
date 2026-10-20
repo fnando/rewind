@@ -35,6 +35,7 @@ module Rewind
           @series_tmdb = {}
           @folders = {}
           @albums_backfilled = {}
+          @artists_backfilled = {}
         end
 
         def recent_plays(since:)
@@ -257,6 +258,7 @@ module Rewind
           return unless track
 
           backfill_album(item)
+          backfill_artist_albums(item)
           track
         end
 
@@ -303,6 +305,80 @@ module Rewind
                                album_id: album_id).each do |sibling|
             music_item(sibling)
           end
+        end
+
+        # Pull every album the artist is credited on (even unplayed ones) so the
+        # artist page shows the full discography — the album analogue of
+        # backfill_album. Keyed on the artist's Jellyfin id from the played
+        # track, fetched at most once per artist per run, re-fetched next run to
+        # pick up newly-added albums. Each album resolves through the same
+        # MusicBrainz path, so a later play of a track dedupes onto it.
+        private def backfill_artist_albums(played_item)
+          artist = Array(played_item["AlbumArtists"]).first ||
+                   Array(played_item["ArtistItems"]).first
+          artist_id = artist && presence(artist["Id"])
+          return unless artist_id
+          return if @artists_backfilled.key?(artist_id)
+
+          @artists_backfilled[artist_id] = true
+          @client.artist_albums(user_id: @source.external_user_id,
+                                artist_id: artist_id).each do |album|
+            music_album(album)
+          end
+        end
+
+        # One-off backfill: fill in the full album list for every artist we
+        # already track — the same data a play now pulls in. Each artist's
+        # Jellyfin id isn't stored on the artist row, so read it from one of its
+        # albums' Jellyfin payloads. Returns how many artists were backfilled.
+        def backfill_known_artists_albums
+          count = 0
+          Rewind::Item.where(media_type: "artist").each do |artist|
+            artist_id = jellyfin_artist_id_for(artist)
+            next unless artist_id
+
+            @client.artist_albums(user_id: @source.external_user_id,
+                                  artist_id:).each {|album| music_album(album) }
+            count += 1
+          end
+          count
+        end
+
+        # The artist's Jellyfin id, read from one of its albums' Jellyfin
+        # payloads. nil when none of its albums came from Jellyfin.
+        private def jellyfin_artist_id_for(artist)
+          album = Rewind::Item
+                  .where(media_type: "album",
+                         parent_external_id: artist.external_id)
+                  .exclude(jellyfin_id: nil).first
+          return unless album
+
+          payload = @client.item(user_id: @source.external_user_id,
+                                 item_id: album.jellyfin_id)
+          credit = Array(payload["AlbumArtists"]).first ||
+                   Array(payload["ArtistItems"]).first
+          credit && presence(credit["Id"])
+        end
+
+        # The album analogue of music_item: resolves a Jellyfin MusicAlbum into
+        # an album Item via MusicBrainz, without a track.
+        private def music_album(item)
+          title = presence(item["Name"])
+          return unless title
+
+          ids = item["ProviderIds"] || {}
+          MusicBrainz.new.resolve_album(
+            title: title,
+            artist: presence(item["AlbumArtist"]) ||
+                    presence(Array(item["AlbumArtists"]).first&.dig("Name")) ||
+                    presence(Array(item["Artists"]).first),
+            release_group_mbid: presence(ids["MusicBrainzReleaseGroup"]),
+            artist_mbid: presence(ids["MusicBrainzAlbumArtist"]) ||
+                         presence(ids["MusicBrainzArtist"]),
+            release_date: premiere_date(item),
+            genres: item["Genres"],
+            jellyfin_id: presence(item["Id"])
+          )
         end
 
         # Episodes carry only their own ids; fetch the series' ProviderIds (once
