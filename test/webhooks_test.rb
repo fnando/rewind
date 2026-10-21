@@ -86,6 +86,26 @@ class WebhooksTest < Minitest::Test
     assert_equal 0, plays_for_track.count
   end
 
+  test "a malformed body is rejected and logged with a snippet" do
+    io = StringIO.new
+    level = Rewind.logger.level
+    Rewind.logger.reopen(io)
+    Rewind.logger.level = Logger::WARN
+
+    begin
+      post "/webhooks/jellyfin/#{@secret}", '{"Name": broken',
+           {"CONTENT_TYPE" => "application/json"}
+    ensure
+      Rewind.logger.level = level
+      Rewind.logger.reopen($stdout)
+    end
+
+    assert_equal 400, last_response.status
+    assert_includes io.string, "rejected: invalid json"
+    assert_includes io.string, "broken" # the body snippet is logged
+    assert_equal 0, plays_for_track.count
+  end
+
   test "an incomplete playback is ignored" do
     post_webhook(payload("PlayedToCompletion" => false))
 

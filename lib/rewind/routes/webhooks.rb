@@ -9,13 +9,24 @@ module Rewind
     # Rack::Protection allow_if in application.rb) — the secret is the auth.
     post "/webhooks/jellyfin/:secret" do
       webhook = Webhook.authenticate(params[:secret])
-      halt 401, "unauthorized" unless webhook
+      unless webhook
+        Rewind.logger.warn("[webhook/jellyfin] rejected: unknown secret")
+        halt 401, "unauthorized"
+      end
       webhook.update(last_used_at: Time.now)
 
+      body = request.body.read
       payload =
         begin
-          JSON.parse(request.body.read)
+          JSON.parse(body)
         rescue JSON::ParserError
+          # Log the body so a malformed Jellyfin webhook template is diagnosable
+          # instead of silently 400ing. inspect keeps it one line and shows the
+          # offending characters.
+          Rewind.logger.warn(
+            "[webhook/jellyfin] rejected: invalid json " \
+            "(#{body.bytesize} bytes): #{body[0, 200].inspect}"
+          )
           halt 400, "invalid json"
         end
 
