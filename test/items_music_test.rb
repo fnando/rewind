@@ -136,6 +136,22 @@ class ItemsMusicTest < Minitest::Test
 
     assert_equal 200, last_response.status
     assert_includes last_response.body, "/items/#{@album.id}"
+    assert_includes last_response.body, "title-hero__poster--square"
+    # Artists can be rated and reviewed like any other item.
+    assert_includes last_response.body, "/items/#{@artist.id}/rating"
+    assert_includes last_response.body, "/items/#{@artist.id}/review"
+  end
+
+  test "artist page lists albums newest first" do
+    @album.update(release_date: "1997-05-21") # OK Computer
+    newer = create_item(media_type: "album", external_id: "mbid:rg:ir",
+                        title: "In Rainbows", release_date: "2007-10-10",
+                        parent_external_id: @artist.external_id)
+
+    get "/items/#{@artist.id}"
+
+    assert_operator last_response.body.index("/items/#{newer.id}"), :<,
+                    last_response.body.index("/items/#{@album.id}")
   end
 
   test "artist page shows a flat list when no release type is known" do

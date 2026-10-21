@@ -1,7 +1,8 @@
 <% @page_title = @item.title %>
 <main class="page page--title">
   <section class="title-hero">
-    <img class="title-hero__poster" src="<%= poster_url(@item) %>" alt="">
+    <img class="title-hero__poster title-hero__poster--square"
+         src="<%= poster_url(@item) %>" alt="">
     <div class="title-hero__info">
       <div class="title-hero__heading">
         <span class="eyebrow">Artist</span>
@@ -9,6 +10,13 @@
         <span class="title-meta">
           <%= pluralize(@albums.size, "album") %>
         </span>
+      </div>
+
+      <div class="hero-actions">
+        <div class="hero-rating">
+          <span>Your rating</span>
+          <%= rating_input(@item, @user_item, current_user) %>
+        </div>
       </div>
     </div>
   </section>
@@ -29,4 +37,6 @@
       </section>
     <% end %>
   <% end %>
+
+  <%= erb :"_partials/review", locals: {item: @item, user_item: @user_item} %>
 </main>

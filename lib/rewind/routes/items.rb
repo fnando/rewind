@@ -259,9 +259,11 @@ module Rewind
           end
         erb :"items/show_album"
       when "artist"
+        # Newest first; undated albums (null release_date) sort last, then by
+        # title. Grouping into release-type sections preserves this order.
         @albums = Item.where(media_type: "album",
                              parent_external_id: @item.external_id)
-                      .order(:title).all
+                      .order(Sequel.desc(:release_date), :title).all
         @user_items_by_item = user_items_by_item_id(@albums)
         erb :"items/show_artist"
       else

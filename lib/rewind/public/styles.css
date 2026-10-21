@@ -1105,6 +1105,8 @@ select.input::-ms-expand { display: none; }
   object-fit: cover;
   background: var(--subtle);
 }
+/* Artist/album art is square, not a 2:3 poster. */
+.title-hero__poster--square { height: auto; aspect-ratio: 1 / 1; }
 .title-hero__info { flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .title-hero__heading { display: flex; flex-direction: column; gap: 6px; }
 .eyebrow {
@@ -1667,6 +1669,7 @@ select.input::-ms-expand { display: none; }
   .page--title { padding-top: 12px; gap: 26px; }
   .title-hero { gap: 18px; }
   .title-hero__poster { width: 120px; height: 180px; }
+  .title-hero__poster--square { height: auto; }
   .title-hero__info { flex-basis: 100%; }
   .title-hero h1 { font-size: 28px; }
   .hero-actions .btn--primary { width: 100%; }
