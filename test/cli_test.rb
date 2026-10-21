@@ -190,7 +190,7 @@ class CLITest < Minitest::Test
     assert_nil Rewind::Source[source.id]
   end
 
-  test "backfill-series-posters refreshes season posters from TMDB" do
+  test "backfill:series refreshes season posters from TMDB" do
     original_config = Rewind.config
     series = create_item(media_type: "series", external_id: "tmdb:1399",
                          title: "GoT",
@@ -203,10 +203,10 @@ class CLITest < Minitest::Test
     ])
 
     out, = with_env("TMDB_API_KEY" => "test-key") do
-      capture { Rewind::CLI.start(["backfill-series-posters"]) }
+      capture { Rewind::CLI.start(["backfill:series"]) }
     end
 
-    assert_includes out, "Refreshed 1 series."
+    assert_includes out, "Refreshed 1 of 1 series."
     posters = series.refresh.metadata["seasons"]
 
     assert_equal "/s1.jpg", posters.first["poster_path"]
@@ -214,12 +214,12 @@ class CLITest < Minitest::Test
     Rewind.config = original_config
   end
 
-  test "backfill-series-posters aborts without a TMDB key" do
+  test "backfill:series aborts without a TMDB key" do
     original_config = Rewind.config
     _out, err = with_env("TMDB_API_KEY" => "") do
       capture do
         assert_raises(SystemExit) do
-          Rewind::CLI.start(["backfill-series-posters"])
+          Rewind::CLI.start(["backfill:series"])
         end
       end
     end
@@ -229,8 +229,9 @@ class CLITest < Minitest::Test
     Rewind.config = original_config
   end
 
-  test "backfill-undated-plays records plays the full pull returns" do
+  test "backfill:undated-plays records plays the full pull returns" do
     original_config = Rewind.config
+    original_level = Rewind.logger.level
     create_source("https://undated.test")
     stub_tmdb_movie(27_205)
     WebMock.stub_request(:get, %r{https://undated\.test/Users/jf-1/Items})
@@ -250,11 +251,12 @@ class CLITest < Minitest::Test
                         ], "TotalRecordCount" => 1
                       }.to_json)
 
-    out, = capture { Rewind::CLI.start(["backfill-undated-plays"]) }
+    out, = capture { Rewind::CLI.start(["backfill:undated-plays"]) }
 
     assert_includes out, "Recorded 1 missing play."
     assert_equal 1, Rewind::Play.count
   ensure
     Rewind.config = original_config
+    Rewind.logger.level = original_level
   end
 end

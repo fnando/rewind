@@ -326,6 +326,97 @@ module Rewind
     end
   end
 
+  # On-demand refreshes. The sync fetches each item once and skips it while
+  # unchanged (fast, never stale for what it tracks), so these are the manual
+  # path to re-pull data that grows or changes out of band — new albums for an
+  # artist, new seasons of a show, or plays Jellyfin recorded without a date.
+  class BackfillCLI < Thor
+    class_option :env_file, type: :string,
+                            desc: "Dotenv file to load before executing"
+    class_option :environment, aliases: "-e", type: :string,
+                               desc: "Run environment (default: production)"
+
+    def self.exit_on_failure?
+      true
+    end
+
+    desc "series", "Refresh TMDB series metadata (season posters, new seasons)"
+    def series
+      Rewind::CLI.load_env!(options)
+      Rewind::CLI.boot_db!
+      if Rewind.config.tmdb_api_key.to_s.empty?
+        abort("TMDB_API_KEY not configured; nothing to backfill.")
+      end
+
+      tmdb = Rewind::Services::TMDB.new
+      series = Rewind::Item.where(media_type: "series")
+                           .where(Sequel.like(:external_id, "tmdb:%")).all
+      say "Refreshing #{series.size} series…"
+      done = 0
+      series.each_with_index do |item, i|
+        # Backdate so tv_item re-fetches instead of returning the cached row.
+        item.update(fetched_at: Time.at(0))
+        tmdb.tv_item(item.tmdb_id)
+        done += 1
+        say "  [#{i + 1}/#{series.size}] #{item.title}"
+      rescue StandardError => error
+        say "  [#{i + 1}/#{series.size}] skipped #{item.title}: " \
+            "#{error.message}"
+      end
+
+      say "Refreshed #{done} of #{series.size} series."
+    end
+
+    desc "artist-albums", "Pull every known artist's full discography"
+    def artist_albums
+      Rewind::CLI.load_env!(options)
+      Rewind::CLI.boot_db!
+
+      sources = Rewind::Source.where(type: "jellyfin", enabled: true)
+      abort("No enabled Jellyfin sources.") if sources.empty?
+
+      done = 0
+      sources.each do |source|
+        say "Source #{source.id} (#{source.url})…"
+        adapter = Rewind::Services::Sources::Jellyfin.new(source)
+        done += adapter.backfill_known_artists_albums do |name, albums|
+          say "  #{name} — #{albums} #{albums == 1 ? 'album' : 'albums'}"
+        end
+      rescue StandardError => error
+        say "  source #{source.id} failed: #{error.message}"
+      end
+
+      say "Backfilled albums for #{done} artists."
+    end
+
+    desc "undated-plays", "Record played tracks Jellyfin left without a date"
+    def undated_plays
+      Rewind::CLI.load_env!(options)
+      Rewind::CLI.boot_db!
+      # Surface the pull/resolve timings as it works — a full scan is slow.
+      Rewind.logger.level = Logger::INFO
+
+      sources = Rewind::Source.where(type: "jellyfin", enabled: true)
+      abort("No enabled Jellyfin sources.") if sources.empty?
+
+      recovered = 0
+      sources.each do |source|
+        say "Source #{source.id} (#{source.url}): scanning full history…"
+        adapter = Rewind::Services::Sources::Jellyfin.new(source)
+        plays = adapter.recent_plays(since: nil)[:plays]
+        written = plays.count do |play|
+          Rewind::Services::Sync.record_play(source, play) == :written
+        end
+        recovered += written
+        say "  recorded #{written} of #{plays.size} plays"
+      rescue StandardError => error
+        say "  source #{source.id} failed: #{error.message}"
+      end
+
+      say "Recorded #{recovered} missing #{recovered == 1 ? 'play' : 'plays'}."
+    end
+  end
+
   class CLI < Thor
     check_unknown_options!
 
@@ -477,88 +568,6 @@ module Rewind
       say "Removed #{removed} duplicate #{removed == 1 ? 'play' : 'plays'}."
     end
 
-    # TEMPORARY: season posters were added to series metadata after most
-    # libraries were already synced, so existing TMDB series carry no season
-    # art until their 7-day cache expires. This forces a refresh now. Remove
-    # once every library has been backfilled.
-    desc "backfill-series-posters",
-         "Refresh TMDB series metadata so season posters appear. Temporary."
-    def backfill_series_posters
-      CLI.load_env!(options)
-      CLI.boot_db!
-      if Rewind.config.tmdb_api_key.to_s.empty?
-        abort("TMDB_API_KEY not configured; nothing to backfill.")
-      end
-
-      tmdb = Rewind::Services::TMDB.new
-      scope = Rewind::Item.where(media_type: "series")
-                          .where(Sequel.like(:external_id, "tmdb:%"))
-      done = 0
-      scope.each do |series|
-        # Backdate so tv_item re-fetches instead of returning the cached row.
-        series.update(fetched_at: Time.at(0))
-        tmdb.tv_item(series.tmdb_id)
-        done += 1
-      rescue StandardError => error
-        warn "Skipped #{series.external_id}: #{error.message}"
-      end
-
-      say "Refreshed #{done} series."
-    end
-
-    # TEMPORARY: artist pages list every album an artist is credited on, but
-    # existing libraries only have albums from tracks that were played. This
-    # pulls each known artist's full discography now. Remove once every library
-    # has been backfilled.
-    desc "backfill-artist-albums",
-         "Fill in every known artist's full album list from Jellyfin. " \
-         "Temporary."
-    def backfill_artist_albums
-      CLI.load_env!(options)
-      CLI.boot_db!
-
-      sources = Rewind::Source.where(type: "jellyfin", enabled: true)
-      abort("No enabled Jellyfin sources.") if sources.empty?
-
-      done = 0
-      sources.each do |source|
-        adapter = Rewind::Services::Sources::Jellyfin.new(source)
-        done += adapter.backfill_known_artists_albums
-      rescue StandardError => error
-        warn "Source #{source.id} failed: #{error.message}"
-      end
-
-      say "Backfilled albums for #{done} artists."
-    end
-
-    # TEMPORARY: music clients that flip Jellyfin's Played flag without a play
-    # date left holes in the history before the undated-IsPlayed pull existed.
-    # This re-pulls each source's full history (now including those undated
-    # tracks) and records the missing plays. Idempotent. Remove once every
-    # library has been backfilled.
-    desc "backfill-undated-plays",
-         "Record played-but-undated tracks the pull used to miss. Temporary."
-    def backfill_undated_plays
-      CLI.load_env!(options)
-      CLI.boot_db!
-
-      sources = Rewind::Source.where(type: "jellyfin", enabled: true)
-      abort("No enabled Jellyfin sources.") if sources.empty?
-
-      recovered = 0
-      sources.each do |source|
-        adapter = Rewind::Services::Sources::Jellyfin.new(source)
-        adapter.recent_plays(since: nil)[:plays].each do |play|
-          recovered += 1 if Rewind::Services::Sync.record_play(source, play) ==
-                            :written
-        end
-      rescue StandardError => error
-        warn "Source #{source.id} failed: #{error.message}"
-      end
-
-      say "Recorded #{recovered} missing #{recovered == 1 ? 'play' : 'plays'}."
-    end
-
     desc "sync", "Sync plays from enabled sources"
     option :source, type: :numeric,
                     desc: "Only sync this source id (default: all enabled)"
@@ -652,6 +661,10 @@ module Rewind
 
     desc "webhooks SUBCOMMAND", "Manage webhook secrets"
     subcommand "webhooks", WebhooksCLI
+
+    desc "backfill SUBCOMMAND",
+         "Refresh data on demand (series, artist-albums, undated-plays)"
+    subcommand "backfill", BackfillCLI
 
     def self.start(given_args = ARGV, config = {})
       # Allow colon form: users:new -> users new

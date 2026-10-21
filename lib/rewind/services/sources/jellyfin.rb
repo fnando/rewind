@@ -426,19 +426,22 @@ module Rewind
           end
         end
 
-        # One-off backfill: fill in the full album list for every artist we
-        # already track — the same data a play now pulls in. Each artist's
-        # Jellyfin id isn't stored on the artist row, so read it from one of its
-        # albums' Jellyfin payloads. Returns how many artists were backfilled.
+        # Backfill the full album list for every artist we already track — the
+        # same data a play now pulls in. Each artist's Jellyfin id isn't stored
+        # on the artist row, so read it from one of its albums' Jellyfin
+        # payloads. Yields (artist title, album count) for progress reporting.
+        # Returns how many artists were backfilled.
         def backfill_known_artists_albums
           count = 0
           Rewind::Item.where(media_type: "artist").each do |artist|
             artist_id = jellyfin_artist_id_for(artist)
             next unless artist_id
 
-            @client.artist_albums(user_id: @source.external_user_id,
-                                  artist_id:).each {|album| music_album(album) }
+            albums = @client.artist_albums(user_id: @source.external_user_id,
+                                           artist_id:)
+            albums.each {|album| music_album(album) }
             count += 1
+            yield(artist.title, albums.size) if block_given?
           end
           count
         end
