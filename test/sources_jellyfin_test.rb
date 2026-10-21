@@ -7,6 +7,17 @@ class SourcesJellyfinTest < Minitest::Test
     @user = create_user
     @source = create_source(user_id: @user.id, url: "https://jf.test",
                             external_user_id: "u-1", access_token: "tok")
+    # The AudioMetadata plugin is optional; default to "not installed" so
+    # release-type lookups are a graceful no-op unless a test opts in.
+    WebMock.stub_request(:get, %r{https://jf\.test/AudioMetadata/Album/})
+           .to_return(status: 404)
+  end
+
+  def stub_release_type(album_id, type)
+    WebMock.stub_request(:get, "https://jf.test/AudioMetadata/Album/#{album_id}")
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {"Tracks" => [{"ReleaseType" => type}]}.to_json)
   end
 
   def adapter
@@ -414,6 +425,24 @@ class SourcesJellyfinTest < Minitest::Test
     assert(albums.all? {|a| a.parent_external_id == artist.external_id })
     # Backfilled albums carry no plays — plays come from recent_plays.
     assert_equal 0, Rewind::Play.count
+  end
+
+  test "caches an album's release type from the AudioMetadata plugin" do
+    stub_album_tracks("alb-1", [])
+    stub_artist_albums("jf-artist-1", [
+      album_item(id: "alb-1", name: "Dookie", mbid: "rg-1"),
+      album_item(id: "alb-2", name: "Insomniac", mbid: "rg-2")
+    ])
+    stub_release_type("alb-2", "EP")
+
+    adapter.resolve(tagged_track)
+
+    insomniac = Rewind::Item.where(title: "Insomniac").first
+    dookie = Rewind::Item.where(title: "Dookie").first
+
+    assert_equal "ep", insomniac.metadata["release_type"] # normalized, cached
+    # alb-1 has no plugin entry (default 404) — no type stored.
+    assert_nil dookie.metadata["release_type"]
   end
 
   test "backfill_known_artists_albums fills a tracked artist's discography" do

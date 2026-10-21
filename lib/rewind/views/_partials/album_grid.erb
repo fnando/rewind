@@ -1,0 +1,10 @@
+<%# A grid of album cover cards. locals: albums, user_items %>
+<ul class="cover-grid">
+  <% albums.each do |album| %>
+    <%= erb :"_partials/album_card", locals: {
+      album:,
+      detail: album.release_date.to_s[0, 4],
+      user_item: user_items[album.id]
+    } %>
+  <% end %>
+</ul>

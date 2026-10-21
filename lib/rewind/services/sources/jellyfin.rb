@@ -469,7 +469,7 @@ module Rewind
           return unless title
 
           ids = item["ProviderIds"] || {}
-          MusicBrainz.new.resolve_album(
+          album = MusicBrainz.new.resolve_album(
             title: title,
             artist: presence(item["AlbumArtist"]) ||
                     presence(Array(item["AlbumArtists"]).first&.dig("Name")) ||
@@ -481,6 +481,25 @@ module Rewind
             genres: item["Genres"],
             jellyfin_id: presence(item["Id"])
           )
+          stamp_release_type(album, item)
+          album
+        end
+
+        # Cache the album's release type from the AudioMetadata plugin the first
+        # time we see the album. Fetch-once: release type is stable, the plugin
+        # is optional (nil when absent), and a `backfill artist-albums` re-run
+        # fills any album still missing one.
+        private def stamp_release_type(album, item)
+          return unless album
+          return if album.metadata["release_type"]
+
+          id = presence(item["Id"]) || album.jellyfin_id
+          return unless id
+
+          type = @client.album_release_type(id)
+          return unless type
+
+          album.update(metadata: album.metadata.merge("release_type" => type))
         end
 
         # Episodes carry only their own ids; fetch the series' ProviderIds (once

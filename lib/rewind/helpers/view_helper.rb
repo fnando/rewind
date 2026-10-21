@@ -366,6 +366,39 @@ module Rewind
         %[<a class="content-link" href="/items/#{item.id}">#{h(text)}</a>]
       end
 
+      # Artist-page album sections, grouped by release type in a fixed order.
+      # Returns [[heading, albums], …], or nil when no album carries a release
+      # type (the plugin that supplies it is optional) — the caller then renders
+      # one flat list.
+      RELEASE_SECTIONS = [
+        %w[album Albums], %w[ep EPs], %w[single Singles],
+        %w[compilation Compilations], %w[other Other]
+      ].freeze
+
+      def album_type_sections(albums)
+        return if albums.none? {|album| album.metadata["release_type"] }
+
+        grouped = albums.group_by do |a|
+          release_bucket(a.metadata["release_type"])
+        end
+        RELEASE_SECTIONS.filter_map do |key, heading|
+          list = grouped[key]
+          [heading, list] if list && !list.empty?
+        end
+      end
+
+      # Collapse a raw MusicBrainz release type (which may combine primary and
+      # secondary types, e.g. "album compilation") into one display bucket.
+      private def release_bucket(type)
+        value = type.to_s.downcase
+        return "compilation" if value.include?("compilation")
+        return "ep" if value.include?("ep")
+        return "single" if value.include?("single")
+        return "album" if value.include?("album")
+
+        "other"
+      end
+
       def load_music_parents_for(plays)
         ids = plays.flat_map do |p|
           next [] unless p.item.media_type == "track"

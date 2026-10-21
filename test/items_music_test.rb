@@ -138,6 +138,26 @@ class ItemsMusicTest < Minitest::Test
     assert_includes last_response.body, "/items/#{@album.id}"
   end
 
+  test "artist page shows a flat list when no release type is known" do
+    get "/items/#{@artist.id}"
+
+    assert_includes last_response.body, ">Albums</h2>"
+    refute_includes last_response.body, ">Releases</h2>"
+  end
+
+  test "artist page groups albums into sections by release type" do
+    @album.update(metadata: @album.metadata.merge("release_type" => "album"))
+    create_item(media_type: "album", external_id: "mbid:rg:ep1",
+                title: "Airbag", parent_external_id: @artist.external_id,
+                metadata_json: {"release_type" => "ep"}.to_json)
+
+    get "/items/#{@artist.id}"
+
+    # Each release type is its own section heading.
+    assert_includes last_response.body, ">Albums</h2>"
+    assert_includes last_response.body, ">EPs</h2>"
+  end
+
   test "artist page albums use the history cover-card design" do
     @album.update(release_date: "1997-05-21")
 

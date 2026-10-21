@@ -214,6 +214,28 @@ class JellyfinServiceTest < Minitest::Test
     assert_empty tracks
   end
 
+  test "album_release_type reads the type from the AudioMetadata plugin" do
+    WebMock.stub_request(:get, "https://jf.test/AudioMetadata/Album/alb-9")
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {"Tracks" => [{"ReleaseType" => "Single"}]}.to_json)
+
+    type = Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
+                                     .album_release_type("alb-9")
+
+    assert_equal "single", type
+  end
+
+  test "album_release_type is nil when the plugin is absent" do
+    WebMock.stub_request(:get, "https://jf.test/AudioMetadata/Album/nope")
+           .to_return(status: 404)
+
+    type = Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
+                                     .album_release_type("nope")
+
+    assert_nil type
+  end
+
   test "played_items paginates until the records are exhausted" do
     stub_items({
                  "Items" => Array.new(2) do |n|

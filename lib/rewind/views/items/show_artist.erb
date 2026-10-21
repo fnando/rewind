@@ -13,20 +13,20 @@
     </div>
   </section>
 
-  <section class="section" aria-labelledby="albums-h">
-    <h2 id="albums-h">Albums</h2>
-    <% if @albums.empty? %>
+  <% if @albums.empty? %>
+    <section class="section">
+      <h2>Albums</h2>
       <p class="muted">No albums tracked for this artist yet.</p>
-    <% else %>
-      <ul class="cover-grid">
-        <% @albums.each do |album| %>
-          <%= erb :"_partials/album_card", locals: {
-            album:,
-            detail: album.release_date.to_s[0, 4],
-            user_item: @user_items_by_item[album.id]
-          } %>
-        <% end %>
-      </ul>
+    </section>
+  <% else %>
+    <%# One section per release type when known (Albums, EPs, Singles, …),
+        otherwise a single "Albums" section. %>
+    <% (album_type_sections(@albums) || [["Albums", @albums]]).each do |heading, albums| %>
+      <section class="section">
+        <h2><%= heading %></h2>
+        <%= erb :"_partials/album_grid",
+                locals: {albums:, user_items: @user_items_by_item} %>
+      </section>
     <% end %>
-  </section>
+  <% end %>
 </main>
