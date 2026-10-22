@@ -221,19 +221,31 @@ module Rewind
         []
       end
 
-      # The album's MusicBrainz release type ("album"/"single"/"ep"/…), read
-      # from the file tags by the AudioMetadata plugin. nil when the plugin
-      # isn't installed, the album is untagged, or the lookup fails — callers
-      # must treat the type as optional.
-      def album_release_type(album_id)
+      # The album's release type + MusicBrainz ids, read from the file tags by
+      # the AudioMetadata plugin. Jellyfin's own album payload often omits the
+      # release group (and sometimes the album artist) even for tagged files, so
+      # the discography backfill reads them from the tracks here. Returns
+      # {release_type:, release_group:, artist:} with nil fields when the plugin
+      # is absent, the album is untagged, or the lookup fails — callers must
+      # treat every field as optional.
+      def album_metadata(album_id)
         response = get("#{@url}/AudioMetadata/Album/#{album_id}")
         tracks = Array(JSON.parse(response.body.to_s)["Tracks"])
-        type = tracks.filter_map do |track|
-          track["ReleaseType"]
-        end.first.to_s.strip
-        type.empty? ? nil : type.downcase
+        raw = tracks.filter_map {|track| track["RawTags"] }
+
+        {
+          release_type: first_tag(tracks.map { it["ReleaseType"] })&.downcase,
+          release_group:
+            first_mbid(raw.map { it["MUSICBRAINZ_RELEASEGROUPID"] }),
+          artist: first_mbid(raw.map { it["MUSICBRAINZ_ALBUMARTISTID"] })
+        }
       rescue Error
-        nil
+        {}
+      end
+
+      # The album's MusicBrainz release type ("album"/"single"/"ep"/…), or nil.
+      def album_release_type(album_id)
+        album_metadata(album_id)[:release_type]
       end
 
       private def get_items(user_id, start_index, order: "Descending")
@@ -291,6 +303,19 @@ module Rewind
         Time.parse(value.to_s)
       rescue ArgumentError
         nil
+      end
+
+      private def first_tag(values)
+        values.map {|v| v.to_s.strip }.reject(&:empty?).first
+      end
+
+      # A RawTags id can carry several mbids joined by ';' or '/' (multi-artist
+      # tracks); take the first non-empty one.
+      private def first_mbid(values)
+        raw = first_tag(values)
+        return unless raw
+
+        raw.split(%r{[;/]}).first.strip
       end
     end
   end

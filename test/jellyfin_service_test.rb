@@ -236,6 +236,42 @@ class JellyfinServiceTest < Minitest::Test
     assert_nil type
   end
 
+  test "album_metadata reads the release group and artist from RawTags" do
+    WebMock.stub_request(:get, "https://jf.test/AudioMetadata/Album/alb-1")
+           .to_return(
+             status: 200, headers: {"Content-Type" => "application/json"},
+             body: {
+               "Tracks" => [
+                 {
+                   "ReleaseType" => "Album",
+                   "RawTags" => {
+                     "MUSICBRAINZ_RELEASEGROUPID" => "rg-1",
+                     # Multi-artist tracks join ids with ';'; we take the first.
+                     "MUSICBRAINZ_ALBUMARTISTID" => "art-1; art-2"
+                   }
+                 }
+               ]
+             }.to_json
+           )
+
+    meta = Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
+                                     .album_metadata("alb-1")
+
+    assert_equal "album", meta[:release_type]
+    assert_equal "rg-1", meta[:release_group]
+    assert_equal "art-1", meta[:artist]
+  end
+
+  test "album_metadata is empty when the plugin is absent" do
+    WebMock.stub_request(:get, "https://jf.test/AudioMetadata/Album/x")
+           .to_return(status: 404)
+
+    meta = Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
+                                     .album_metadata("x")
+
+    assert_empty meta
+  end
+
   test "played_items paginates until the records are exhausted" do
     stub_items({
                  "Items" => Array.new(2) do |n|

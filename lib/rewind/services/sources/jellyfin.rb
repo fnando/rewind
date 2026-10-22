@@ -36,6 +36,7 @@ module Rewind
           @folders = {}
           @albums_backfilled = {}
           @artists_backfilled = {}
+          @album_meta = {}
         end
 
         def recent_plays(since:)
@@ -366,15 +367,16 @@ module Rewind
           return unless title
 
           ids = item["ProviderIds"] || {}
+          release_group, artist_mbid =
+            album_mbids(ids, album_id: presence(item["ParentId"]))
           track = MusicBrainz.new.resolve(
             title: title,
             artist: presence(item["AlbumArtist"]) ||
                     presence(Array(item["Artists"]).first),
             album: presence(item["Album"]),
             recording_mbid: presence(ids["MusicBrainzRecording"]),
-            release_group_mbid: presence(ids["MusicBrainzReleaseGroup"]),
-            artist_mbid: presence(ids["MusicBrainzAlbumArtist"]) ||
-                         presence(ids["MusicBrainzArtist"]),
+            release_group_mbid: release_group,
+            artist_mbid: artist_mbid,
             length_ms: item["RunTimeTicks"].to_i / 10_000,
             track_number: positive_int(item["IndexNumber"]),
             disc_number: positive_int(item["ParentIndexNumber"]),
@@ -395,7 +397,12 @@ module Rewind
         # call), but always re-fetched on the next run — cheap, and it picks up
         # tracks added to the album since.
         private def backfill_album(played_item)
-          album_id = presence(played_item["ParentId"])
+          backfill_album_tracks(presence(played_item["ParentId"]))
+        end
+
+        # Resolve every track on an album (by its Jellyfin id) so the album's
+        # full mbid tracklist exists. Fetched at most once per album per run.
+        private def backfill_album_tracks(album_id)
           return unless album_id
           return if @albums_backfilled.key?(album_id)
 
@@ -426,11 +433,11 @@ module Rewind
           end
         end
 
-        # Backfill the full album list for every artist we already track — the
-        # same data a play now pulls in. Each artist's Jellyfin id isn't stored
-        # on the artist row, so read it from one of its albums' Jellyfin
-        # payloads. Yields (artist title, album count) for progress reporting.
-        # Returns how many artists were backfilled.
+        # Backfill the full album list — and each album's tracks — for every
+        # artist we already track. Each artist's Jellyfin id isn't stored on the
+        # artist row, so read it from one of its albums' Jellyfin payloads.
+        # Yields (artist title, album count) for progress reporting. Returns how
+        # many artists were backfilled.
         def backfill_known_artists_albums
           count = 0
           Rewind::Item.where(media_type: "artist").each do |artist|
@@ -439,7 +446,10 @@ module Rewind
 
             albums = @client.artist_albums(user_id: @source.external_user_id,
                                            artist_id:)
-            albums.each {|album| music_album(album) }
+            albums.each do |album|
+              music_album(album)
+              backfill_album_tracks(presence(album["Id"]))
+            end
             count += 1
             yield(artist.title, albums.size) if block_given?
           end
@@ -469,20 +479,47 @@ module Rewind
           return unless title
 
           ids = item["ProviderIds"] || {}
+          release_group, artist_mbid =
+            album_mbids(ids, album_id: presence(item["Id"]))
           album = MusicBrainz.new.resolve_album(
             title: title,
             artist: presence(item["AlbumArtist"]) ||
                     presence(Array(item["AlbumArtists"]).first&.dig("Name")) ||
                     presence(Array(item["Artists"]).first),
-            release_group_mbid: presence(ids["MusicBrainzReleaseGroup"]),
-            artist_mbid: presence(ids["MusicBrainzAlbumArtist"]) ||
-                         presence(ids["MusicBrainzArtist"]),
+            release_group_mbid: release_group,
+            artist_mbid: artist_mbid,
             release_date: premiere_date(item),
             genres: item["Genres"],
             jellyfin_id: presence(item["Id"])
           )
           stamp_release_type(album, item)
           album
+        end
+
+        # The release group + album-artist mbids for an audio item, from its own
+        # ProviderIds when present, else read from the album's file tags via the
+        # AudioMetadata plugin. Jellyfin frequently omits the release group (and
+        # sometimes the album artist) even for tagged files — on the track, the
+        # album, or both — so either side can fill the gap for the other.
+        private def album_mbids(ids, album_id:)
+          release_group = presence(ids["MusicBrainzReleaseGroup"])
+          artist = presence(ids["MusicBrainzAlbumArtist"]) ||
+                   presence(ids["MusicBrainzArtist"])
+          if release_group.nil? || artist.nil?
+            plugin = album_plugin_metadata(album_id)
+            release_group ||= presence(plugin[:release_group])
+            artist ||= presence(plugin[:artist])
+          end
+          [release_group, artist]
+        end
+
+        # Album MusicBrainz ids + release type from the AudioMetadata plugin,
+        # fetched once per album id (empty hashes are cached too, so a
+        # plugin-less server isn't re-hit).
+        private def album_plugin_metadata(album_id)
+          return {} unless album_id
+
+          @album_meta[album_id] ||= @client.album_metadata(album_id)
         end
 
         # Cache the album's release type from the AudioMetadata plugin the first
@@ -494,9 +531,7 @@ module Rewind
           return if album.metadata["release_type"]
 
           id = presence(item["Id"]) || album.jellyfin_id
-          return unless id
-
-          type = @client.album_release_type(id)
+          type = album_plugin_metadata(id)[:release_type]
           return unless type
 
           album.update(metadata: album.metadata.merge("release_type" => type))

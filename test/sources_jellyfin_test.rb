@@ -445,6 +445,39 @@ class SourcesJellyfinTest < Minitest::Test
     assert_nil dookie.metadata["release_type"]
   end
 
+  test "resolves an album to its mbid via the plugin when Jellyfin omits it" do
+    stub_album_tracks("alb-1", []) # the played track's own album backfill
+    # Jellyfin's album payload carries the artist but not the release group.
+    no_rg = {
+      "Id" => "alb-9", "Type" => "MusicAlbum", "Name" => "Kerplunk",
+      "AlbumArtist" => "Green Day",
+      "ProviderIds" => {"MusicBrainzAlbumArtist" => "art-1"}
+    }
+    stub_artist_albums("jf-artist-1", [no_rg])
+    # The plugin reads the release group from the album's file tags.
+    WebMock.stub_request(:get, "https://jf.test/AudioMetadata/Album/alb-9")
+           .to_return(
+             status: 200, headers: {"Content-Type" => "application/json"},
+             body: {
+               "Tracks" => [
+                 {
+                   "RawTags" => {
+                     "MUSICBRAINZ_RELEASEGROUPID" => "rg-9",
+                     "MUSICBRAINZ_ALBUMARTISTID" => "art-1"
+                   }
+                 }
+               ]
+             }.to_json
+           )
+
+    adapter.resolve(tagged_track)
+
+    kerplunk = Rewind::Item.where(title: "Kerplunk").first
+
+    assert_equal "mbid:rg:rg-9", kerplunk.external_id
+    assert_equal "mbid:artist:art-1", kerplunk.parent_external_id
+  end
+
   test "backfill_known_artists_albums fills a tracked artist's discography" do
     artist = create_item(media_type: "artist", external_id: "mbid:artist:art-1",
                          title: "Green Day")
@@ -464,6 +497,8 @@ class SourcesJellyfinTest < Minitest::Test
       album_item(id: "alb-1", name: "Dookie", mbid: "rg-1"),
       album_item(id: "alb-2", name: "Insomniac", mbid: "rg-2")
     ])
+    stub_album_tracks("alb-1", [])
+    stub_album_tracks("alb-2", [])
 
     count = adapter.backfill_known_artists_albums
 
@@ -472,6 +507,40 @@ class SourcesJellyfinTest < Minitest::Test
 
     assert_equal %w[Dookie Insomniac], albums.map(:title)
     assert(albums.all? {|a| a.parent_external_id == artist.external_id })
+  end
+
+  test "backfill_known_artists_albums also creates each album's tracks" do
+    artist = create_item(media_type: "artist",
+                         external_id: "mbid:artist:art-1", title: "Green Day")
+    create_item(media_type: "album", external_id: "mbid:rg:rg-1",
+                parent_external_id: artist.external_id, title: "Dookie",
+                jellyfin_id: "alb-1")
+    stub_item("alb-1", "Type" => "MusicAlbum", "Name" => "Dookie",
+                       "AlbumArtists" => [
+                         {
+                           "Name" => "Green Day",
+                           "Id" => "jf-artist-1"
+                         }
+                       ])
+    stub_artist_albums("jf-artist-1",
+                       [album_item(id: "alb-1", name: "Dookie", mbid: "rg-1")])
+    stub_album_tracks("alb-1", [
+      audio_item(id: "t1", name: "Burnout", index: 1).merge(
+        "ProviderIds" => {
+          "MusicBrainzRecording" => "rec-1",
+          "MusicBrainzReleaseGroup" => "rg-1",
+          "MusicBrainzAlbumArtist" => "art-1"
+        }
+      )
+    ])
+
+    adapter.backfill_known_artists_albums
+
+    track = Rewind::Item.where(media_type: "track", title: "Burnout").first
+
+    refute_nil track
+    assert_equal "mbid:rec-1", track.external_id
+    assert_equal "mbid:rg:rg-1", track.parent_external_id
   end
 
   test "fetches an artist's albums at most once per run" do
