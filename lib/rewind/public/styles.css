@@ -1543,6 +1543,14 @@ select.input::-ms-expand { display: none; }
 .rank-list__row--with-poster { grid-template-columns: 20px 32px minmax(80px, 140px) 1fr auto; }
 .rank-list__poster { width: 32px; height: 48px; object-fit: cover; border-radius: 3px; }
 
+/* Audio art is square — override the 2:3 poster used for film/TV. */
+.rank-panel--artists .rank-hero__poster,
+.rank-panel--albums .rank-hero__poster,
+.rank-panel--tracks .rank-hero__poster { height: 56px; }
+.rank-panel--artists .rank-list__poster,
+.rank-panel--albums .rank-list__poster,
+.rank-panel--tracks .rank-list__poster { height: 32px; }
+
 .rank-panel--shows .rank-list,
 .rank-panel--taste .rank-list { gap: 0; }
 .rank-panel--shows .rank-list__row,
