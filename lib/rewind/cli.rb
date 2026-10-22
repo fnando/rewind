@@ -7,8 +7,6 @@ module Rewind
   class UsersCLI < Thor
     class_option :env_file, type: :string,
                             desc: "Dotenv file to load before executing"
-    class_option :environment, aliases: "-e", type: :string,
-                               desc: "Run environment (default: production)"
 
     def self.exit_on_failure?
       true
@@ -126,8 +124,6 @@ module Rewind
   class SourcesCLI < Thor
     class_option :env_file, type: :string,
                             desc: "Dotenv file to load before executing"
-    class_option :environment, aliases: "-e", type: :string,
-                               desc: "Run environment (default: production)"
 
     def self.exit_on_failure?
       true
@@ -210,8 +206,6 @@ module Rewind
   class ImportCLI < Thor
     class_option :env_file, type: :string,
                             desc: "Dotenv file to load before executing"
-    class_option :environment, aliases: "-e", type: :string,
-                               desc: "Run environment (default: production)"
 
     def self.exit_on_failure?
       true
@@ -257,8 +251,6 @@ module Rewind
   class WebhooksCLI < Thor
     class_option :env_file, type: :string,
                             desc: "Dotenv file to load before executing"
-    class_option :environment, aliases: "-e", type: :string,
-                               desc: "Run environment (default: production)"
 
     def self.exit_on_failure?
       true
@@ -333,8 +325,6 @@ module Rewind
   class BackfillCLI < Thor
     class_option :env_file, type: :string,
                             desc: "Dotenv file to load before executing"
-    class_option :environment, aliases: "-e", type: :string,
-                               desc: "Run environment (default: production)"
 
     def self.exit_on_failure?
       true
@@ -466,8 +456,6 @@ module Rewind
   class ArtistsCLI < Thor
     class_option :env_file, type: :string,
                             desc: "Dotenv file to load before executing"
-    class_option :environment, aliases: "-e", type: :string,
-                               desc: "Run environment (default: production)"
 
     def self.exit_on_failure?
       true
@@ -531,11 +519,11 @@ module Rewind
       true
     end
 
-    # Loads an optional dotenv file, then resolves the run environment and
-    # exports it as APP_ENV/RACK_ENV so Sinatra, Puma, and the app's own env
-    # checks all agree — and so it applies before the app is loaded. The
-    # --environment flag wins, else a file/shell APP_ENV|RACK_ENV, else
-    # production. Runs for every command, not just `run`.
+    # Loads an optional dotenv file, then rebuilds the config from it. The run
+    # environment is whatever APP_ENV/RACK_ENV say (from the file or shell),
+    # read directly by Sinatra (Rewind::Application.development?/production?)
+    # and Config — so there's no flag and nothing to keep in sync. Runs for
+    # every command, not just `run`.
     def self.load_env!(options)
       path = options[:env_file]
       if path
@@ -543,10 +531,6 @@ module Rewind
         Dotenv.load(path)
       end
 
-      env = options[:environment] || ENV["APP_ENV"] || ENV["RACK_ENV"] ||
-            "production"
-      ENV["APP_ENV"] = env
-      ENV["RACK_ENV"] = env
       Rewind.config = Config.new
     end
 
@@ -570,8 +554,6 @@ module Rewind
 
     class_option :env_file, type: :string,
                             desc: "Dotenv file to load before executing"
-    class_option :environment, aliases: "-e", type: :string,
-                               desc: "Run environment (default: production)"
 
     desc "run", "Start the Rewind web server"
     option :port, type: :numeric

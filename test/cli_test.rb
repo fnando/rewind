@@ -90,26 +90,6 @@ class CLITest < Minitest::Test
     end
   end
 
-  test "load_env! exports the resolved environment as APP_ENV and RACK_ENV" do
-    original_config = Rewind.config
-
-    with_env("APP_ENV" => nil, "RACK_ENV" => nil) do
-      Rewind::CLI.load_env!(environment: "staging") # explicit flag wins
-
-      assert_equal "staging", ENV.fetch("APP_ENV")
-      assert_equal "staging", ENV.fetch("RACK_ENV")
-      assert_equal "staging", Rewind.config.environment
-    end
-
-    with_env("APP_ENV" => nil, "RACK_ENV" => nil) do
-      Rewind::CLI.load_env!({}) # nothing set anywhere
-
-      assert_equal "production", ENV.fetch("RACK_ENV")
-    end
-  ensure
-    Rewind.config = original_config
-  end
-
   test "users:new creates a user with a generated password" do
     out, = capture { Rewind::CLI.start(["users:new", "--username", "alice"]) }
 

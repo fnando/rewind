@@ -23,9 +23,10 @@ module Rewind
     set :method_override, true
     set :erb, escape_html: false
     set :sessions, false
-    set :show_exceptions, false
-    set :raise_errors, false
-    set :dump_errors, false
+    set :show_exceptions, development?
+    set :raise_errors, development?
+    set :dump_errors, development?
+    set :logging, development?
 
     use ImageStore
 
@@ -33,11 +34,11 @@ module Rewind
         key: "rewind.session",
         secret: Rewind.config.resolved_session_secret,
         same_site: :lax,
-        secure: ENV["RACK_ENV"] == "production",
+        secure: production?,
         httponly: true,
         expire_after: 60 * 60 * 24 * 30
 
-    unless ENV["RACK_ENV"] == "test"
+    unless test?
       use Rack::Protection,
           use: %i[
             authenticity_token form_token json_csrf remote_referrer
