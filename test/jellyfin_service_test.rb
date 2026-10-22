@@ -251,7 +251,8 @@ class JellyfinServiceTest < Minitest::Test
                    "RawTags" => {
                      "MUSICBRAINZ_RELEASETRACKID" => "rt-1",
                      # Multi-artist tracks join ids with ';'; we take the first.
-                     "MUSICBRAINZ_ALBUMARTISTID" => "art-1; art-2"
+                     "MUSICBRAINZ_ALBUMARTISTID" => "art-1; art-2",
+                     "ALBUMARTISTS" => "Artist One; Artist Two"
                    }
                  }
                ]
@@ -264,10 +265,26 @@ class JellyfinServiceTest < Minitest::Test
     assert_equal "album", meta[:release_type]
     assert_equal "rel-1", meta[:release]
     assert_equal "art-1", meta[:artist]
+    assert_equal "Artist One", meta[:artist_name]
     assert_equal(
       [{item_id: "jf-t1", release_track: "rt-1", recording: "rec-1"}],
       meta[:tracks]
     )
+  end
+
+  test "album_tracks and artist_albums ask for the structured AlbumArtists" do
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u/Items})
+           .to_return(status: 200, body: {"Items" => []}.to_json,
+                      headers: {"Content-Type" => "application/json"})
+    client = Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
+
+    client.album_tracks(user_id: "u", album_id: "alb")
+    client.artist_albums(user_id: "u", artist_id: "art")
+
+    pattern = %r{https://jf\.test/Users/u/Items}
+    assert_requested(:get, pattern, times: 2) do |req|
+      req.uri.query_values["Fields"].to_s.include?("AlbumArtists")
+    end
   end
 
   test "album_metadata is empty when the plugin is absent" do

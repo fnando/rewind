@@ -385,8 +385,7 @@ module Rewind
                           plugin_release_track(album_id, presence(item["Id"]))
           track = MusicBrainz.new.resolve(
             title: title,
-            artist: presence(item["AlbumArtist"]) ||
-                    presence(Array(item["Artists"]).first),
+            artist: album_artist_name(item, album_id),
             album: presence(item["Album"]),
             release_track_mbid: release_track,
             release_mbid: release,
@@ -555,9 +554,7 @@ module Rewind
                                              album_id: presence(item["Id"]))
           album = MusicBrainz.new.resolve_album(
             title: title,
-            artist: presence(item["AlbumArtist"]) ||
-                    presence(Array(item["AlbumArtists"]).first&.dig("Name")) ||
-                    presence(Array(item["Artists"]).first),
+            artist: album_artist_name(item, presence(item["Id"])),
             release_mbid: release,
             artist_mbid: artist_mbid,
             release_date: premiere_date(item),
@@ -575,15 +572,23 @@ module Rewind
         # AudioMetadata plugin. Jellyfin often omits these even for tagged files
         # — on the track, the album, or both — so either side fills the other.
         private def album_mbids(ids, album_id:)
-          release = presence(ids["MusicBrainzAlbum"])
-          artist = presence(ids["MusicBrainzAlbumArtist"]) ||
-                   presence(ids["MusicBrainzArtist"])
+          release = first_id(ids["MusicBrainzAlbum"])
+          artist = first_id(ids["MusicBrainzAlbumArtist"]) ||
+                   first_id(ids["MusicBrainzArtist"])
           if release.nil? || artist.nil?
             plugin = album_plugin_metadata(album_id)
             release ||= presence(plugin[:release])
             artist ||= presence(plugin[:artist])
           end
           [release, artist]
+        end
+
+        # The first id of a possibly multi-artist credit. A split release joins
+        # its album-artist ids with ";" (sometimes "/"); mbids never contain
+        # either, so take the first — the lead artist we parent under. Without
+        # this a combined "a; b" becomes a broken "mbid:artist:a; b" id.
+        private def first_id(value)
+          presence(presence(value)&.split(%r{[;/]})&.first)
         end
 
         # The release-track mbid for one track, from the album's file tags via
@@ -686,6 +691,19 @@ module Rewind
         private def presence(value)
           str = value.to_s.strip
           str.empty? ? nil : str
+        end
+
+        # The lead album-artist's name. The plugin's file tags are
+        # authoritative — they join a split credit with ";" so we can take the
+        # first cleanly (and a single name with a "/" survives). Jellyfin's own
+        # fields are the fallback: its structured AlbumArtists splits a credit
+        # per artist, while its flat AlbumArtist carries the combined "A / B"
+        # for a split (and can be empty), so they're preferred in that order.
+        private def album_artist_name(item, album_id)
+          presence(album_plugin_metadata(album_id)[:artist_name]) ||
+            presence(Array(item["AlbumArtists"]).first&.dig("Name")) ||
+            presence(item["AlbumArtist"]) ||
+            presence(Array(item["Artists"]).first)
         end
 
         # ----- Jellyfin-native fallback (no TMDB/MusicBrainz) -----

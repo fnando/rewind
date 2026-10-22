@@ -331,6 +331,96 @@ class SourcesJellyfinTest < Minitest::Test
     assert_requested(:get, "https://jf.test/Users/u-1/Items/jf-old", times: 1)
   end
 
+  test "a split release is credited to its first artist, not the pair" do
+    # Jellyfin collapses the album-artist mbid to one id, but the flat
+    # AlbumArtist string is the combined credit. The structured AlbumArtists is
+    # what tells us the primary is "New Found Glory".
+    item = adapter.resolve(
+      "Id" => "split-t1", "Type" => "Audio", "Name" => "Swiss Army Bro-Mance",
+      "Album" => "Swiss Army Bro-Mance", "ServerId" => "srv-1",
+      "AlbumArtist" => "New Found Glory / Dashboard Confessional",
+      "AlbumArtists" => [
+        {"Name" => "New Found Glory"},
+        {"Name" => "Dashboard Confessional"}
+      ],
+      "RunTimeTicks" => 1_280_000_000,
+      "ProviderIds" => {
+        "MusicBrainzTrack" => "rt-split", "MusicBrainzAlbum" => "rel-split",
+        "MusicBrainzAlbumArtist" => "nfg-id",
+        "MusicBrainzRecording" => "rec-split"
+      },
+      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+    )
+
+    assert_equal "New Found Glory", item.artist
+    assert_equal "mbid:artist:nfg-id", item.metadata["artist_external_id"]
+    artist = Rewind::Item.where(external_id: "mbid:artist:nfg-id").first
+    # The combined split credit never lands as the artist's name.
+    assert_equal "New Found Glory", artist.title
+  end
+
+  test "a split's combined id and name from the plugin collapse to the lead" do
+    # The real shape: Jellyfin hands us a combined album-artist id and an empty
+    # AlbumArtists, so only the plugin's ;-joined tags reveal the lead artist.
+    WebMock.stub_request(:get, "https://jf.test/AudioMetadata/Album/split-alb")
+           .to_return(
+             status: 200, headers: {"Content-Type" => "application/json"},
+             body: {
+               "Tracks" => [
+                 {
+                   "ItemId" => "split-t1",
+                   "RawTags" => {
+                     "MUSICBRAINZ_ALBUMID" => "rel-split",
+                     "MUSICBRAINZ_ALBUMARTISTID" => "nfg-id; dc-id",
+                     "ALBUMARTISTS" => "New Found Glory; Dashboard",
+                     "MUSICBRAINZ_RELEASETRACKID" => "rt-split"
+                   }
+                 }
+               ]
+             }.to_json
+           )
+    split = {
+      "Id" => "split-t1", "Type" => "Audio", "ParentId" => "split-alb",
+      "Name" => "The Swiss Army Romance", "Album" => "Swiss Army Bro-Mance",
+      "ServerId" => "srv-1", "AlbumArtists" => [],
+      "AlbumArtist" => "New Found Glory / Dashboard Confessional",
+      "RunTimeTicks" => 1_280_000_000,
+      "ProviderIds" => {
+        "MusicBrainzTrack" => "rt-split", "MusicBrainzAlbum" => "rel-split",
+        "MusicBrainzAlbumArtist" => "nfg-id; dc-id"
+      },
+      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+    }
+    stub_album_tracks("split-alb", [split])
+
+    item = adapter.resolve(split)
+
+    assert_equal "New Found Glory", item.artist
+    assert_equal "mbid:artist:nfg-id", item.metadata["artist_external_id"]
+    artist = Rewind::Item.where(external_id: "mbid:artist:nfg-id").first
+
+    assert_equal "New Found Glory", artist.title
+    # The combined credit never becomes its own (broken-id) artist.
+    assert_nil Rewind::Item.where(Sequel.like(:external_id, "%;%")).first
+  end
+
+  test "a single artist whose own name has a slash is kept intact" do
+    item = adapter.resolve(
+      "Id" => "bc-t1", "Type" => "Audio", "Name" => "Warriors",
+      "Album" => "Warriors", "ServerId" => "srv-1",
+      "AlbumArtist" => "Bad Cop/Bad Cop",
+      "AlbumArtists" => [{"Name" => "Bad Cop/Bad Cop"}],
+      "RunTimeTicks" => 1_280_000_000,
+      "ProviderIds" => {
+        "MusicBrainzTrack" => "rt-bc", "MusicBrainzAlbum" => "rel-bc",
+        "MusicBrainzAlbumArtist" => "bc-id"
+      },
+      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+    )
+
+    assert_equal "Bad Cop/Bad Cop", item.artist
+  end
+
   def audio_item(id:, name:, index:, parent_id: "alb-1")
     {
       "Id" => id, "Type" => "Audio", "Name" => name,

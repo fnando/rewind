@@ -212,7 +212,7 @@ module Rewind
           SortBy: "ParentIndexNumber,IndexNumber,SortName",
           SortOrder: "Ascending",
           Fields: "ProviderIds,ParentIndexNumber,IndexNumber,RunTimeTicks," \
-                  "PremiereDate,ProductionYear,Genres,Etag",
+                  "PremiereDate,ProductionYear,Genres,AlbumArtists,Etag",
           Limit: 500
         )
         Array(JSON.parse(response.body.to_s)["Items"])
@@ -231,7 +231,8 @@ module Rewind
           Recursive: true,
           SortBy: "PremiereDate,ProductionYear,SortName",
           SortOrder: "Descending",
-          Fields: "ProviderIds,PremiereDate,ProductionYear,Genres,Etag",
+          Fields: "ProviderIds,PremiereDate,ProductionYear,Genres," \
+                  "AlbumArtists,Etag",
           Limit: 500
         )
         Array(JSON.parse(response.body.to_s)["Items"])
@@ -243,11 +244,12 @@ module Rewind
       # the AudioMetadata plugin. Jellyfin's own album payload often omits the
       # release (and sometimes the album artist) even for tagged files, so the
       # discography backfill and the rekey migration read them from the tracks
-      # here. Returns {release_type:, release:, artist:, tracks:} — tracks is
-      # [{item_id:, release_track:, recording:}] — the per-track Jellyfin id,
-      # release-track mbid, and recording mbid. Fields are nil / tracks empty
-      # when the plugin is absent, the album is untagged, or the lookup fails —
-      # callers treat all of it as optional.
+      # here. Returns {release_type:, release:, artist:, artist_name:, tracks:}
+      # — tracks is [{item_id:, release_track:, recording:}] — the per-track
+      # Jellyfin id, release-track mbid, and recording mbid. `artist`/
+      # `artist_name` are the lead album-artist's id + name (first of a split
+      # credit). Fields are nil / tracks empty when the plugin is absent, the
+      # album is untagged, or the lookup fails — callers treat all as optional.
       def album_metadata(album_id)
         response = get("#{@url}/AudioMetadata/Album/#{album_id}")
         tracks = Array(JSON.parse(response.body.to_s)["Tracks"])
@@ -258,6 +260,9 @@ module Rewind
           release: first_mbid(tracks.map { it["MusicBrainzAlbumId"] } +
                               raw.map { it["MUSICBRAINZ_ALBUMID"] }),
           artist: first_mbid(raw.map { it["MUSICBRAINZ_ALBUMARTISTID"] }),
+          artist_name: first_name(raw.map { it["ALBUMARTISTS"] } +
+                                  raw.map { it["ALBUMARTIST"] } +
+                                  raw.map { it["ARTIST"] }),
           tracks: tracks.filter_map { album_track_entry(it) }
         }
       rescue Error
@@ -351,6 +356,14 @@ module Rewind
         return unless raw
 
         raw.split(%r{[;/]}).first.strip
+      end
+
+      # The first artist of a possibly multi-artist credit. Multi-artist tags
+      # join names with ';'; take the first. Split on ';' ONLY (never '/'), so a
+      # single artist whose name has a slash ("Bad Cop/Bad Cop") stays whole.
+      private def first_name(values)
+        raw = first_tag(values)
+        raw && raw.split(";").first.strip
       end
     end
   end
