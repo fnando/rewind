@@ -223,11 +223,12 @@ module Rewind
 
       # The album's release type + MusicBrainz ids, read from the file tags by
       # the AudioMetadata plugin. Jellyfin's own album payload often omits the
-      # release group (and sometimes the album artist) even for tagged files, so
-      # the discography backfill reads them from the tracks here. Returns
-      # {release_type:, release_group:, artist:} with nil fields when the plugin
-      # is absent, the album is untagged, or the lookup fails — callers must
-      # treat every field as optional.
+      # release (and sometimes the album artist) even for tagged files, so the
+      # discography backfill and the rekey migration read them from the tracks
+      # here. Returns {release_type:, release:, artist:, tracks:} — tracks is
+      # [{item_id:, release_track:}] — the per-track Jellyfin id + release-track
+      # mbid. Fields are nil / tracks empty when the plugin is absent, the album
+      # is untagged, or the lookup fails — callers treat all of it as optional.
       def album_metadata(album_id)
         response = get("#{@url}/AudioMetadata/Album/#{album_id}")
         tracks = Array(JSON.parse(response.body.to_s)["Tracks"])
@@ -235,12 +236,21 @@ module Rewind
 
         {
           release_type: first_tag(tracks.map { it["ReleaseType"] })&.downcase,
-          release_group:
-            first_mbid(raw.map { it["MUSICBRAINZ_RELEASEGROUPID"] }),
-          artist: first_mbid(raw.map { it["MUSICBRAINZ_ALBUMARTISTID"] })
+          release: first_mbid(tracks.map { it["MusicBrainzAlbumId"] } +
+                              raw.map { it["MUSICBRAINZ_ALBUMID"] }),
+          artist: first_mbid(raw.map { it["MUSICBRAINZ_ALBUMARTISTID"] }),
+          tracks: tracks.filter_map { album_track_entry(it) }
         }
       rescue Error
         {}
+      end
+
+      # {item_id:, release_track:} for one plugin track, or nil without both.
+      private def album_track_entry(track)
+        item_id = first_tag([track["ItemId"]])
+        raw = track["RawTags"] || {}
+        release_track = first_mbid([raw["MUSICBRAINZ_RELEASETRACKID"]])
+        {item_id:, release_track:} if item_id && release_track
       end
 
       # The album's MusicBrainz release type ("album"/"single"/"ep"/…), or nil.

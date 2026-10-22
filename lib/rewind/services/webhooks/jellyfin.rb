@@ -110,9 +110,8 @@ module Rewind
             title:,
             artist: presence(payload["Artist"]),
             album: presence(payload["Album"]),
-            recording_mbid: presence(payload["Provider_musicbrainzrecording"]),
-            release_group_mbid:
-              presence(payload["Provider_musicbrainzreleasegroup"]),
+            release_track_mbid: presence(payload["Provider_musicbrainztrack"]),
+            release_mbid: presence(payload["Provider_musicbrainzalbum"]),
             artist_mbid: presence(payload["Provider_musicbrainzartist"]),
             length_ms: payload["RunTimeTicks"].to_i / 10_000,
             release_date: presence(payload["PremiereDate"]),

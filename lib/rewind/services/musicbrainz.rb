@@ -28,35 +28,42 @@ module Rewind
 
       # The external_id for a real MusicBrainz id, by kind. One source of truth
       # for the id format, shared with the merge (Services::MusicMerge) that
-      # collapses synthetic items onto these.
-      def self.track_external_id(recording_mbid)
-        "mbid:#{recording_mbid}"
+      # collapses synthetic items onto these. Identity is release-scoped: an
+      # album is its release, a track its release-track — so editions stay
+      # distinct and a song shared across editions is one row per release. We
+      # never key on the release group (too coarse) or the recording (shared
+      # across editions).
+      def self.track_external_id(release_track_mbid)
+        "mbid:rt:#{release_track_mbid}" if presence(release_track_mbid)
       end
 
-      def self.album_external_id(release_group_mbid)
-        "mbid:rg:#{release_group_mbid}"
+      def self.album_external_id(release_mbid)
+        "mbid:release:#{release_mbid}" if presence(release_mbid)
+      end
+
+      def self.presence(value)
+        str = value.to_s.strip
+        str.empty? ? nil : str
       end
 
       def self.artist_external_id(artist_mbid)
         "mbid:artist:#{artist_mbid}"
       end
 
-      def resolve(title:, artist:, album:, recording_mbid: nil,
-                  release_group_mbid: nil, artist_mbid: nil, length_ms: nil,
-                  track_number: nil, disc_number: nil, release_date: nil,
-                  genres: nil, jellyfin_id: nil, album_jellyfin_id: nil)
+      def resolve(title:, artist:, album:, release_track_mbid: nil,
+                  release_mbid: nil, artist_mbid: nil,
+                  length_ms: nil, track_number: nil, disc_number: nil,
+                  release_date: nil, genres: nil, jellyfin_id: nil,
+                  album_jellyfin_id: nil)
         return if presence(title).nil?
 
         artist_item = ensure_artist(artist_mbid, artist)
-        album_item = ensure_album(release_group_mbid, album, artist_item,
+        album_item = ensure_album(release_mbid, album, artist_item,
                                   release_date:, genres:,
                                   jellyfin_id: album_jellyfin_id)
         external_id =
-          if presence(recording_mbid)
-            self.class.track_external_id(recording_mbid)
-          else
-            canonical(synthetic_id("track", "#{artist}/#{album}/#{title}"))
-          end
+          self.class.track_external_id(release_track_mbid) ||
+          canonical(synthetic_id("track", "#{artist}/#{album}/#{title}"))
 
         upsert(external_id, "track") do |existing|
           {
@@ -78,13 +85,12 @@ module Rewind
       # Build the artist -> album chain from an album payload alone (no track),
       # so an artist's full discography can be listed even for albums the user
       # never played. Returns the album Item, or nil without a title.
-      def resolve_album(title:, artist:, release_group_mbid: nil,
-                        artist_mbid: nil, release_date: nil, genres: nil,
-                        jellyfin_id: nil)
+      def resolve_album(title:, artist:, release_mbid: nil, artist_mbid: nil,
+                        release_date: nil, genres: nil, jellyfin_id: nil)
         return if presence(title).nil?
 
         artist_item = ensure_artist(artist_mbid, artist)
-        ensure_album(release_group_mbid, title, artist_item,
+        ensure_album(release_mbid, title, artist_item,
                      release_date:, genres:, jellyfin_id:)
       end
 
@@ -109,15 +115,12 @@ module Rewind
         end
       end
 
-      private def ensure_album(mbid, title, artist, release_date: nil,
-                               genres: nil, jellyfin_id: nil)
+      private def ensure_album(release_mbid, title, artist,
+                               release_date: nil, genres: nil, jellyfin_id: nil)
         title = presence(title) || "Unknown Album"
         external_id =
-          if presence(mbid)
-            self.class.album_external_id(mbid)
-          else
-            canonical(synthetic_id("album", "#{artist.title}/#{title}"))
-          end
+          self.class.album_external_id(release_mbid) ||
+          canonical(synthetic_id("album", "#{artist.title}/#{title}"))
 
         upsert(external_id, "album") do |existing|
           genres = Array(genres).filter_map {|g| presence(g) }
@@ -131,7 +134,7 @@ module Rewind
             # have when a given track's payload is missing them.
             release_date: presence(release_date) || existing&.release_date,
             jellyfin_id: presence(jellyfin_id) || existing&.jellyfin_id,
-            poster_path: (cover_art_url(mbid) if presence(mbid)),
+            poster_path: cover_art_url(release_mbid),
             metadata: {
               "artist" => artist.title,
               "artist_external_id" => artist.external_id,
@@ -154,8 +157,11 @@ module Rewind
         }
       end
 
-      private def cover_art_url(rg_mbid)
-        "#{COVER_ART_URL}/release-group/#{rg_mbid}/front-250"
+      # Cover Art Archive art for the album's release. nil without a release.
+      private def cover_art_url(release_mbid)
+        return unless presence(release_mbid)
+
+        "#{COVER_ART_URL}/release/#{release_mbid}/front-250"
       end
 
       private def ms_to_minutes(length_ms)

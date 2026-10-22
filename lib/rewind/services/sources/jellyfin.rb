@@ -367,15 +367,17 @@ module Rewind
           return unless title
 
           ids = item["ProviderIds"] || {}
-          release_group, artist_mbid =
-            album_mbids(ids, album_id: presence(item["ParentId"]))
+          album_id = presence(item["ParentId"])
+          release, artist_mbid = album_mbids(ids, album_id:)
+          release_track = presence(ids["MusicBrainzTrack"]) ||
+                          plugin_release_track(album_id, presence(item["Id"]))
           track = MusicBrainz.new.resolve(
             title: title,
             artist: presence(item["AlbumArtist"]) ||
                     presence(Array(item["Artists"]).first),
             album: presence(item["Album"]),
-            recording_mbid: presence(ids["MusicBrainzRecording"]),
-            release_group_mbid: release_group,
+            release_track_mbid: release_track,
+            release_mbid: release,
             artist_mbid: artist_mbid,
             length_ms: item["RunTimeTicks"].to_i / 10_000,
             track_number: positive_int(item["IndexNumber"]),
@@ -383,7 +385,7 @@ module Rewind
             release_date: premiere_date(item),
             genres: item["Genres"],
             jellyfin_id: presence(item["Id"]),
-            album_jellyfin_id: presence(item["ParentId"])
+            album_jellyfin_id: album_id
           )
           stamp_source_etag(track, item)
           track
@@ -456,6 +458,21 @@ module Rewind
           count
         end
 
+        # After a full backfill has re-resolved every album, drop albums still
+        # keyed by release group whose tracks have all re-parented onto a
+        # release-keyed twin (leaving them childless). A release-group-only
+        # album keeps its tracks, so it's never childless. DB-only; returns how
+        # many were removed.
+        def self.prune_orphaned_albums
+          parented = Rewind::Item.where(media_type: "track")
+                                 .exclude(parent_external_id: nil)
+                                 .select(:parent_external_id)
+          Rewind::Item.where(media_type: "album")
+                      .where(Sequel.like(:external_id, "mbid:rg:%"))
+                      .exclude(external_id: parented)
+                      .delete
+        end
+
         # The artist's Jellyfin id, read from one of its albums' Jellyfin
         # payloads. nil when none of its albums came from Jellyfin.
         private def jellyfin_artist_id_for(artist)
@@ -479,14 +496,14 @@ module Rewind
           return unless title
 
           ids = item["ProviderIds"] || {}
-          release_group, artist_mbid =
-            album_mbids(ids, album_id: presence(item["Id"]))
+          release, artist_mbid = album_mbids(ids,
+                                             album_id: presence(item["Id"]))
           album = MusicBrainz.new.resolve_album(
             title: title,
             artist: presence(item["AlbumArtist"]) ||
                     presence(Array(item["AlbumArtists"]).first&.dig("Name")) ||
                     presence(Array(item["Artists"]).first),
-            release_group_mbid: release_group,
+            release_mbid: release,
             artist_mbid: artist_mbid,
             release_date: premiere_date(item),
             genres: item["Genres"],
@@ -496,21 +513,31 @@ module Rewind
           album
         end
 
-        # The release group + album-artist mbids for an audio item, from its own
+        # The release + album-artist mbids for an audio item, from its own
         # ProviderIds when present, else read from the album's file tags via the
-        # AudioMetadata plugin. Jellyfin frequently omits the release group (and
-        # sometimes the album artist) even for tagged files — on the track, the
-        # album, or both — so either side can fill the gap for the other.
+        # AudioMetadata plugin. Jellyfin often omits these even for tagged files
+        # — on the track, the album, or both — so either side fills the other.
         private def album_mbids(ids, album_id:)
-          release_group = presence(ids["MusicBrainzReleaseGroup"])
+          release = presence(ids["MusicBrainzAlbum"])
           artist = presence(ids["MusicBrainzAlbumArtist"]) ||
                    presence(ids["MusicBrainzArtist"])
-          if release_group.nil? || artist.nil?
+          if release.nil? || artist.nil?
             plugin = album_plugin_metadata(album_id)
-            release_group ||= presence(plugin[:release_group])
+            release ||= presence(plugin[:release])
             artist ||= presence(plugin[:artist])
           end
-          [release_group, artist]
+          [release, artist]
+        end
+
+        # The release-track mbid for one track, from the album's file tags via
+        # the plugin, matched by the track's Jellyfin id. Used when Jellyfin's
+        # own track payload omits MusicBrainzTrack.
+        private def plugin_release_track(album_id, track_jellyfin_id)
+          return unless album_id && track_jellyfin_id
+
+          entry = Array(album_plugin_metadata(album_id)[:tracks])
+                  .find {|t| t[:item_id] == track_jellyfin_id }
+          entry && presence(entry[:release_track])
         end
 
         # Album MusicBrainz ids + release type from the AudioMetadata plugin,

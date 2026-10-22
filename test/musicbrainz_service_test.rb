@@ -13,18 +13,18 @@ class MusicBrainzServiceTest < Minitest::Test
   end
 
   test "resolve with mbids builds the artist, album and track chain" do
-    track = resolve(recording_mbid: "rec-1", release_group_mbid: "rg-1",
+    track = resolve(release_track_mbid: "rt-1", release_mbid: "rel-1",
                     artist_mbid: "a-1", length_ms: 240_000)
 
     assert_equal "track", track.media_type
-    assert_equal "mbid:rec-1", track.external_id
-    assert_equal "mbid:rg:rg-1", track.parent_external_id
+    assert_equal "mbid:rt:rt-1", track.external_id
+    assert_equal "mbid:release:rel-1", track.parent_external_id
     assert_equal "Black Sabbath", track.artist
     assert_equal "Paranoid", track.album
     assert_equal 4, track.runtime
-    assert_includes track.poster_path, "coverartarchive.org/release-group/rg-1"
+    assert_includes track.poster_path, "coverartarchive.org/release/rel-1"
 
-    album = Rewind::Item.where(external_id: "mbid:rg:rg-1").first
+    album = Rewind::Item.where(external_id: "mbid:release:rel-1").first
 
     assert_equal "album", album.media_type
     assert_equal "mbid:artist:a-1", album.parent_external_id
@@ -161,5 +161,35 @@ class MusicBrainzServiceTest < Minitest::Test
     again = resolve(artist: "Ghost", album: "Prequelle", title: "Rats")
 
     assert_equal synth, again.metadata["artist_external_id"]
+  end
+
+  test "a track without a release-track id falls back to synthetic" do
+    track = resolve(release_mbid: "rel-1", artist_mbid: "a-1")
+
+    assert track.external_id.start_with?("mbid:synthetic:track:")
+    # The album still resolves by its release id.
+    assert_equal "mbid:release:rel-1", track.parent_external_id
+  end
+
+  test "an album without a release id is synthetic (never a group)" do
+    track = resolve(release_track_mbid: "rt-1", artist_mbid: "a-1")
+
+    album = Rewind::Item.where(external_id: track.parent_external_id).first
+
+    assert album.external_id.start_with?("mbid:synthetic:album:")
+    refute_includes Rewind::Item.map(:external_id).join, "mbid:rg:"
+  end
+
+  test "the same song on two releases resolves to separate tracks + albums" do
+    resolve(title: "Turning Back", release_track_mbid: "rt-us",
+            release_mbid: "rel-us", artist_mbid: "a-1")
+    resolve(title: "Turning Back", release_track_mbid: "rt-jp",
+            release_mbid: "rel-jp", artist_mbid: "a-1")
+
+    tracks = Rewind::Item.where(media_type: "track").map(:external_id).sort
+    albums = Rewind::Item.where(media_type: "album").map(:external_id).sort
+
+    assert_equal ["mbid:rt:rt-jp", "mbid:rt:rt-us"], tracks
+    assert_equal ["mbid:release:rel-jp", "mbid:release:rel-us"], albums
   end
 end
