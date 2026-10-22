@@ -38,10 +38,12 @@ module Rewind
           item = resolve(payload)
           return log_skip(payload, "could not resolve track") unless item
 
+          jellyfin_id = presence(payload["ItemId"])
+          archive(payload, item, source, jellyfin_id)
+
           # Prefer the track's LastPlayedDate (re-fetched from Jellyfin) so this
           # play keys the same as the pull's; fall back to the stop time when
           # Jellyfin never settled a date.
-          jellyfin_id = presence(payload["ItemId"])
           last_played = fetch_last_played(source, jellyfin_id)
           anchor = last_played || payload["UtcTimestamp"]
           played_at = parse_time(anchor)
@@ -65,11 +67,8 @@ module Rewind
         def self.fetch_last_played(source, jellyfin_id)
           return unless jellyfin_id && presence(source.access_token)
 
-          client = Services::Jellyfin.new(source.url,
-                                          token: source.access_token,
-                                          device_id: source.device_id)
-          item = client.item(user_id: source.external_user_id,
-                             item_id: jellyfin_id)
+          item = client_for(source).item(user_id: source.external_user_id,
+                                         item_id: jellyfin_id)
           presence(item.dig("UserData", "LastPlayedDate"))
         rescue StandardError => error
           Rewind.logger.debug(
@@ -77,6 +76,30 @@ module Rewind
             "#{error.message}"
           )
           nil
+        end
+
+        def self.client_for(source)
+          Services::Jellyfin.new(source.url,
+                                 token: source.access_token,
+                                 device_id: source.device_id)
+        end
+
+        # Record this id -> track + recording in the archive, and on the id's
+        # first sighting run the re-tag healer so a re-tagged file's stranded
+        # play is pulled onto the row the webhook just resolved. Mirrors the
+        # pull's archive_track. Keyed on the payload's ServerId (per-instance).
+        def self.archive(payload, item, source, jellyfin_id)
+          instance = presence(payload["ServerId"]) || source.instance_id
+          recording = presence(payload["Provider_musicbrainzrecording"])
+          if recording && !JellyfinArchive.seen?(jellyfin_id, instance)
+            JellyfinArchive.reconcile(
+              target: item, recording_mbid: recording, instance_id: instance,
+              user_id: source.external_user_id, client: client_for(source)
+            )
+          end
+          JellyfinArchive.remember(item:, jellyfin_id:, media_type: "track",
+                                   instance_id: instance,
+                                   recording_mbid: recording)
         end
 
         def self.actionable?(payload)

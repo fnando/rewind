@@ -269,6 +269,68 @@ class SourcesJellyfinTest < Minitest::Test
     assert_equal "Green Day", item.artist
   end
 
+  # A track re-tagged onto a new release: it carries a new Jellyfin id and
+  # release-track, but the same recording as the row we already played.
+  def retagged_track
+    {
+      "Id" => "jf-new", "Type" => "Audio", "Name" => "The Thief",
+      "Album" => "Mmhmm", "AlbumArtist" => "Relient K", "ServerId" => "srv-1",
+      "ParentId" => "alb-1", "RunTimeTicks" => 1_280_000_000,
+      "ProviderIds" => {
+        "MusicBrainzTrack" => "rt-new", "MusicBrainzAlbum" => "rel-1",
+        "MusicBrainzAlbumArtist" => "art-1", "MusicBrainzRecording" => "rec-1"
+      },
+      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+    }
+  end
+
+  # Seed a stranded, played row under the old release + id, archived with the
+  # recording that survives the re-tag.
+  def stranded_old_play
+    old = create_item(media_type: "track", external_id: "mbid:rt:rt-old",
+                      parent_external_id: "mbid:release:rel-old",
+                      title: "The Thief", jellyfin_id: "jf-old",
+                      metadata_json: {}.to_json)
+    Rewind::Play.create(user_id: @user.id, item_id: old.id, source: "jellyfin",
+                        instance_id: "srv-1", source_event_id: "e-old",
+                        played_at: Time.parse("2026-10-10T12:00:00Z"))
+    Rewind::Services::JellyfinArchive.remember(
+      item: old, jellyfin_id: "jf-old", media_type: "track",
+      instance_id: "srv-1", recording_mbid: "rec-1"
+    )
+    old
+  end
+
+  test "a re-tagged track's new id reclaims the stranded play by recording" do
+    old = stranded_old_play
+    stub_album_tracks("alb-1", [retagged_track]) # backfill re-lists the album
+    # The old file is gone (re-tagged away) -> its id 404s.
+    WebMock.stub_request(:get, "https://jf.test/Users/u-1/Items/jf-old")
+           .to_return(status: 404)
+
+    item = adapter.resolve(retagged_track)
+
+    assert_equal "mbid:rt:rt-new", item.external_id
+    assert_nil Rewind::Item[old.id]
+    assert_equal 1, Rewind::Play.where(item_id: item.id).count
+    assert_equal 0, Rewind::Play.where(item_id: old.id).count
+    assert_empty Rewind::Services::Streaks.verify(@user)
+  end
+
+  test "the re-tag healer runs only on the id's first sighting" do
+    stranded_old_play
+    stub_album_tracks("alb-1", [retagged_track])
+    WebMock.stub_request(:get, "https://jf.test/Users/u-1/Items/jf-old")
+           .to_return(status: 404)
+
+    client = adapter
+    client.resolve(retagged_track)
+    client.resolve(retagged_track) # second sync: jf-new already archived
+
+    # The staleness check fired once; the second resolve skipped reconcile.
+    assert_requested(:get, "https://jf.test/Users/u-1/Items/jf-old", times: 1)
+  end
+
   def audio_item(id:, name:, index:, parent_id: "alb-1")
     {
       "Id" => id, "Type" => "Audio", "Name" => name,

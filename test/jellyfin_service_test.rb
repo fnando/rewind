@@ -236,7 +236,7 @@ class JellyfinServiceTest < Minitest::Test
     assert_nil type
   end
 
-  test "album_metadata reads release, artist and per-track release-track" do
+  test "album_metadata reads release, artist and per-track ids" do
     WebMock.stub_request(:get, "https://jf.test/AudioMetadata/Album/alb-1")
            .to_return(
              status: 200, headers: {"Content-Type" => "application/json"},
@@ -246,6 +246,8 @@ class JellyfinServiceTest < Minitest::Test
                    "ItemId" => "jf-t1",
                    "ReleaseType" => "Album",
                    "MusicBrainzAlbumId" => "rel-1",
+                   # The plugin's curated recording id.
+                   "MusicBrainzTrackId" => "rec-1",
                    "RawTags" => {
                      "MUSICBRAINZ_RELEASETRACKID" => "rt-1",
                      # Multi-artist tracks join ids with ';'; we take the first.
@@ -262,7 +264,10 @@ class JellyfinServiceTest < Minitest::Test
     assert_equal "album", meta[:release_type]
     assert_equal "rel-1", meta[:release]
     assert_equal "art-1", meta[:artist]
-    assert_equal [{item_id: "jf-t1", release_track: "rt-1"}], meta[:tracks]
+    assert_equal(
+      [{item_id: "jf-t1", release_track: "rt-1", recording: "rec-1"}],
+      meta[:tracks]
+    )
   end
 
   test "album_metadata is empty when the plugin is absent" do
@@ -273,6 +278,25 @@ class JellyfinServiceTest < Minitest::Test
                                      .album_metadata("x")
 
     assert_empty meta
+  end
+
+  def item_present?(status)
+    WebMock.stub_request(:get, "https://jf.test/Users/u/Items/it")
+           .to_return(status: status)
+    Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
+                              .item_present?(user_id: "u", item_id: "it")
+  end
+
+  test "item_present? maps status to a tri-state (404 alone means gone)" do
+    # 2xx -> present, 404 -> gone, anything else -> unknown (never a false
+    # delete, so an outage can't trigger a wrong re-tag merge).
+    assert_equal(
+      [true, false, :unknown, :unknown],
+      [
+        item_present?(200), item_present?(404),
+        item_present?(500), item_present?(401)
+      ]
+    )
   end
 
   test "played_items paginates until the records are exhausted" do

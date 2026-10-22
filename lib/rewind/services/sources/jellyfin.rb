@@ -159,6 +159,13 @@ module Rewind
           # it through MusicBrainz (so unplayed siblings do too); everything
           # else is stamped here, its single choke point.
           stamp_jellyfin_id(resolved, item)
+          # Archive non-audio ids too (audio is archived in music_item). The
+          # ledger is the full id history; only tracks carry a recording and
+          # only they are healed.
+          unless item["Type"] == "Audio"
+            archive_remember(resolved, presence(item["Id"]),
+                             resolved.media_type, instance_for(item))
+          end
 
           # A genuine scrobble always carries a play date. A dateless Audio item
           # is a Jellyfin artifact — the IsPlayed flag set before the date is
@@ -360,9 +367,14 @@ module Rewind
         # re-resolve when the Etag is unchanged, so a backfill that re-lists an
         # album doesn't re-write every sibling.
         private def music_item(item)
-          cached = unchanged_item(item)
-          return cached if cached
+          track = unchanged_item(item) || resolve_music_track(item)
+          return unless track
 
+          archive_track(track, item)
+          track
+        end
+
+        private def resolve_music_track(item)
           title = presence(item["Name"])
           return unless title
 
@@ -389,6 +401,49 @@ module Rewind
           )
           stamp_source_etag(track, item)
           track
+        end
+
+        # Record the track's Jellyfin id -> item + recording in the archive, and
+        # on the id's first sighting run the re-tag healer (a re-tagged file has
+        # a new id but the same recording, so this ties its stranded play to the
+        # new row). Runs on the cached path too, so an already-synced library
+        # still gets archived. The plugin recording lookup (an HTTP call, cached
+        # per album per run) fires only on first sight; repeat syncs read the
+        # recording from ProviderIds alone and `remember` keeps the stored one.
+        private def archive_track(track, item)
+          jellyfin_id = presence(item["Id"])
+          return unless jellyfin_id
+
+          instance = instance_for(item)
+          ids = item["ProviderIds"] || {}
+          recording = presence(ids["MusicBrainzRecording"])
+          if JellyfinArchive.seen?(jellyfin_id, instance)
+            return archive_remember(track, jellyfin_id, "track", instance,
+                                    recording)
+          end
+
+          album_id = presence(item["ParentId"])
+          recording ||= plugin_recording(album_id, jellyfin_id)
+          JellyfinArchive.reconcile(
+            target: track, recording_mbid: recording, instance_id: instance,
+            user_id: @source.external_user_id, client: @client
+          )
+          archive_remember(track, jellyfin_id, "track", instance, recording)
+        end
+
+        private def archive_remember(item, jellyfin_id, media_type, instance,
+                                     recording = nil)
+          JellyfinArchive.remember(
+            item:, jellyfin_id:, media_type:, instance_id: instance,
+            recording_mbid: recording
+          )
+        end
+
+        # The Jellyfin server id for an item. Prefer the payload's own ServerId;
+        # fall back to the source's adopted instance id (nil only on the very
+        # first sync, before it's adopted).
+        private def instance_for(item)
+          presence(item["ServerId"]) || @source.instance_id
         end
 
         # Pull every track on the played track's album (even unplayed ones) so
@@ -510,6 +565,8 @@ module Rewind
             jellyfin_id: presence(item["Id"])
           )
           stamp_release_type(album, item)
+          archive_remember(album, presence(item["Id"]), "album",
+                           instance_for(item))
           album
         end
 
@@ -538,6 +595,17 @@ module Rewind
           entry = Array(album_plugin_metadata(album_id)[:tracks])
                   .find {|t| t[:item_id] == track_jellyfin_id }
           entry && presence(entry[:release_track])
+        end
+
+        # The recording mbid for one track from the album's file tags via the
+        # plugin, matched by Jellyfin id. Used when Jellyfin's own payload omits
+        # MusicBrainzRecording — it's the archive's re-tag anchor.
+        private def plugin_recording(album_id, track_jellyfin_id)
+          return unless album_id && track_jellyfin_id
+
+          entry = Array(album_plugin_metadata(album_id)[:tracks])
+                  .find {|t| t[:item_id] == track_jellyfin_id }
+          entry && presence(entry[:recording])
         end
 
         # Album MusicBrainz ids + release type from the AudioMetadata plugin,

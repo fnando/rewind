@@ -182,6 +182,24 @@ module Rewind
         {}
       end
 
+      # Whether an item still exists, as a tri-state so a transient failure is
+      # never mistaken for a deletion: true (2xx), false (404 — the file is
+      # gone), or :unknown (any other status / transport error). The re-tag
+      # healer (Services::JellyfinArchive#reconcile) treats only a definitive
+      # false as "re-tagged away" and absorbs on nothing else, so an outage
+      # can't trigger a wrong merge.
+      def item_present?(user_id:, item_id:)
+        response = http(auth: token_auth_header)
+                   .get("#{@url}/Users/#{user_id}/Items/#{item_id}")
+        return :unknown if response.is_a?(HTTPX::ErrorResponse)
+
+        case response.status
+        when 200..299 then true
+        when 404 then false
+        else :unknown
+        end
+      end
+
       # Every Audio track belonging to an album, in disc/track order. Used to
       # backfill an album's unplayed tracks from a played one's parent. Empty
       # list on failure.
@@ -226,9 +244,10 @@ module Rewind
       # release (and sometimes the album artist) even for tagged files, so the
       # discography backfill and the rekey migration read them from the tracks
       # here. Returns {release_type:, release:, artist:, tracks:} — tracks is
-      # [{item_id:, release_track:}] — the per-track Jellyfin id + release-track
-      # mbid. Fields are nil / tracks empty when the plugin is absent, the album
-      # is untagged, or the lookup fails — callers treat all of it as optional.
+      # [{item_id:, release_track:, recording:}] — the per-track Jellyfin id,
+      # release-track mbid, and recording mbid. Fields are nil / tracks empty
+      # when the plugin is absent, the album is untagged, or the lookup fails —
+      # callers treat all of it as optional.
       def album_metadata(album_id)
         response = get("#{@url}/AudioMetadata/Album/#{album_id}")
         tracks = Array(JSON.parse(response.body.to_s)["Tracks"])
@@ -245,12 +264,18 @@ module Rewind
         {}
       end
 
-      # {item_id:, release_track:} for one plugin track, or nil without both.
+      # {item_id:, release_track:, recording:} for one plugin track, or nil
+      # without the id + release-track. The recording (the plugin's curated
+      # MusicBrainzTrackId, or RawTags MUSICBRAINZ_TRACKID) is the id that
+      # survives a re-tag, so the archive can tie a re-tagged file to its row.
       private def album_track_entry(track)
         item_id = first_tag([track["ItemId"]])
         raw = track["RawTags"] || {}
         release_track = first_mbid([raw["MUSICBRAINZ_RELEASETRACKID"]])
-        {item_id:, release_track:} if item_id && release_track
+        recording = first_mbid(
+          [track["MusicBrainzTrackId"], raw["MUSICBRAINZ_TRACKID"]]
+        )
+        {item_id:, release_track:, recording:} if item_id && release_track
       end
 
       # The album's MusicBrainz release type ("album"/"single"/"ep"/…), or nil.
