@@ -260,6 +260,55 @@ class CLITest < Minitest::Test
     Rewind.logger.level = original_level
   end
 
+  test "rekey-music re-keys albums/tracks to release ids and reports" do
+    original_config = Rewind.config
+    create_source("https://jf.test")
+    artist = create_item(media_type: "artist", external_id: "mbid:artist:a",
+                         title: "A")
+    album = create_item(media_type: "album", external_id: "mbid:rg:old",
+                        parent_external_id: artist.external_id, title: "Alb",
+                        jellyfin_id: "jf-alb")
+    create_item(media_type: "track", external_id: "mbid:oldrec",
+                parent_external_id: album.external_id, title: "T",
+                jellyfin_id: "jf-t1")
+    WebMock.stub_request(:get, "https://jf.test/AudioMetadata/Album/jf-alb")
+           .to_return(
+             status: 200, headers: {"Content-Type" => "application/json"},
+             body: {
+               "Tracks" => [
+                 {
+                   "ItemId" => "jf-t1", "MusicBrainzAlbumId" => "rel-1",
+                   "RawTags" => {"MUSICBRAINZ_RELEASETRACKID" => "rt-1"}
+                 }
+               ]
+             }.to_json
+           )
+
+    out, = capture { Rewind::CLI.start(["backfill:rekey-music"]) }
+
+    assert_includes out, "re-keyed"
+    assert_equal "mbid:release:rel-1", Rewind::Item[album.id].external_id
+  ensure
+    Rewind.config = original_config
+  end
+
+  test "artist-albums runs once per Jellyfin instance, not per account" do
+    original_config = Rewind.config
+    # The local create_source helper fixes instance_id to "srv-1", so two
+    # sources (different users) share one instance.
+    a = create_source("https://jf.test")
+    b = create_source("https://jf.test")
+
+    out, = capture { Rewind::CLI.start(["backfill:artist-albums"]) }
+
+    # Both accounts share one instance, so only the first is processed.
+    assert_includes out, "Source #{a.id} "
+    refute_includes out, "Source #{b.id} "
+    assert_includes out, "Backfilled albums for 0 artists."
+  ensure
+    Rewind.config = original_config
+  end
+
   test "artists:merge collapses a synthetic artist and reports a summary" do
     original_config = Rewind.config
     user = create_user

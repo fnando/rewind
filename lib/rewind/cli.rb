@@ -372,8 +372,13 @@ module Rewind
       Rewind::CLI.load_env!(options)
       Rewind::CLI.boot_db!
 
-      sources = Rewind::Source.where(type: "jellyfin", enabled: true)
+      sources = Rewind::Source.where(type: "jellyfin", enabled: true).all
       abort("No enabled Jellyfin sources.") if sources.empty?
+
+      # The discography is global per server, so one account per Jellyfin
+      # instance is enough — extra accounts on the same instance would just redo
+      # identical work. (A nil instance_id can't be deduped; keep those.)
+      sources = sources.uniq {|source| source.instance_id || source.id.to_s }
 
       done = 0
       sources.each do |source|
@@ -386,7 +391,9 @@ module Rewind
         say "  source #{source.id} failed: #{error.message}"
       end
 
+      pruned = Rewind::Services::Sources::Jellyfin.prune_orphaned_albums
       say "Backfilled albums for #{done} artists."
+      say "Removed #{pruned} stale #{pruned == 1 ? 'album' : 'albums'}."
     end
 
     desc "undated-plays", "Record played tracks Jellyfin left without a date"
@@ -414,6 +421,42 @@ module Rewind
       end
 
       say "Recorded #{recovered} missing #{recovered == 1 ? 'play' : 'plays'}."
+    end
+
+    desc "rekey-music", "Re-key albums/tracks to release + release-track ids"
+    long_desc <<~TEXT
+      One-time migration: re-keys every album to its MusicBrainz release and
+      every track to its release-track, reading the ids from the AudioMetadata
+      plugin and matching rows by Jellyfin id. Plays and ratings are preserved;
+      stale rows the plugin doesn't know are left alone. Run with sync paused.
+    TEXT
+    def rekey_music
+      Rewind::CLI.load_env!(options)
+      Rewind::CLI.boot_db!
+
+      sources = Rewind::Source.where(type: "jellyfin", enabled: true).all
+      abort("No enabled Jellyfin sources.") if sources.empty?
+      # One library per server; one account per instance is enough.
+      sources = sources.uniq {|source| source.instance_id || source.id.to_s }
+
+      sources.each do |source|
+        say "Source #{source.id} (#{source.url})…"
+        client = Rewind::Services::Jellyfin.new(source.url,
+                                                token: source.access_token,
+                                                device_id: source.device_id)
+        summary = Rewind::Services::MusicRekey.new(client:).run {|e| say "  #{e}" }
+        say "  albums: #{summary.albums_rekeyed} re-keyed, " \
+            "#{summary.albums_pruned} pruned, #{summary.skipped} skipped. " \
+            "tracks: #{summary.tracks_rekeyed} re-keyed, " \
+            "#{summary.items_absorbed} merged."
+        say "  plays: #{summary.plays_moved} moved, " \
+            "#{summary.plays_dropped} duplicates dropped."
+        unless summary.drift.empty?
+          say "  WARNING drift: #{summary.drift.inspect}"
+        end
+      rescue StandardError => error
+        say "  source #{source.id} failed: #{error.message}"
+      end
     end
   end
 
