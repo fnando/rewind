@@ -417,6 +417,70 @@ module Rewind
     end
   end
 
+  # Admin fixes for the music library's identity model. Untagged files resolve
+  # to synthetic ids, so one real artist can end up stored twice (synthetic +
+  # mbid); `merge` collapses the two by hand, moving every play and rating.
+  class ArtistsCLI < Thor
+    class_option :env_file, type: :string,
+                            desc: "Dotenv file to load before executing"
+    class_option :environment, aliases: "-e", type: :string,
+                               desc: "Run environment (default: production)"
+
+    def self.exit_on_failure?
+      true
+    end
+
+    desc "merge", "Merge one artist (and its albums/tracks) into another"
+    long_desc <<~TEXT
+      Collapses the --from artist onto --to, matching albums and tracks by name,
+      moving plays and ratings, and recording the mapping so future untagged
+      plays route to the real artist. It also de-duplicates the target's own
+      albums (a synthetic album onto its mbid twin of the same name) — so if an
+      album's mbid twin was synced only after an earlier merge re-parented it,
+      pass the SAME id for --from and --to to collapse it now. --from/--to are
+      the item ids in the /items/:id URL. Destructive — run with sync paused.
+    TEXT
+    option :from, type: :numeric, required: true,
+                  desc: "Item id to merge FROM (usually the synthetic artist)"
+    option :to, type: :numeric, required: true,
+                desc: "Item id to merge INTO (the real MusicBrainz artist)"
+    def merge
+      Rewind::CLI.load_env!(options)
+      Rewind::CLI.boot_db!
+
+      from = Rewind::Item[options[:from].to_i]
+      to = Rewind::Item[options[:to].to_i]
+      abort("No item with id #{options[:from].to_i}") unless from
+      abort("No item with id #{options[:to].to_i}") unless to
+
+      if from.id == to.id
+        say "De-duplicating albums under #{to.title.inspect} (##{to.id})…"
+      else
+        say "Merging #{from.title.inspect} (##{from.id}) into " \
+            "#{to.title.inspect} (##{to.id})…"
+      end
+      summary =
+        begin
+          Rewind::Services::MusicMerge.new(from:, to:).run {|event| say event }
+        rescue Rewind::Services::MusicMerge::Error => error
+          abort("Merge aborted: #{error.message}")
+        end
+
+      say ""
+      say "Done. albums: #{summary.albums_merged} merged, " \
+          "#{summary.albums_reparented} kept; tracks: " \
+          "#{summary.tracks_merged} merged, #{summary.tracks_reparented} kept."
+      say "Plays: #{summary.plays_repointed} moved, " \
+          "#{summary.plays_dropped} duplicates dropped. " \
+          "Ratings/reviews migrated: #{summary.user_items_migrated} " \
+          "(#{summary.rating_conflicts} rating conflicts)."
+      say "Map entries written: #{summary.map_entries}."
+      return if summary.drift.empty?
+
+      say "WARNING: streak drift detected — #{summary.drift.inspect}"
+    end
+  end
+
   class CLI < Thor
     check_unknown_options!
 
@@ -665,6 +729,9 @@ module Rewind
     desc "backfill SUBCOMMAND",
          "Refresh data on demand (series, artist-albums, undated-plays)"
     subcommand "backfill", BackfillCLI
+
+    desc "artists SUBCOMMAND", "Music artist admin fixes (merge)"
+    subcommand "artists", ArtistsCLI
 
     def self.start(given_args = ARGV, config = {})
       # Allow colon form: users:new -> users new

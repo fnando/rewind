@@ -259,4 +259,80 @@ class CLITest < Minitest::Test
     Rewind.config = original_config
     Rewind.logger.level = original_level
   end
+
+  test "artists:merge collapses a synthetic artist and reports a summary" do
+    original_config = Rewind.config
+    user = create_user
+    real = create_item(media_type: "artist", external_id: "mbid:artist:r",
+                       title: "DLD")
+    synth = create_item(media_type: "artist",
+                        external_id: "mbid:synthetic:artist:s", title: "DLD")
+    album = create_item(media_type: "album",
+                        external_id: "mbid:synthetic:album:s",
+                        parent_external_id: synth.external_id, title: "EP",
+                        jellyfin_id: "jf-s")
+    track = create_item(
+      media_type: "track", external_id: "mbid:synthetic:track:s",
+      parent_external_id: album.external_id, title: "Song",
+      metadata_json: {
+        "artist_external_id" => synth.external_id,
+        "album_external_id" => album.external_id,
+        "artist" => "DLD"
+      }.to_json
+    )
+    Rewind::Play.create(user_id: user.id, item_id: track.id, source: "jellyfin",
+                        instance_id: "i", source_event_id: "e",
+                        played_at: Time.parse("2026-10-10 12:00:00 UTC"))
+
+    out, = capture do
+      Rewind::CLI.start([
+        "artists:merge", "--from", synth.id.to_s,
+        "--to", real.id.to_s
+      ])
+    end
+
+    assert_includes out, "Merging"
+    assert_includes out, "Done."
+    assert_nil Rewind::Item[synth.id]
+    assert_equal "mbid:artist:r", Rewind::Item[album.id].parent_external_id
+  ensure
+    Rewind.config = original_config
+  end
+
+  test "artists:merge aborts on an unknown id" do
+    original_config = Rewind.config
+    real = create_item(media_type: "artist", external_id: "mbid:artist:r2",
+                       title: "X")
+    _out, err = capture do
+      assert_raises(SystemExit) do
+        Rewind::CLI.start([
+          "artists:merge", "--from", "99999999",
+          "--to", real.id.to_s
+        ])
+      end
+    end
+
+    assert_includes err, "No item with id 99999999"
+  ensure
+    Rewind.config = original_config
+  end
+
+  test "artists:merge aborts when an item is not an artist" do
+    original_config = Rewind.config
+    real = create_item(media_type: "artist", external_id: "mbid:artist:r3",
+                       title: "X")
+    movie = create_item(media_type: "movie")
+    _out, err = capture do
+      assert_raises(SystemExit) do
+        Rewind::CLI.start([
+          "artists:merge", "--from", movie.id.to_s,
+          "--to", real.id.to_s
+        ])
+      end
+    end
+
+    assert_includes err, "Merge aborted"
+  ensure
+    Rewind.config = original_config
+  end
 end

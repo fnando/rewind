@@ -26,6 +26,21 @@ module Rewind
         @fanart = fanart
       end
 
+      # The external_id for a real MusicBrainz id, by kind. One source of truth
+      # for the id format, shared with the merge (Services::MusicMerge) that
+      # collapses synthetic items onto these.
+      def self.track_external_id(recording_mbid)
+        "mbid:#{recording_mbid}"
+      end
+
+      def self.album_external_id(release_group_mbid)
+        "mbid:rg:#{release_group_mbid}"
+      end
+
+      def self.artist_external_id(artist_mbid)
+        "mbid:artist:#{artist_mbid}"
+      end
+
       def resolve(title:, artist:, album:, recording_mbid: nil,
                   release_group_mbid: nil, artist_mbid: nil, length_ms: nil,
                   track_number: nil, disc_number: nil, release_date: nil,
@@ -38,9 +53,9 @@ module Rewind
                                   jellyfin_id: album_jellyfin_id)
         external_id =
           if presence(recording_mbid)
-            "mbid:#{recording_mbid}"
+            self.class.track_external_id(recording_mbid)
           else
-            synthetic_id("track", "#{artist}/#{album}/#{title}")
+            canonical(synthetic_id("track", "#{artist}/#{album}/#{title}"))
           end
 
         upsert(external_id, "track") do |existing|
@@ -76,7 +91,11 @@ module Rewind
       private def ensure_artist(mbid, name)
         name = presence(name) || "Unknown Artist"
         external_id =
-          presence(mbid) ? "mbid:artist:#{mbid}" : synthetic_id("artist", name)
+          if presence(mbid)
+            self.class.artist_external_id(mbid)
+          else
+            canonical(synthetic_id("artist", name))
+          end
 
         upsert(external_id, "artist") do |existing|
           {
@@ -95,9 +114,9 @@ module Rewind
         title = presence(title) || "Unknown Album"
         external_id =
           if presence(mbid)
-            "mbid:rg:#{mbid}"
+            self.class.album_external_id(mbid)
           else
-            synthetic_id("album", "#{artist.title}/#{title}")
+            canonical(synthetic_id("album", "#{artist.title}/#{title}"))
           end
 
         upsert(external_id, "album") do |existing|
@@ -147,6 +166,25 @@ module Rewind
 
       private def synthetic_id(kind, text)
         "mbid:synthetic:#{kind}:#{Digest::SHA256.hexdigest(text.to_s.downcase)}"
+      end
+
+      # Follow the synthetic -> canonical merge map (Services::MusicMerge writes
+      # it) to the final id, so a play that would re-mint a merged-away
+      # synthetic id lands on its mbid twin instead of resurrecting the
+      # duplicate. Only synthetic ids are ever keys, so callers apply this on
+      # the synthetic branch alone. The visited set stops a cycle from hanging.
+      private def canonical(external_id)
+        seen = Set.new
+        current = external_id
+        until seen.include?(current)
+          seen << current
+          nxt = Rewind.db[:item_merges]
+                      .where(from_external_id: current).get(:to_external_id)
+          break unless nxt
+
+          current = nxt
+        end
+        current
       end
 
       private def presence(value)

@@ -126,4 +126,40 @@ class MusicBrainzServiceTest < Minitest::Test
   test "resolve returns nil without a title" do
     assert_nil resolve(title: "")
   end
+
+  def map(from, to)
+    Rewind.db[:item_merges].insert(from_external_id: from, to_external_id: to,
+                                   created_at: Time.now)
+  end
+
+  test "resolve routes a merged-away synthetic id to the mbid item" do
+    original = resolve(artist: "Ghost", album: "Prequelle", title: "Rats")
+    map(original.metadata["artist_external_id"], "mbid:artist:ghost-real")
+
+    again = resolve(artist: "Ghost", album: "Prequelle", title: "Rats")
+
+    assert_equal "mbid:artist:ghost-real", again.metadata["artist_external_id"]
+  end
+
+  test "resolve follows a merge chain to the final id" do
+    original = resolve(artist: "Ghost", album: "Prequelle", title: "Rats")
+    map(original.metadata["artist_external_id"], "mbid:artist:mid")
+    map("mbid:artist:mid", "mbid:artist:final")
+
+    again = resolve(artist: "Ghost", album: "Prequelle", title: "Rats")
+
+    assert_equal "mbid:artist:final", again.metadata["artist_external_id"]
+  end
+
+  test "resolve terminates on a cyclic merge map" do
+    original = resolve(artist: "Ghost", album: "Prequelle", title: "Rats")
+    synth = original.metadata["artist_external_id"]
+    map(synth, "mbid:artist:loop")
+    map("mbid:artist:loop", synth)
+
+    # The visited-set guard must stop the walk instead of hanging.
+    again = resolve(artist: "Ghost", album: "Prequelle", title: "Rats")
+
+    assert_equal synth, again.metadata["artist_external_id"]
+  end
 end
