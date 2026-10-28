@@ -10,6 +10,11 @@ module Rewind
 
     RATING_STYLES = %w[stars thumbs].freeze
 
+    # The instance admin — the only role today. Gates the error log page.
+    def admin?
+      admin == true
+    end
+
     def before_validation
       self.rating_style ||= "stars"
       self.timezone ||= "UTC"

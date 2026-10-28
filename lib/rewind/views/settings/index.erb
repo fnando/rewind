@@ -69,6 +69,15 @@
     </div>
   </section>
 
+  <% if admin? %>
+    <section class="panel">
+      <h2 class="panel__title">Admin</h2>
+      <div class="panel__body">
+        <p class="muted"><a href="/settings/errors">View error log →</a></p>
+      </div>
+    </section>
+  <% end %>
+
   <section class="panel">
     <h2 class="panel__title">Connected sources</h2>
     <div class="panel__body">

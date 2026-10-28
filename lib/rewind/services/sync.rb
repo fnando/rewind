@@ -72,6 +72,11 @@ module Rewind
           "#{Rewind.format_duration(Rewind.clock - started)}"
         )
       rescue StandardError => error
+        ErrorLog.record(error, context: {
+                          "component" => "sync",
+                          "source_id" => source.id,
+                          "user_id" => source.user_id
+                        })
         record_error(source, error.message)
         raise # let run_once / sync_one keep their existing logging and abort
       end

@@ -78,8 +78,32 @@ module Rewind
       halt redirect "/settings/password"
     end
 
+    # Capturing the request's data that caused an error, with secrets stripped,
+    # so the admin error page can show what was happening when it broke.
+    helpers do
+      def error_context
+        {
+          "method" => request.request_method,
+          "path" => request.fullpath,
+          "params" => sanitized_params,
+          "user_id" => @current_user&.id,
+          "ip" => request.ip,
+          "user_agent" => request.user_agent
+        }
+      rescue StandardError
+        {}
+      end
+
+      def sanitized_params
+        params.reject {|key, _| key.to_s.match?(/password|secret|token/i) }
+      rescue StandardError
+        {}
+      end
+    end
+
     error do
       e = env["sinatra.error"]
+      ErrorLog.record(e, context: error_context)
       backtrace = e.backtrace&.first(10)&.join("\n")
       Rewind.logger.error("#{e.class}: #{e.message}\n#{backtrace}")
       status 500
@@ -98,6 +122,7 @@ module Rewind
     require_relative "routes/history"
     require_relative "routes/images"
     require_relative "routes/settings"
+    require_relative "routes/errors"
     require_relative "routes/stats"
   end
 end

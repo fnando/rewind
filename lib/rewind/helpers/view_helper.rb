@@ -34,6 +34,17 @@ module Rewind
         request.path_info
       end
 
+      # Whether the signed-in user is the instance admin.
+      def admin?
+        !!current_user&.admin?
+      end
+
+      # Gate an admin-only route. 404 (not 403) so the page's existence isn't
+      # revealed to non-admins.
+      def require_admin!
+        halt 404 unless admin?
+      end
+
       def nav_current?(path)
         return current_path == "/" if path == "/"
 
@@ -321,6 +332,12 @@ module Rewind
           ui = by_key[item.rating_key]
           result[item.id] = ui if ui
         end
+      end
+
+      # Builds a /settings/errors URL for the given page (page 1 omits the
+      # param, keeping the URL clean).
+      def errors_page_url(page)
+        page > 1 ? "/settings/errors?page=#{page}" : "/settings/errors"
       end
 
       # Builds a /history URL for the given page, preserving the active media

@@ -1962,3 +1962,22 @@ select.input::-ms-expand { display: none; }
   .plays__bar { display: none; }
   .tracklist td, .tracklist th { padding-left: 10px; padding-right: 10px; }
 }
+
+/* Error log (admin) */
+.error-table { width: 100%; border-collapse: collapse; }
+.error-table th, .error-table td {
+  text-align: left; padding: 8px 10px;
+  border-bottom: 1px solid var(--border); vertical-align: top;
+}
+.error-table th { color: var(--muted); font-weight: 600; }
+.error-table td.error-when { white-space: nowrap; }
+.error-class {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+}
+.error-message { margin: 0 0 8px; font-weight: 600; }
+.error-trace, .error-context {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+  white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+  background: var(--subtle); padding: 12px; border-radius: var(--radius);
+  margin: 0;
+}
