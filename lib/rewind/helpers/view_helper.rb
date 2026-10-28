@@ -228,7 +228,7 @@ module Rewind
         case type
         when "movie" then "Movies"
         when "episode", "series" then "Series"
-        when "track", "album", "artist" then "Music"
+        when "track", "album", "artist", "music_video" then "Music"
         else "All"
         end
       end
@@ -337,9 +337,16 @@ module Rewind
       def cover_detail(card)
         case card.kind
         when "track" then track_cover_detail(card)
+        when "music_video" then music_video_cover_detail(card)
         when "episode" then episode_cover_detail(card)
         else h(card.movie_year)
         end
+      end
+
+      private def music_video_cover_detail(card)
+        return "" unless card.item.artist
+
+        item_link(card.artist_item, card.item.artist)
       end
 
       private def track_cover_detail(card)
@@ -401,12 +408,18 @@ module Rewind
 
       def load_music_parents_for(plays)
         ids = plays.flat_map do |p|
-          next [] unless p.item.media_type == "track"
-
-          [
-            p.item.metadata["artist_external_id"],
-            p.item.metadata["album_external_id"]
-          ]
+          # Music videos link to their artist but have no album.
+          case p.item.media_type
+          when "track"
+            [
+              p.item.metadata["artist_external_id"],
+              p.item.metadata["album_external_id"]
+            ]
+          when "music_video"
+            [p.item.metadata["artist_external_id"]]
+          else
+            []
+          end
         end.compact.uniq
         return {} if ids.empty?
 

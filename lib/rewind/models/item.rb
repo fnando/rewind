@@ -4,7 +4,7 @@ module Rewind
   class Item < Sequel::Model
     one_to_many :plays
 
-    MEDIA_TYPES = %w[movie episode series track album artist].freeze
+    MEDIA_TYPES = %w[movie episode series track album artist music_video].freeze
 
     def metadata
       return {} if metadata_json.nil? || metadata_json.empty?
@@ -69,7 +69,7 @@ module Rewind
         season = season_number.to_s.rjust(2, "0")
         episode = episode_number.to_s.rjust(2, "0")
         "#{parent} S#{season}E#{episode} · #{title}"
-      when "track"
+      when "track", "music_video"
         artist ? "#{artist} — #{title}" : title
       else
         title

@@ -32,7 +32,8 @@ module Rewind
         @user_items[@item.id]
       end
 
-      # movie / episode / track — drives the aspect ratio and badge.
+      # movie / episode / track / music_video — drives the aspect ratio and
+      # badge.
       def kind
         @item.media_type
       end
@@ -40,7 +41,7 @@ module Rewind
       def kind_label
         {
           "movie" => "Movie", "episode" => "Episode",
-          "track" => "Track"
+          "track" => "Track", "music_video" => "Music Video"
         }.fetch(kind, kind.to_s.capitalize)
       end
 

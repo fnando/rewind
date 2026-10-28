@@ -65,4 +65,26 @@ class PlayCardTest < Minitest::Test
 
     assert_equal movie, card.cover_item
   end
+
+  test "a music video card is labelled and links to its artist" do
+    artist = create_item(media_type: "artist", external_id: "mbid:artist:a1",
+                         title: "Green Day")
+    video = create_item(
+      media_type: "music_video", external_id: "youtube:v1",
+      title: "Basket Case",
+      metadata_json: {
+        "artist" => "Green Day",
+        "artist_external_id" => "mbid:artist:a1"
+      }.to_json
+    )
+    play = Rewind::Play.create(user_id: @user.id, item_id: video.id,
+                               played_at: Time.now, source: "jellyfin")
+    card = Rewind::Presenters::PlayCard.new(
+      play, music_parents: {artist.external_id => artist}
+    )
+
+    assert_equal "music_video", card.kind
+    assert_equal "Music Video", card.kind_label
+    assert_equal artist, card.artist_item
+  end
 end

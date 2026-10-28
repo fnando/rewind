@@ -45,7 +45,8 @@ module Rewind
           items = @client.played_items(user_id: @source.external_user_id,
                                        since: fetch_since)
           Rewind.logger.info(
-            "[sync/jellyfin] fetched #{items.size} played items in " \
+            "[sync/jellyfin] fetched #{items.size} played items " \
+            "(#{type_tally(items)}) in " \
             "#{Rewind.format_duration(Rewind.clock - fetch_started)} since " \
             "#{fetch_since.inspect} (cursor #{since.inspect})"
           )
@@ -108,7 +109,9 @@ module Rewind
               generic_episode(item) || generic_video(item, "movie")
             when "Audio"
               resolve_audio(item)
-            when "Video", "MusicVideo"
+            when "MusicVideo"
+              music_video(item)
+            when "Video"
               # Loose videos (e.g. YouTube downloads) carry no external ids. If
               # they sit in a folder, treat the folder as a series; otherwise
               # keep them as standalone movies.
@@ -180,12 +183,21 @@ module Rewind
           anchor = played ||
                    presence(item["DateCreated"]) ||
                    presence(item["PremiereDate"])
+          played_at = anchor && Time.parse(anchor)
+          # A music video's LastPlayedDate advances while it plays, so a later
+          # sync would re-log the same watch under a new key. Collapse it onto
+          # the play already recorded for this watch.
+          if resolved.media_type == "music_video" &&
+             music_video_duplicate?(resolved, played_at)
+            return log_skip(item, "music video already recorded this watch")
+          end
+
           Rewind.logger.info(
             "[sync/jellyfin] resolved #{describe(item)} -> item #{resolved.id}"
           )
           {
             item_id: resolved.id,
-            played_at: anchor && Time.parse(anchor),
+            played_at: played_at,
             source_event_id: "jellyfin:#{item['Id']}:#{played || 'played'}"
           }
         rescue Services::TMDB::Error, Services::Jellyfin::Error => error
@@ -318,6 +330,19 @@ module Rewind
             .empty?
         end
 
+        # Whether this music-video watch was already recorded within its runtime
+        # window — the pull re-dates it every tick while it plays, so each tick
+        # would otherwise be a fresh play. See Play.music_video_watch_recorded?.
+        private def music_video_duplicate?(resolved, played_at)
+          Rewind::Play.music_video_watch_recorded?(
+            user_id: @source.user_id,
+            item_id: resolved.id,
+            instance_id: @source.instance_id,
+            played_at: played_at,
+            window: Rewind::Play.music_video_window(resolved)
+          )
+        end
+
         # Logs why an item isn't being recorded and returns nil, so callers can
         # `return log_skip(...)`.
         private def log_skip(item, reason)
@@ -329,6 +354,19 @@ module Rewind
 
         private def describe(item)
           "#{item['Type']} #{item['Name'].inspect} (#{item['Id']})"
+        end
+
+        # "Movie=3 Episode=11 Audio=200 MusicVideo=0" — a per-type count of the
+        # fetched items, so it's clear at a glance (at INFO) whether a given
+        # type (e.g. MusicVideo) came back at all. Follows the PLAYED_TYPES
+        # order, and always lists every requested type, including the zeros.
+        private def type_tally(items)
+          counts = items.each_with_object(Hash.new(0)) do |item, tally|
+            tally[presence(item["Type"]) || "Unknown"] += 1
+          end
+          Services::Jellyfin::PLAYED_TYPES.split(",").map do |type|
+            "#{type}=#{counts.delete(type) || 0}"
+          end.concat(counts.map {|type, n| "#{type}=#{n}" }).join(" ")
         end
 
         private def last_played(item)
@@ -707,6 +745,42 @@ module Rewind
         end
 
         # ----- Jellyfin-native fallback (no TMDB/MusicBrainz) -----
+
+        # A MusicVideo resolves to its own media_type (not a movie) and links to
+        # its artist by name. No external provider knows the video, so it's
+        # built straight from Jellyfin's metadata. See Services::MusicVideo.
+        private def music_video(item)
+          title = presence(item["Name"])
+          return unless title
+
+          Services::MusicVideo.build(
+            external_id: generic_external_id(item),
+            title: title,
+            artist_name: music_video_artist(item),
+            runtime: ticks_to_minutes(item["RunTimeTicks"]),
+            release_date: premiere_date(item),
+            poster_path: primary_image_url(item["Id"],
+                                           item.dig("ImageTags", "Primary")),
+            jellyfin_id: presence(item["Id"])
+          )
+        end
+
+        # The music video's artist name: Jellyfin's own Artists/AlbumArtists
+        # fields first, then the parent folder of its path (videos are filed as
+        # ".../Artist/Video.mp4").
+        private def music_video_artist(item)
+          presence(Array(item["Artists"]).first) ||
+            presence(Array(item["AlbumArtists"]).first&.dig("Name")) ||
+            presence(item["AlbumArtist"]) ||
+            artist_from_path(item)
+        end
+
+        private def artist_from_path(item)
+          path = presence(item["Path"])
+          return unless path
+
+          presence(File.basename(File.dirname(path)))
+        end
 
         private def generic_video(item, media_type)
           title = presence(item["Name"])

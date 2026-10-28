@@ -242,4 +242,48 @@ class StatsTest < Minitest::Test
     assert_equal 2, stats[:totals][:plays]
     assert_empty stats[:top_movies]
   end
+
+  def seed_music_video
+    @mv = create_item(
+      media_type: "music_video", external_id: "youtube:mv1",
+      title: "Creep", runtime: 4,
+      metadata_json: {"artist" => "Radiohead"}.to_json
+    )
+    Rewind::Play.create(user_id: @user.id, item_id: @mv.id,
+                        played_at: Time.now, source: "jellyfin")
+  end
+
+  test "music videos count as listening, not screen time" do
+    seed_music_video
+    stats = Rewind::Services::Stats.new(user: @user, from: nil, to: nil,
+                                        period: "all").to_h
+    totals = stats[:totals]
+
+    # Setup's three movie plays are the only screen time; the music video adds
+    # a listen and listening hours, never a movie count.
+    assert_in_delta 5.5, totals[:hours_watched], 0.1
+    assert_equal 3, totals[:movies_count]
+    assert_equal 1, totals[:tracks_count]
+    assert_operator totals[:listening_hours], :>, 0
+  end
+
+  test "the music filter includes music videos" do
+    seed_music
+    seed_music_video
+    stats = Rewind::Services::Stats.new(user: @user, media_type: "music",
+                                        from: nil, to: nil, period: "all").to_h
+
+    # Two track plays + one music-video play.
+    assert_equal 3, stats[:totals][:plays]
+  end
+
+  test "rhythm buckets music videos into music, not movies" do
+    seed_music_video
+    rows = Rewind::Services::Stats.new(user: @user, from: nil, to: nil,
+                                       period: "all").to_h[:rhythm]
+
+    # Music-video hours land in the tracks bucket; movie hours stay at 5.5.
+    assert_operator rows.sum {|r| r[:tracks] }, :>, 0
+    assert_in_delta 5.5, rows.sum {|r| r[:movies] }, 0.1
+  end
 end

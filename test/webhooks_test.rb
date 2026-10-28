@@ -113,10 +113,97 @@ class WebhooksTest < Minitest::Test
     assert_equal 0, plays_for_track.count
   end
 
-  test "a non-audio event is ignored" do
+  test "an unsupported type (e.g. a movie) is ignored" do
     post_webhook(payload("ItemType" => "Movie"))
 
     assert_equal 0, plays_for_track.count
+  end
+
+  MV_JF_ID = "d0f1e2c3b4a5968778695a4b3c2d1e0f"
+
+  def mv_payload(overrides = {})
+    {
+      "NotificationType" => "PlaybackStop",
+      "ItemType" => "MusicVideo",
+      "PlayedToCompletion" => true,
+      "ServerId" => SERVER_ID,
+      "UserId" => JELLYFIN_USER,
+      "ItemId" => MV_JF_ID,
+      "Name" => "Basket Case",
+      "Artist" => "Green Day",
+      "Provider_youtube" => "mv-yt",
+      "RunTimeTicks" => 1_800_000_000,
+      "UtcTimestamp" => "2026-10-19T21:09:23.8576697Z"
+    }.merge(overrides)
+  end
+
+  def stub_mv_last_played(value = LAST_PLAYED)
+    user_data = value ? {"LastPlayedDate" => value} : {}
+    WebMock.stub_request(
+      :get, "#{@source.url}/Users/#{JELLYFIN_USER}/Items/#{MV_JF_ID}"
+    ).to_return(status: 200, body: {"UserData" => user_data}.to_json,
+                headers: {"Content-Type" => "application/json"})
+  end
+
+  test "a completed music video playback records a play linked to its artist" do
+    artist = create_item(media_type: "artist",
+                         external_id: "mbid:artist:a1", title: "Green Day")
+    stub_mv_last_played
+
+    post_webhook(mv_payload)
+
+    assert_equal 204, last_response.status
+    video = Rewind::Item.where(media_type: "music_video").first
+
+    refute_nil video
+    assert_equal "youtube:mv-yt", video.external_id
+    assert_equal artist.external_id, video.metadata["artist_external_id"]
+    play = Rewind::Play.where(item_id: video.id).first
+
+    refute_nil play
+    assert_equal "jellyfin:#{MV_JF_ID}:#{LAST_PLAYED}", play.source_event_id
+  end
+
+  test "a music video webhook resolves an already-synced item by jellyfin id" do
+    video = create_item(media_type: "music_video", external_id: "youtube:mv-yt",
+                        title: "Basket Case", jellyfin_id: MV_JF_ID)
+    stub_mv_last_played
+
+    post_webhook(mv_payload)
+
+    assert_equal 1, Rewind::Item.where(media_type: "music_video").count
+    assert_equal 1, Rewind::Play.where(item_id: video.id).count
+  end
+
+  test "a music video webhook skips a watch the pull already logged" do
+    video = create_item(media_type: "music_video", external_id: "youtube:mv-yt",
+                        title: "Basket Case", jellyfin_id: MV_JF_ID, runtime: 3)
+    # The pull logged this watch a minute earlier, under its own (shifting) key.
+    Rewind::Play.create(
+      user_id: @user.id, item_id: video.id, source: "jellyfin",
+      source_id: @source.id, instance_id: SERVER_ID,
+      source_event_id: "jellyfin:#{MV_JF_ID}:pull",
+      played_at: Time.parse(LAST_PLAYED) - 60
+    )
+    stub_mv_last_played
+
+    post_webhook(mv_payload)
+
+    assert_equal 1, Rewind::Play.where(item_id: video.id).count
+  end
+
+  test "a music video dedups against a pull play of the same completion" do
+    create_item(media_type: "music_video", external_id: "youtube:mv-yt",
+                title: "Basket Case", jellyfin_id: MV_JF_ID)
+    stub_mv_last_played
+    post_webhook(mv_payload)
+
+    # A second delivery under the same LastPlayedDate key collapses.
+    post_webhook(mv_payload)
+
+    video = Rewind::Item.where(media_type: "music_video").first
+
+    assert_equal 1, Rewind::Play.where(item_id: video.id).count
   end
 
   test "a re-delivered event does not double-record" do

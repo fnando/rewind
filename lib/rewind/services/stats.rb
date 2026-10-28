@@ -83,7 +83,9 @@ module Rewind
 
         scope = scope.for_media_type("movie") if @media_type == "movie"
         scope = scope.for_media_type("episode") if @media_type == "series"
-        scope = scope.for_media_type("track") if @media_type == "music"
+        if @media_type == "music"
+          scope = scope.for_media_type(Play::MUSIC_MEDIA_TYPES)
+        end
         scope.all
       end
 
@@ -99,7 +101,11 @@ module Rewind
       private def compute_totals(plays)
         movies = plays.select {|p| p.item.media_type == "movie" }
         episodes = plays.select {|p| p.item.media_type == "episode" }
-        tracks = plays.select {|p| p.item.media_type == "track" }
+        # Music videos count as music (listening), never as movies — they'd
+        # otherwise leak into screen time and the movie totals.
+        tracks = plays.select do |p|
+          Play::MUSIC_MEDIA_TYPES.include?(p.item.media_type)
+        end
 
         unique_movies = movies.map {|p| p.item.external_id }.uniq
         unique_shows = episodes.map {|p| p.item.parent_external_id }.uniq
@@ -315,7 +321,7 @@ module Rewind
 
           case play.item.media_type
           when "episode" then counts[key][:episodes] += hours
-          when "track" then counts[key][:tracks] += hours
+          when "track", "music_video" then counts[key][:tracks] += hours
           else counts[key][:movies] += hours
           end
         end
@@ -398,7 +404,9 @@ module Rewind
         end
         scope = scope.for_media_type("movie") if @media_type == "movie"
         scope = scope.for_media_type("episode") if @media_type == "series"
-        scope = scope.for_media_type("track") if @media_type == "music"
+        if @media_type == "music"
+          scope = scope.for_media_type(Play::MUSIC_MEDIA_TYPES)
+        end
 
         counts = Hash.new(0)
         scope.select_map(:played_at).each do |t|

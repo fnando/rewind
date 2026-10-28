@@ -18,7 +18,8 @@ module Rewind
       MEDIA_GROUPS = {
         "movie" => "movie",
         "episode" => "series",
-        "track" => "music"
+        "track" => "music",
+        "music_video" => "music"
       }.freeze
 
       class << self

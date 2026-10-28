@@ -118,9 +118,18 @@ class ItemModelTest < Minitest::Test
   end
 
   test "track and album and artist are valid media types" do
-    %w[track album artist].each do |type|
+    %w[track album artist music_video].each do |type|
       assert_includes Rewind::Item::MEDIA_TYPES, type
     end
+  end
+
+  test "music_video display_title joins artist and title" do
+    video = create_item(
+      media_type: "music_video", external_id: "youtube:v1", title: "Creep",
+      metadata_json: {"artist" => "Radiohead"}.to_json
+    )
+
+    assert_equal "Radiohead — Creep", video.display_title
   end
 end
 

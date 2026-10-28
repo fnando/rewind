@@ -755,6 +755,7 @@ select.input::-ms-expand { display: none; }
   color: #fff;
 }
 .cover-card--track { aspect-ratio: 1 / 1; }
+.cover-card--music_video { aspect-ratio: 16 / 9; }
 /* Author display rules beat the UA [hidden] rule, so be explicit. */
 .cover-card[hidden] { display: none; }
 
@@ -1107,6 +1108,8 @@ select.input::-ms-expand { display: none; }
 }
 /* Artist/album art is square, not a 2:3 poster. */
 .title-hero__poster--square { height: auto; aspect-ratio: 1 / 1; }
+/* A music video's still is 16:9 landscape. */
+.title-hero__poster--video { width: 320px; height: auto; aspect-ratio: 16 / 9; }
 .title-hero__info { flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .title-hero__heading { display: flex; flex-direction: column; gap: 6px; }
 .eyebrow {

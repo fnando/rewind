@@ -298,7 +298,7 @@ module Rewind
           SortOrder: order,
           Fields: "ProviderIds,ParentIndexNumber,IndexNumber,SeriesId," \
                   "ParentId,DateCreated,PremiereDate,ProductionYear,Genres," \
-                  "Etag",
+                  "Path,Artists,AlbumArtists,Etag",
           Limit: @page_size,
           StartIndex: start_index
         )

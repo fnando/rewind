@@ -230,6 +230,14 @@ module Rewind
           external_id: @item.metadata["artist_external_id"]
         ).first
         erb :"items/show_track"
+      when "music_video"
+        @plays = Play.where(user_id: current_user.id, item_id: @item.id)
+                     .order(Sequel.desc(:played_at))
+                     .all
+        @artist = Item.where(
+          external_id: @item.metadata["artist_external_id"]
+        ).first
+        erb :"items/show_music_video"
       when "album"
         @artist = Item.where(external_id: @item.parent_external_id).first
         @tracks = Item.where(media_type: "track",
@@ -264,6 +272,9 @@ module Rewind
         @albums = Item.where(media_type: "album",
                              parent_external_id: @item.external_id)
                       .order(Sequel.desc(:release_date), :title).all
+        @music_videos = Item.where(media_type: "music_video",
+                                   parent_external_id: @item.external_id)
+                            .order(Sequel.desc(:release_date), :title).all
         @user_items_by_item = user_items_by_item_id(@albums)
         erb :"items/show_artist"
       else

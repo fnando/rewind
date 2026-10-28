@@ -38,5 +38,28 @@
     <% end %>
   <% end %>
 
+  <% if @music_videos.any? %>
+    <section class="section">
+      <h2>Music videos</h2>
+      <ul class="cover-grid">
+        <% @music_videos.each do |video| %>
+          <li class="cover-card cover-card--music_video">
+            <%= erb :"_partials/cover_poster", locals: {item: video} %>
+            <span class="cover-card__scrim" aria-hidden="true"></span>
+            <div class="cover-card__top">
+              <span class="cover-card__badge">Music Video</span>
+            </div>
+            <div class="cover-card__body">
+              <span class="cover-card__titlewrap"><a class="cover-card__title" href="/items/<%= video.id %>"><%= h(video.title) %></a></span>
+              <% unless video.release_date.to_s[0, 4].empty? %>
+                <span class="cover-card__meta"><%= video.release_date.to_s[0, 4] %></span>
+              <% end %>
+            </div>
+          </li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+
   <%= erb :"_partials/review", locals: {item: @item, user_item: @user_item} %>
 </main>

@@ -271,6 +271,49 @@ class ItemsMusicTest < Minitest::Test
     refute_includes last_response.body, "Heat"
   end
 
+  def music_video
+    create_item(
+      media_type: "music_video", external_id: "youtube:v1",
+      title: "Creep", parent_external_id: "mbid:artist:a1",
+      metadata_json: {
+        "artist" => "Radiohead",
+        "artist_external_id" => "mbid:artist:a1"
+      }.to_json
+    )
+  end
+
+  test "the music filter also lists music videos" do
+    video = music_video
+    Rewind::Play.create(user_id: @user.id, item_id: video.id,
+                        played_at: Time.now, source: "jellyfin")
+
+    get "/history?type=track"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "Creep"
+  end
+
+  test "music video page renders and links its artist" do
+    video = music_video
+
+    get "/items/#{video.id}"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "Creep"
+    assert_includes last_response.body, "Music Video"
+    assert_includes last_response.body, "/items/#{@artist.id}"
+  end
+
+  test "artist page shows a music videos section" do
+    music_video
+
+    get "/items/#{@artist.id}"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "Music videos"
+    assert_includes last_response.body, "Creep"
+  end
+
   test "stats page renders with the music filter" do
     get "/stats?type=music"
 

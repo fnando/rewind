@@ -13,7 +13,11 @@ module Rewind
       @page = [params[:page].to_i, 1].max
 
       scope = Play.for_user(current_user).order(Sequel.desc(:played_at))
-      scope = scope.for_media_type(@type) if @type && @type != "all"
+      if @type && @type != "all"
+        # The "Music" nav uses type=track; widen it to also cover music videos.
+        filter = @type == "track" ? Play::MUSIC_MEDIA_TYPES : @type
+        scope = scope.for_media_type(filter)
+      end
 
       # Paginate by day of activity, not a fixed row count: each page spans
       # DAYS_PER_PAGE days that had plays, however far apart they fall on the

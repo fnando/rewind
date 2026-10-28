@@ -19,8 +19,9 @@ module Rewind
       # fall back to the stop time; the pull can't key such a play either, so
       # there's nothing to collide with.
       module Jellyfin
-        # Media types we record. Audio is the proven gap; widen as needed.
-        SUPPORTED_TYPES = %w[Audio].freeze
+        # Media types we record. Audio is the proven gap; music videos run both
+        # paths for the same redundancy.
+        SUPPORTED_TYPES = %w[Audio MusicVideo].freeze
 
         # Returns the created Play, or nil when the event is ignored/deduped.
         def self.record(payload)
@@ -36,7 +37,7 @@ module Rewind
           return log_skip(payload, "no matching Jellyfin source") unless source
 
           item = resolve(payload)
-          return log_skip(payload, "could not resolve track") unless item
+          return log_skip(payload, "could not resolve item") unless item
 
           jellyfin_id = presence(payload["ItemId"])
           archive(payload, item, source, jellyfin_id)
@@ -48,6 +49,13 @@ module Rewind
           anchor = last_played || payload["UtcTimestamp"]
           played_at = parse_time(anchor)
           return log_skip(payload, "no usable timestamp") unless played_at
+
+          # A music video is re-dated while it plays, so the pull may already
+          # have logged this watch under a different date. Collapse onto it.
+          if item.media_type == "music_video" &&
+             music_video_duplicate?(source, item, played_at)
+            return log_skip(payload, "music video already recorded this watch")
+          end
 
           event_id = "jellyfin:#{jellyfin_id}:#{anchor}"
           play = create_play(source, item, event_id, played_at)
@@ -84,20 +92,24 @@ module Rewind
                                  device_id: source.device_id)
         end
 
-        # Record this id -> track + recording in the archive, and on the id's
+        # Record this id -> item + recording in the archive, and on the id's
         # first sighting run the re-tag healer so a re-tagged file's stranded
         # play is pulled onto the row the webhook just resolved. Mirrors the
         # pull's archive_track. Keyed on the payload's ServerId (per-instance).
+        # Only tracks carry a MusicBrainz recording (the re-tag anchor); a music
+        # video has none, so its archiving is a plain remember.
         def self.archive(payload, item, source, jellyfin_id)
           instance = presence(payload["ServerId"]) || source.instance_id
           recording = presence(payload["Provider_musicbrainzrecording"])
-          if recording && !JellyfinArchive.seen?(jellyfin_id, instance)
+          if item.media_type == "track" && recording &&
+             !JellyfinArchive.seen?(jellyfin_id, instance)
             JellyfinArchive.reconcile(
               target: item, recording_mbid: recording, instance_id: instance,
               user_id: source.external_user_id, client: client_for(source)
             )
           end
-          JellyfinArchive.remember(item:, jellyfin_id:, media_type: "track",
+          JellyfinArchive.remember(item:, jellyfin_id:,
+                                   media_type: item.media_type,
                                    instance_id: instance,
                                    recording_mbid: recording)
         end
@@ -115,14 +127,60 @@ module Rewind
           Source.where(type: "jellyfin", external_user_id: user_id).first
         end
 
-        # Prefer the already-synced track (no network); otherwise resolve via
-        # MusicBrainz from the ids Jellyfin includes in the payload.
+        # Prefer the already-synced item (no network); otherwise build it from
+        # the payload — tracks via MusicBrainz, music videos Jellyfin-native.
         def self.resolve(payload)
+          music_video = payload["ItemType"] == "MusicVideo"
+          media_type = music_video ? "music_video" : "track"
           jellyfin_id = presence(payload["ItemId"])
           existing =
-            jellyfin_id &&
-            Item.where(media_type: "track", jellyfin_id:).first
-          existing || resolve_via_musicbrainz(payload)
+            jellyfin_id && Item.where(media_type:, jellyfin_id:).first
+          return existing if existing
+          return resolve_music_video(payload) if music_video
+
+          resolve_via_musicbrainz(payload)
+        end
+
+        # Build a music_video from the webhook payload (no external provider for
+        # the video itself). Mirrors the pull's artist derivation order; the
+        # next pull backfills the poster the webhook can't supply.
+        def self.resolve_music_video(payload)
+          title = presence(payload["Name"])
+          return unless title
+
+          Services::MusicVideo.build(
+            external_id: music_video_external_id(payload),
+            title:,
+            artist_name: music_video_artist(payload),
+            runtime: ticks_to_minutes(payload["RunTimeTicks"]),
+            release_date: presence(payload["PremiereDate"]),
+            jellyfin_id: presence(payload["ItemId"])
+          )
+        end
+
+        # Prefer the stable YouTube id over Jellyfin's, so a webhook-built video
+        # shares the id the pull assigns and the two dedup onto one Item.
+        def self.music_video_external_id(payload)
+          yt = presence(payload["Provider_youtube"])
+          yt ? "youtube:#{yt}" : "jellyfin:#{payload['ItemId']}"
+        end
+
+        def self.music_video_artist(payload)
+          presence(payload["Artist"]) ||
+            presence(Array(payload["Artists"]).first) ||
+            artist_from_path(payload)
+        end
+
+        def self.artist_from_path(payload)
+          path = presence(payload["Path"])
+          return unless path
+
+          presence(File.basename(File.dirname(path)))
+        end
+
+        def self.ticks_to_minutes(ticks)
+          minutes = (ticks.to_i / 600_000_000.0).round
+          minutes.positive? ? minutes : nil
         end
 
         def self.resolve_via_musicbrainz(payload)
@@ -139,6 +197,18 @@ module Rewind
             length_ms: payload["RunTimeTicks"].to_i / 10_000,
             release_date: presence(payload["PremiereDate"]),
             jellyfin_id: presence(payload["ItemId"])
+          )
+        end
+
+        # Whether the pull (or a prior webhook) already logged this music-video
+        # watch within its runtime window. See Play.music_video_watch_recorded?.
+        def self.music_video_duplicate?(source, item, played_at)
+          Play.music_video_watch_recorded?(
+            user_id: source.user_id,
+            item_id: item.id,
+            instance_id: source.instance_id,
+            played_at: played_at,
+            window: Play.music_video_window(item)
           )
         end
 
