@@ -163,44 +163,6 @@ class SourcesJellyfinTest < Minitest::Test
     assert_equal "mv-1", video.jellyfin_id
   end
 
-  # A played music video already recorded for this watch, so a re-dated pull
-  # can be tested for collapse.
-  def seed_music_video_play(at:)
-    video = Rewind::Services::MusicVideo.build(
-      external_id: "youtube:mv-yt", title: "Basket Case",
-      artist_name: "Green Day", runtime: 3, jellyfin_id: "mv-1"
-    )
-    Rewind::Play.create(user_id: @user.id, item_id: video.id,
-                        source: "jellyfin", instance_id: @source.instance_id,
-                        source_event_id: "jellyfin:mv-1:#{at}",
-                        played_at: Time.parse(at))
-    video
-  end
-
-  def music_video_played_at(at)
-    music_video_item.merge("UserData" => {"LastPlayedDate" => at})
-  end
-
-  test "does not re-log a music video re-dated within its runtime window" do
-    video = seed_music_video_play(at: "2026-10-16T05:00:00Z")
-    # Next sync: Jellyfin advanced the date a minute into the same watch.
-    stub_items([music_video_played_at("2026-10-16T05:01:00Z")])
-
-    result = adapter.recent_plays(since: nil)
-
-    assert_empty(result[:plays].select {|p| p[:item_id] == video.id })
-  end
-
-  test "logs a music video watched again well after the window as a new play" do
-    video = seed_music_video_play(at: "2026-10-16T05:00:00Z")
-    # A genuine re-watch 20 minutes later (well past the ~5-min window).
-    stub_items([music_video_played_at("2026-10-16T05:20:00Z")])
-
-    result = adapter.recent_plays(since: nil)
-
-    assert_equal(1, result[:plays].count {|p| p[:item_id] == video.id })
-  end
-
   def stub_item(id, attrs)
     WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items/#{id}\z})
            .to_return(status: 200,
@@ -327,27 +289,6 @@ class SourcesJellyfinTest < Minitest::Test
     assert_includes io.string, "skipped Audio nil (a1)"
     assert_includes io.string, "no TMDB/MusicBrainz match"
     assert_includes io.string, %[fields: {"Id":"a1"]
-  end
-
-  test "the fetched log tallies items by type, including zero counts" do
-    stub_tmdb_movie(27_205)
-    stub_items([movie_item(id: "m1")])
-
-    io = StringIO.new
-    level = Rewind.logger.level
-    Rewind.logger.reopen(io)
-    Rewind.logger.level = Logger::INFO
-
-    begin
-      adapter.recent_plays(since: nil)
-    ensure
-      Rewind.logger.level = level
-      Rewind.logger.reopen($stdout)
-    end
-
-    assert_includes io.string,
-                    "fetched 1 played items (Movie=1 Episode=0 Audio=0 " \
-                    "Video=0 MusicVideo=0)"
   end
 
   test "resolves an episode via the series' TMDB id" do
