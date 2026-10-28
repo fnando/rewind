@@ -45,7 +45,8 @@ module Rewind
           items = @client.played_items(user_id: @source.external_user_id,
                                        since: fetch_since)
           Rewind.logger.info(
-            "[sync/jellyfin] fetched #{items.size} played items in " \
+            "[sync/jellyfin] fetched #{items.size} played items " \
+            "(#{type_tally(items)}) in " \
             "#{Rewind.format_duration(Rewind.clock - fetch_started)} since " \
             "#{fetch_since.inspect} (cursor #{since.inspect})"
           )
@@ -331,6 +332,19 @@ module Rewind
 
         private def describe(item)
           "#{item['Type']} #{item['Name'].inspect} (#{item['Id']})"
+        end
+
+        # "Movie=3 Episode=11 Audio=200 MusicVideo=0" — a per-type count of the
+        # fetched items, so it's clear at a glance (at INFO) whether a given
+        # type (e.g. MusicVideo) came back at all. Follows the PLAYED_TYPES
+        # order, and always lists every requested type, including the zeros.
+        private def type_tally(items)
+          counts = items.each_with_object(Hash.new(0)) do |item, tally|
+            tally[presence(item["Type"]) || "Unknown"] += 1
+          end
+          Services::Jellyfin::PLAYED_TYPES.split(",").map do |type|
+            "#{type}=#{counts.delete(type) || 0}"
+          end.concat(counts.map {|type, n| "#{type}=#{n}" }).join(" ")
         end
 
         private def last_played(item)

@@ -291,6 +291,27 @@ class SourcesJellyfinTest < Minitest::Test
     assert_includes io.string, %[fields: {"Id":"a1"]
   end
 
+  test "the fetched log tallies items by type, including zero counts" do
+    stub_tmdb_movie(27_205)
+    stub_items([movie_item(id: "m1")])
+
+    io = StringIO.new
+    level = Rewind.logger.level
+    Rewind.logger.reopen(io)
+    Rewind.logger.level = Logger::INFO
+
+    begin
+      adapter.recent_plays(since: nil)
+    ensure
+      Rewind.logger.level = level
+      Rewind.logger.reopen($stdout)
+    end
+
+    assert_includes io.string,
+                    "fetched 1 played items (Movie=1 Episode=0 Audio=0 " \
+                    "Video=0 MusicVideo=0)"
+  end
+
   test "resolves an episode via the series' TMDB id" do
     WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items/series-1})
            .to_return(status: 200,
