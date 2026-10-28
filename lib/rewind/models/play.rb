@@ -17,6 +17,36 @@ module Rewind
     # Tracks and music videos both play directly (albums/artists never do).
     MUSIC_MEDIA_TYPES = %w[track music_video].freeze
 
+    # Seconds added to a music video's runtime to absorb pauses, and the window
+    # used when its runtime is unknown. A music video's LastPlayedDate advances
+    # while it plays (unlike audio, which stays dateless until it settles, and
+    # unlike movies/episodes, which aren't re-dated mid-play), so each pull tick
+    # — and the webhook's completion — would otherwise log the same watch again
+    # under a new key. A play of the same (user, item, instance) within one
+    # runtime window is that same watch; the first writer wins. This merges a
+    # genuine back-to-back replay too, the same trade-off PlayDedup accepts.
+    MUSIC_VIDEO_DEDUP_MARGIN = 120
+    MUSIC_VIDEO_DEDUP_FALLBACK = 600
+
+    # The dedup window (seconds) for a music video, from its runtime (minutes).
+    def self.music_video_window(item)
+      seconds = item.runtime.to_i * 60
+      base = seconds.positive? ? seconds : MUSIC_VIDEO_DEDUP_FALLBACK
+      base + MUSIC_VIDEO_DEDUP_MARGIN
+    end
+
+    # Whether this music-video watch is already recorded — any play of the same
+    # (user, item, instance) within +window+ seconds of +played_at+. Undated
+    # candidates (nil played_at) can't collide on time, so the guard is skipped.
+    def self.music_video_watch_recorded?(user_id:, item_id:, instance_id:,
+                                         played_at:, window:)
+      return false unless played_at
+
+      !where(user_id:, item_id:, instance_id:)
+        .where(played_at: (played_at - window)..(played_at + window))
+        .empty?
+    end
+
     # A completed Jellyfin play reaches us from both the pull sync and the
     # webhook. Both key their source_event_id on the same identity — the
     # track's Jellyfin id plus its LastPlayedDate (the webhook re-fetches that

@@ -175,6 +175,23 @@ class WebhooksTest < Minitest::Test
     assert_equal 1, Rewind::Play.where(item_id: video.id).count
   end
 
+  test "a music video webhook skips a watch the pull already logged" do
+    video = create_item(media_type: "music_video", external_id: "youtube:mv-yt",
+                        title: "Basket Case", jellyfin_id: MV_JF_ID, runtime: 3)
+    # The pull logged this watch a minute earlier, under its own (shifting) key.
+    Rewind::Play.create(
+      user_id: @user.id, item_id: video.id, source: "jellyfin",
+      source_id: @source.id, instance_id: SERVER_ID,
+      source_event_id: "jellyfin:#{MV_JF_ID}:pull",
+      played_at: Time.parse(LAST_PLAYED) - 60
+    )
+    stub_mv_last_played
+
+    post_webhook(mv_payload)
+
+    assert_equal 1, Rewind::Play.where(item_id: video.id).count
+  end
+
   test "a music video dedups against a pull play of the same completion" do
     create_item(media_type: "music_video", external_id: "youtube:mv-yt",
                 title: "Basket Case", jellyfin_id: MV_JF_ID)

@@ -183,12 +183,21 @@ module Rewind
           anchor = played ||
                    presence(item["DateCreated"]) ||
                    presence(item["PremiereDate"])
+          played_at = anchor && Time.parse(anchor)
+          # A music video's LastPlayedDate advances while it plays, so a later
+          # sync would re-log the same watch under a new key. Collapse it onto
+          # the play already recorded for this watch.
+          if resolved.media_type == "music_video" &&
+             music_video_duplicate?(resolved, played_at)
+            return log_skip(item, "music video already recorded this watch")
+          end
+
           Rewind.logger.info(
             "[sync/jellyfin] resolved #{describe(item)} -> item #{resolved.id}"
           )
           {
             item_id: resolved.id,
-            played_at: anchor && Time.parse(anchor),
+            played_at: played_at,
             source_event_id: "jellyfin:#{item['Id']}:#{played || 'played'}"
           }
         rescue Services::TMDB::Error, Services::Jellyfin::Error => error
@@ -319,6 +328,19 @@ module Rewind
           !Rewind::Play
             .where(user_id: @source.user_id, item_id: item_id)
             .empty?
+        end
+
+        # Whether this music-video watch was already recorded within its runtime
+        # window — the pull re-dates it every tick while it plays, so each tick
+        # would otherwise be a fresh play. See Play.music_video_watch_recorded?.
+        private def music_video_duplicate?(resolved, played_at)
+          Rewind::Play.music_video_watch_recorded?(
+            user_id: @source.user_id,
+            item_id: resolved.id,
+            instance_id: @source.instance_id,
+            played_at: played_at,
+            window: Rewind::Play.music_video_window(resolved)
+          )
         end
 
         # Logs why an item isn't being recorded and returns nil, so callers can
