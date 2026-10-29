@@ -648,8 +648,9 @@ module Rewind
       say "Migrations complete."
     end
 
-    desc "dedupe-plays", "Collapse Jellyfin plays recorded by both the pull " \
-                         "sync and the webhook (start vs stop). Idempotent."
+    desc "dedupe-plays",
+         "Collapse duplicate Jellyfin plays: a video re-logged while it " \
+         "played, and a track's pull-start / webhook-stop pair. Idempotent."
     def dedupe_plays
       CLI.load_env!(options)
       CLI.boot_db!
