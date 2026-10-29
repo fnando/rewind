@@ -17,29 +17,33 @@ module Rewind
     # Tracks and music videos both play directly (albums/artists never do).
     MUSIC_MEDIA_TYPES = %w[track music_video].freeze
 
-    # Seconds added to a music video's runtime to absorb pauses, and the window
-    # used when its runtime is unknown. A music video's LastPlayedDate advances
-    # while it plays (unlike audio, which stays dateless until it settles, and
-    # unlike movies/episodes, which aren't re-dated mid-play), so each pull tick
-    # — and the webhook's completion — would otherwise log the same watch again
-    # under a new key. A play of the same (user, item, instance) within one
-    # runtime window is that same watch; the first writer wins. This merges a
-    # genuine back-to-back replay too, the same trade-off PlayDedup accepts.
-    MUSIC_VIDEO_DEDUP_MARGIN = 120
-    MUSIC_VIDEO_DEDUP_FALLBACK = 600
+    # Video types whose LastPlayedDate Jellyfin advances WHILE they play, so a
+    # per-minute pull (and the webhook's completion) would otherwise log the
+    # same watch again and again under a new key. Audio is deliberately out: it
+    # stays dateless until it settles once, and short tracks are legitimately
+    # replayed back-to-back.
+    WATCH_DEDUP_MEDIA_TYPES = %w[movie episode music_video].freeze
 
-    # The dedup window (seconds) for a music video, from its runtime (minutes).
-    def self.music_video_window(item)
+    # Seconds added to a video's runtime to absorb pauses, and the window used
+    # when its runtime is unknown. A play of the same (user, item, instance)
+    # within one runtime window is the same watch; the first writer wins. This
+    # merges a genuine back-to-back replay too, the same trade-off PlayDedup
+    # accepts — fine for video (you can't rewatch a 45-min episode in 45 min).
+    WATCH_DEDUP_MARGIN = 120
+    WATCH_DEDUP_FALLBACK = 600
+
+    # The dedup window (seconds) for one item, from its runtime (minutes).
+    def self.watch_window(item)
       seconds = item.runtime.to_i * 60
-      base = seconds.positive? ? seconds : MUSIC_VIDEO_DEDUP_FALLBACK
-      base + MUSIC_VIDEO_DEDUP_MARGIN
+      base = seconds.positive? ? seconds : WATCH_DEDUP_FALLBACK
+      base + WATCH_DEDUP_MARGIN
     end
 
-    # Whether this music-video watch is already recorded — any play of the same
-    # (user, item, instance) within +window+ seconds of +played_at+. Undated
-    # candidates (nil played_at) can't collide on time, so the guard is skipped.
-    def self.music_video_watch_recorded?(user_id:, item_id:, instance_id:,
-                                         played_at:, window:)
+    # Whether this watch is already recorded — any play of the same (user, item,
+    # instance) within +window+ seconds of +played_at+. Undated candidates (nil
+    # played_at) can't collide on time, so the guard is skipped.
+    def self.watch_recorded?(user_id:, item_id:, instance_id:,
+                             played_at:, window:)
       return false unless played_at
 
       !where(user_id:, item_id:, instance_id:)

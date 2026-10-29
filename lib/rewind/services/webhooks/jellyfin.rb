@@ -50,11 +50,10 @@ module Rewind
           played_at = parse_time(anchor)
           return log_skip(payload, "no usable timestamp") unless played_at
 
-          # A music video is re-dated while it plays, so the pull may already
-          # have logged this watch under a different date. Collapse onto it.
-          if item.media_type == "music_video" &&
-             music_video_duplicate?(source, item, played_at)
-            return log_skip(payload, "music video already recorded this watch")
+          # A video is re-dated while it plays, so the pull may already have
+          # logged this watch under a different date. Collapse onto it.
+          if watch_duplicate?(source, item, played_at)
+            return log_skip(payload, "already recorded this watch")
           end
 
           event_id = "jellyfin:#{jellyfin_id}:#{anchor}"
@@ -200,15 +199,19 @@ module Rewind
           )
         end
 
-        # Whether the pull (or a prior webhook) already logged this music-video
-        # watch within its runtime window. See Play.music_video_watch_recorded?.
-        def self.music_video_duplicate?(source, item, played_at)
-          Play.music_video_watch_recorded?(
+        # Whether the pull (or a prior webhook) already logged this watch within
+        # the item's runtime window. Only video types qualify; see
+        # Play.watch_recorded?.
+        def self.watch_duplicate?(source, item, played_at)
+          types = Play::WATCH_DEDUP_MEDIA_TYPES
+          return false unless types.include?(item.media_type)
+
+          Play.watch_recorded?(
             user_id: source.user_id,
             item_id: item.id,
             instance_id: source.instance_id,
             played_at: played_at,
-            window: Play.music_video_window(item)
+            window: Play.watch_window(item)
           )
         end
 

@@ -201,6 +201,21 @@ class SourcesJellyfinTest < Minitest::Test
     assert_equal(1, result[:plays].count {|p| p[:item_id] == video.id })
   end
 
+  test "does not re-log a movie re-dated within its runtime window" do
+    stub_tmdb_movie(27_205)
+    movie = adapter.resolve(movie_item)
+    Rewind::Play.create(user_id: @user.id, item_id: movie.id,
+                        source: "jellyfin", instance_id: @source.instance_id,
+                        source_event_id: "jellyfin:m1:2026-10-16T05:00:00Z",
+                        played_at: Time.parse("2026-10-16T05:00:00Z"))
+    # The pull a minute later sees the same watch under an advanced date.
+    stub_items([movie_item(last_played: "2026-10-16T05:01:00Z")])
+
+    result = adapter.recent_plays(since: nil)
+
+    assert_empty(result[:plays].select {|p| p[:item_id] == movie.id })
+  end
+
   def stub_item(id, attrs)
     WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items/#{id}\z})
            .to_return(status: 200,

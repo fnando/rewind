@@ -184,12 +184,12 @@ module Rewind
                    presence(item["DateCreated"]) ||
                    presence(item["PremiereDate"])
           played_at = anchor && Time.parse(anchor)
-          # A music video's LastPlayedDate advances while it plays, so a later
-          # sync would re-log the same watch under a new key. Collapse it onto
-          # the play already recorded for this watch.
-          if resolved.media_type == "music_video" &&
-             music_video_duplicate?(resolved, played_at)
-            return log_skip(item, "music video already recorded this watch")
+          # A video's LastPlayedDate advances while it plays, so a later sync
+          # would re-log the same watch under a new key. Collapse it onto the
+          # play already recorded for this watch (audio is left out — see
+          # Play::WATCH_DEDUP_MEDIA_TYPES).
+          if watch_duplicate?(resolved, played_at)
+            return log_skip(item, "already recorded this watch")
           end
 
           Rewind.logger.info(
@@ -330,16 +330,20 @@ module Rewind
             .empty?
         end
 
-        # Whether this music-video watch was already recorded within its runtime
-        # window — the pull re-dates it every tick while it plays, so each tick
-        # would otherwise be a fresh play. See Play.music_video_watch_recorded?.
-        private def music_video_duplicate?(resolved, played_at)
-          Rewind::Play.music_video_watch_recorded?(
+        # Whether this watch was already recorded within the item's runtime
+        # window — the pull re-dates a playing video every tick, so each tick
+        # would otherwise be a fresh play. Only video types qualify; see
+        # Play.watch_recorded?.
+        private def watch_duplicate?(resolved, played_at)
+          types = Rewind::Play::WATCH_DEDUP_MEDIA_TYPES
+          return false unless types.include?(resolved.media_type)
+
+          Rewind::Play.watch_recorded?(
             user_id: @source.user_id,
             item_id: resolved.id,
             instance_id: @source.instance_id,
             played_at: played_at,
-            window: Rewind::Play.music_video_window(resolved)
+            window: Rewind::Play.watch_window(resolved)
           )
         end
 
