@@ -6,12 +6,48 @@ class SettingsSourcesTest < Minitest::Test
   def setup
     @user = create_user
     sign_in(@user)
+    stub_plugin_info
+  end
+
+  def stub_plugin_info(status: 200)
+    WebMock.stub_request(:get, %r{/Rewind/Info\z})
+           .to_return(status:,
+                      body: {
+                        "id" => "6bcfddb4c3fb48f6996f5b02d07e3e62",
+                        "name" => "Rewind", "version" => "1.0.0"
+                      }.to_json,
+                      headers: {"Content-Type" => "application/json"})
+  end
+
+  test "connecting a server without the Rewind plugin is rejected" do
+    stub_auth
+    stub_plugin_info(status: 404)
+
+    post "/settings/sources",
+         {url: "https://jf.test", username: "fnando", password: "pw"}
+
+    assert_equal 0, @user.sources_dataset.count
+    # Checked before signing in, so no token is minted for nothing.
+    assert_not_requested(:post, "https://jf.test/Users/AuthenticateByName")
+    assert_includes last_response.body, "Rewind plugin installed"
+  end
+
+  test "connecting while the plugin can't be reached is rejected" do
+    stub_auth
+    stub_plugin_info(status: 500)
+
+    post "/settings/sources",
+         {url: "https://jf.test", username: "fnando", password: "pw"}
+
+    assert_equal 0, @user.sources_dataset.count
+    assert_includes last_response.body, "Could not reach the Rewind plugin"
   end
 
   def stub_auth(status: 200, access_token: "tok-1", user_id: "u-1",
-                server_id: "srv-1")
+                server_id: "srv-1", user_name: "fnando")
     body = {
-      "AccessToken" => access_token, "User" => {"Id" => user_id},
+      "AccessToken" => access_token,
+      "User" => {"Id" => user_id, "Name" => user_name},
       "ServerId" => server_id
     }
     WebMock.stub_request(:post, "https://jf.test/Users/AuthenticateByName")
@@ -36,6 +72,17 @@ class SettingsSourcesTest < Minitest::Test
     assert_equal "secret-token", source.access_token
     refute_includes Rewind.db[:sources].first[:encrypted_credentials].to_s,
                     "secret-token"
+  end
+
+  test "a connected source shows the Jellyfin username it signs in as" do
+    stub_auth(user_id: "jf-42", user_name: "guga")
+
+    post "/settings/sources",
+         {url: "https://jf.test", username: "guga", password: "pw"}
+    follow_redirect!
+
+    assert_equal "guga", @user.sources_dataset.first.external_user_name
+    assert_includes last_response.body, "Signed in as <strong>guga</strong>"
   end
 
   test "connecting assigns a random per-source device id" do

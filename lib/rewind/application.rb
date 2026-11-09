@@ -45,10 +45,7 @@ module Rewind
             http_origin
           ],
           except: %i[session_hijacking],
-          allow_empty_referrer: true,
-          # Inbound webhooks are machine-to-machine and authenticate by secret,
-          # not a session/CSRF token, so skip the browser protections for them.
-          allow_if: ->(env) { env["PATH_INFO"].to_s.start_with?("/webhooks/") }
+          allow_empty_referrer: true
     end
 
     helpers Helpers::ViewHelper
@@ -64,7 +61,7 @@ module Rewind
       path = request.path_info
       public_paths = ["/login", "/logout", "/info"]
       next if public_paths.include?(path)
-      next if path.start_with?("/assets", "/public", "/images", "/webhooks")
+      next if path.start_with?("/assets", "/public", "/images")
 
       halt redirect "/login" unless @current_user
     end
@@ -117,7 +114,6 @@ module Rewind
 
     require_relative "routes/auth"
     require_relative "routes/info"
-    require_relative "routes/webhooks"
     require_relative "routes/items"
     require_relative "routes/history"
     require_relative "routes/images"

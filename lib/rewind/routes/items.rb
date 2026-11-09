@@ -101,11 +101,12 @@ module Rewind
              "Invalid season/episode"
       end
 
+      played_at = manual_played_at
       item = Services::TMDB.new.episode(show.tmdb_id, season, episode)
       Play.create(
         user_id: current_user.id,
         item_id: item.id,
-        played_at: Time.now,
+        played_at:,
         source: "manual"
       )
 

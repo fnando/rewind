@@ -110,6 +110,25 @@ module Rewind
         fail_form.call("Enter your Jellyfin URL and username.")
       end
 
+      # Plays come from the Rewind plugin's history; without it there's
+      # nothing to sync, so check (no sign-in needed) before linking.
+      begin
+        Services::Jellyfin.new(url).rewind_info
+      rescue Services::Jellyfin::PluginMissing => error
+        fail_form.call(
+          "This Jellyfin server doesn't have the Rewind plugin installed. " \
+          "Install it from #{Services::Jellyfin::PLUGIN_URL}, restart " \
+          "Jellyfin, then connect again.",
+          detail: error.message
+        )
+      rescue Services::Jellyfin::Error => error
+        fail_form.call(
+          "Could not reach the Rewind plugin on this Jellyfin server. " \
+          "Check the URL.",
+          detail: "#{error.class}: #{error.message}"
+        )
+      end
+
       # A random device id per source so Jellyfin binds this connection's token
       # to its own device, never clobbering another account's or environment's.
       device_id = SecureRandom.hex(16)
@@ -127,7 +146,8 @@ module Rewind
 
       source = Source.new(
         user_id: current_user.id, type: "jellyfin", url:, device_id:,
-        external_user_id: auth[:user_id], instance_id: auth[:server_id]
+        external_user_id: auth[:user_id], instance_id: auth[:server_id],
+        external_user_name: auth[:user_name]
       )
       source.credentials = {"access_token" => auth[:access_token]}
 

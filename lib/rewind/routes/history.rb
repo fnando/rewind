@@ -61,16 +61,7 @@ module Rewind
       # Music is only ever recorded from scrobbles, never logged by hand.
       halt 422, "Tracks can't be logged manually" if item.media_type == "track"
 
-      played_at =
-        begin
-          if params[:played_at] && !params[:played_at].empty?
-            Time.parse(params[:played_at])
-          else
-            Time.now
-          end
-        rescue ArgumentError
-          Time.now
-        end
+      played_at = manual_played_at
 
       Play.create(
         user_id: current_user.id,
@@ -80,6 +71,23 @@ module Rewind
       )
 
       redirect "/items/#{item.id}"
+    end
+
+    helpers do
+      # When a hand-logged watch happened: the `played_at` form value, a
+      # wall-clock time in the user's timezone, as UTC. Blank means now. Halts
+      # on a value that isn't a date/time, or one in the future.
+      def manual_played_at
+        raw = params[:played_at].to_s.strip
+        return Time.now if raw.empty?
+
+        played_at = current_user.local_time_to_utc(raw)
+        halt 400, "Invalid date and time" unless played_at
+        # A minute of slack: the form's default is "now", already past.
+        halt 422, "A watch can't be in the future" if played_at > Time.now + 60
+
+        played_at
+      end
     end
 
     delete "/history/:id" do

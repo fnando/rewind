@@ -6,7 +6,14 @@
     <span class="integration__meta">Last sync: <%= source.last_synced_at ? source.last_synced_at.strftime("%Y-%m-%d %H:%M") : "never" %></span>
   </div>
   <div class="integration__row">
-    <span class="integration__uid">User ID <code class="code-chip"><%= h(source.external_user_id) %></code></span>
+    <span class="integration__uid">
+      <% if source.external_user_name %>
+        Signed in as <strong><%= h(source.external_user_name) %></strong>
+        <code class="code-chip" title="Jellyfin user id"><%= h(source.external_user_id) %></code>
+      <% else %>
+        User ID <code class="code-chip"><%= h(source.external_user_id) %></code>
+      <% end %>
+    </span>
     <div class="integration__actions">
       <form method="post" action="/settings/sources/<%= source.id %>/toggle">
         <%= csrf_tag %><button class="btn btn--ghost btn--sm" type="submit"><%= source.enabled? ? "Pause" : "Resume" %></button>

@@ -234,6 +234,26 @@ class ItemsMusicTest < Minitest::Test
     assert_includes last_response.body, "cover-card--in-album"
   end
 
+  test "an album group's time range reads from first to last play" do
+    2.times do |i|
+      track = create_item(
+        media_type: "track", external_id: "mbid:range:#{i}",
+        title: "Range #{i}", parent_external_id: "mbid:rg:r1", runtime: 4,
+        metadata_json: {
+          "artist" => "Radiohead", "artist_external_id" => "mbid:artist:a1",
+          "album" => "OK Computer", "album_external_id" => "mbid:rg:r1"
+        }.to_json
+      )
+      Rewind::Play.create(user_id: @user.id, item_id: track.id,
+                          played_at: Time.utc(2026, 1, 5, 10, 27) + (i * 2400),
+                          source: "jellyfin")
+    end
+
+    get "/history?type=track"
+
+    assert_includes last_response.body, "10:27 AM – 11:07 AM"
+  end
+
   test "an album group card carries the album's rating" do
     # A second track from the same album forms a collapsible group.
     track = create_item(

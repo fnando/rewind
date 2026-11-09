@@ -6,9 +6,8 @@ require "time"
 module Rewind
   module Services
     # Per-provider sync adapters. Each implements:
-    #   recent_plays(since:) -> { plays: [{item_id:, played_at:,
-    #                             source_event_id:}], cursor: <opaque> }
-    #   resolve(external_item) -> Rewind::Item | nil
+    #   changes(since:) -> one page of the provider's play feed
+    #   resolve_entry(entry) -> Rewind::Item | nil
     module Sources
       def self.adapter_for(source)
         case source.type
@@ -17,16 +16,10 @@ module Rewind
         end
       end
 
-      # Resolves Jellyfin API items (Movie/Episode/Audio) into Items via TMDB /
-      # MusicBrainz, and turns a user's played history into play records keyed
-      # by the item id + its LastPlayedDate.
+      # Reads a user's play history from the Rewind Jellyfin plugin's changes
+      # feed, and resolves each played Jellyfin item (Movie/Episode/Audio/...)
+      # into an Item via TMDB / MusicBrainz.
       class Jellyfin
-        # Re-scan this far back before the cursor every sync. Jellyfin dates a
-        # play only once it settles, which can land after a mid-session sync has
-        # already advanced the cursor past it; re-scanning the window catches
-        # those late-dated plays (dedup on source_event_id keeps it idempotent).
-        LOOKBACK_SECONDS = 24 * 60 * 60
-
         def initialize(source)
           @source = source
           @client = Services::Jellyfin.new(source.url,
@@ -39,51 +32,85 @@ module Rewind
           @album_meta = {}
         end
 
-        def recent_plays(since:)
-          fetch_since = lookback(since)
-          fetch_started = Rewind.clock
-          items = @client.played_items(user_id: @source.external_user_id,
-                                       since: fetch_since)
-          Rewind.logger.info(
-            "[sync/jellyfin] fetched #{items.size} played items " \
-            "(#{type_tally(items)}) in " \
-            "#{Rewind.format_duration(Rewind.clock - fetch_started)} since " \
-            "#{fetch_since.inspect} (cursor #{since.inspect})"
-          )
-          # First pass: dated items and non-audio. build_play returns nil for
-          # dateless audio (recovered below).
-          resolve_started = Rewind.clock
-          plays = items.filter_map {|item| build_play(item) }
-          # Second pass: a track Jellyfin marks played but never dates still
-          # belongs to a session — recover it onto its album's play time.
-          plays += recover_dateless_audio(items, plays)
-          Rewind.logger.info(
-            "[sync/jellyfin] resolved #{items.size} items into #{plays.size} " \
-            "plays in #{Rewind.format_duration(Rewind.clock - resolve_started)}"
-          )
-          # Advance to the newest real play date, but never behind the incoming
-          # cursor (the lookback re-scans older items; it must not rewind us).
-          latest = items.filter_map {|i| last_played(i) }.max
-          cursor =
-            if latest && since
-              [latest, since].max_by {|value| Time.parse(value) }
-            else
-              latest || since
-            end
-          # Every Jellyfin payload carries the server's own id; grab it so plays
-          # can be keyed on the instance (stable when a source is re-added).
-          instance_id = items.filter_map {|i| presence(i["ServerId"]) }.first
-          {plays: plays, cursor: cursor, instance_id: instance_id}
+        def server_id
+          @client.server_id
         end
 
-        # Shift the cursor back by the lookback window so late-dated plays are
-        # re-scanned. nil (full history) stays nil.
-        private def lookback(since)
-          return since if since.nil?
+        def user_name
+          @client.current_user_name
+        end
 
-          (Time.parse(since.to_s) - LOOKBACK_SECONDS).iso8601
-        rescue ArgumentError
-          since
+        # One page of the plugin's changes feed after `since` (a sequence).
+        def changes(since:)
+          @client.rewind_changes(since:)
+        end
+
+        # The Item a plugin history entry played, or nil when it can't be
+        # matched. Reads the live library item; when the server no longer has it
+        # (deleted, re-tagged away), falls back to the Item already stamped with
+        # its Jellyfin id, then to the plugin's snapshot of the item taken when
+        # it played. Transport errors fetching the item propagate, so the caller
+        # retries the entry instead of resolving it from a stale snapshot.
+        def resolve_entry(entry)
+          item_id = presence(entry["itemId"])
+          return log_skip(snapshot_item(entry), "no item id") unless item_id
+
+          live = @client.library_item(user_id: @source.external_user_id,
+                                      item_id:)
+          if live.nil?
+            known = Rewind::Item.where(jellyfin_id: item_id).first
+            return known if known
+          end
+
+          resolve_played(live || snapshot_item(entry))
+        end
+
+        private def resolve_played(item)
+          Rewind.logger.debug(
+            "[sync/jellyfin] #{describe(item)} fields: #{JSON.generate(item)}"
+          )
+          resolved = resolve(item)
+          return log_skip(item, "no TMDB/MusicBrainz match") unless resolved
+
+          # Stamp the stable Jellyfin id so ratings can key off it. Audio gets
+          # it through MusicBrainz (so unplayed siblings do too); everything
+          # else is stamped here, its single choke point.
+          stamp_jellyfin_id(resolved, item)
+          # Archive non-audio ids too (audio is archived in music_item). The
+          # ledger is the full id history; only tracks carry a recording and
+          # only they are healed.
+          unless item["Type"] == "Audio"
+            archive_remember(resolved, presence(item["Id"]),
+                             resolved.media_type, instance_for(item))
+          end
+          resolved
+        rescue Services::TMDB::Error, Services::Jellyfin::Error => error
+          log_skip(item, error.message)
+        end
+
+        # The plugin's snapshot of an item (taken when it played) in the shape
+        # of a Jellyfin API item, so `resolve` can match an item the library no
+        # longer has. No Etag, so it's never mistaken for an unchanged item.
+        def snapshot_item(entry)
+          {
+            "Id" => entry["itemId"],
+            "Type" => entry["itemType"],
+            "Name" => entry["name"],
+            "ProviderIds" => entry["providerIds"] || {},
+            "IndexNumber" => entry["indexNumber"],
+            "ParentIndexNumber" => entry["seasonNumber"] || entry["discNumber"],
+            "SeriesId" => entry["seriesId"],
+            "SeriesName" => entry["seriesName"],
+            "SeriesProviderIds" => entry["seriesProviderIds"],
+            "ParentId" => entry["albumId"],
+            "AlbumId" => entry["albumId"],
+            "Album" => entry["album"],
+            "Artists" => entry["artists"],
+            "AlbumArtists" => entry["albumArtists"]&.map { {"Name" => it} },
+            "ProductionYear" => entry["productionYear"],
+            "Genres" => entry["genres"],
+            "RunTimeTicks" => entry["runtimeTicks"]
+          }.compact
         end
 
         # Match to TMDB/MusicBrainz; failing that, keep the item anyway by
@@ -149,61 +176,6 @@ module Rewind
           nil
         end
 
-        private def build_play(item)
-          # Dump the raw payload (debug only — it's noisy), whatever the type
-          # or outcome.
-          Rewind.logger.debug(
-            "[sync/jellyfin] #{describe(item)} fields: #{JSON.generate(item)}"
-          )
-          resolved = resolve(item)
-          return log_skip(item, "no TMDB/MusicBrainz match") unless resolved
-
-          # Stamp the stable Jellyfin id so ratings can key off it. Audio gets
-          # it through MusicBrainz (so unplayed siblings do too); everything
-          # else is stamped here, its single choke point.
-          stamp_jellyfin_id(resolved, item)
-          # Archive non-audio ids too (audio is archived in music_item). The
-          # ledger is the full id history; only tracks carry a recording and
-          # only they are healed.
-          unless item["Type"] == "Audio"
-            archive_remember(resolved, presence(item["Id"]),
-                             resolved.media_type, instance_for(item))
-          end
-
-          # A genuine scrobble always carries a play date. A dateless Audio item
-          # is a Jellyfin artifact — the IsPlayed flag set before the date is
-          # written, or a stale flag. Anchoring it to the file's import date
-          # would strand it on the wrong day, so leave it to the second pass,
-          # which anchors it onto its album's session instead.
-          played = last_played(item)
-          return if played.nil? && item["Type"] == "Audio"
-
-          # No real play date (movies/episodes)? Anchor to when it was added,
-          # then when it aired, so it still lands on the timeline.
-          anchor = played ||
-                   presence(item["DateCreated"]) ||
-                   presence(item["PremiereDate"])
-          played_at = anchor && Time.parse(anchor)
-          # A video's LastPlayedDate advances while it plays, so a later sync
-          # would re-log the same watch under a new key. Collapse it onto the
-          # play already recorded for this watch (audio is left out — see
-          # Play::WATCH_DEDUP_MEDIA_TYPES).
-          if watch_duplicate?(resolved, played_at)
-            return log_skip(item, "already recorded this watch")
-          end
-
-          Rewind.logger.info(
-            "[sync/jellyfin] resolved #{describe(item)} -> item #{resolved.id}"
-          )
-          {
-            item_id: resolved.id,
-            played_at: played_at,
-            source_event_id: "jellyfin:#{item['Id']}:#{played || 'played'}"
-          }
-        rescue Services::TMDB::Error, Services::Jellyfin::Error => error
-          log_skip(item, error.message)
-        end
-
         # Record the Jellyfin id on a non-audio item (movie/episode/generic) so
         # its rating keys off a stable identity. Audio is handled in the music
         # path so unplayed album siblings get ids too.
@@ -214,137 +186,6 @@ module Rewind
           return if id.nil? || resolved.jellyfin_id == id
 
           resolved.update(jellyfin_id: id)
-        end
-
-        # Tracks Jellyfin reports as played-but-dateless (no LastPlayedDate)
-        # would otherwise vanish. Place each where it belongs in its album's
-        # session, so an album heard start-to-finish shows every track. With no
-        # dated same-album track to anchor to we can't know when it played, so
-        # record it undated — it still counts toward all-time play totals
-        # without inventing a day. Skips a track we already recorded (dated this
-        # batch, or any play already stored including a prior recovery), so the
-        # dateless pull — which returns these forever — doesn't re-recover and
-        # re-log them every sync.
-        private def recover_dateless_audio(items, dated_plays)
-          sessions = album_sessions(items)
-          timelines = album_timelines(items)
-          dated_item_ids = dated_plays.to_set {|p| p[:item_id] }
-
-          items.filter_map do |item|
-            next unless item["Type"] == "Audio" && last_played(item).nil?
-
-            resolved = resolve(item)
-            next unless resolved
-            next if dated_item_ids.include?(resolved.id)
-            next if already_recorded?(resolved.id)
-
-            # Interpolate between the album's dated neighbours by track number,
-            # else its earliest session time, else nil (undated play).
-            parent = presence(item["ParentId"])
-            anchor = interpolated_time(item, timelines[parent]) ||
-                     sessions[parent]
-            when_at = anchor ? "@ #{anchor.iso8601}" : "(date unknown)"
-            Rewind.logger.info(
-              "[sync/jellyfin] recovered dateless #{describe(item)} -> " \
-              "item #{resolved.id} #{when_at}"
-            )
-            {
-              item_id: resolved.id,
-              played_at: anchor,
-              source_event_id: "jellyfin:#{item['Id']}:played"
-            }
-          end
-        end
-
-        # album ParentId -> earliest real play time among this batch's dated
-        # audio, the anchor for that album's dateless tracks.
-        private def album_sessions(items)
-          items.each_with_object({}) do |item, sessions|
-            next unless item["Type"] == "Audio"
-
-            played = last_played(item)
-            parent = presence(item["ParentId"])
-            next unless played && parent
-
-            time = Time.parse(played)
-            current = sessions[parent]
-            sessions[parent] = time if current.nil? || time < current
-          end
-        end
-
-        # album ParentId -> sorted [[track number, play time], ...] for this
-        # batch's dated audio, so a dateless track can be slotted between its
-        # neighbours by track number instead of all sharing the session start.
-        private def album_timelines(items)
-          timelines = {}
-          items.each do |item|
-            next unless item["Type"] == "Audio"
-
-            played = last_played(item)
-            parent = presence(item["ParentId"])
-            index = positive_int(item["IndexNumber"])
-            next unless played && parent && index
-
-            (timelines[parent] ||= []) << [index, Time.parse(played)]
-          end
-          timelines.each_value(&:sort!)
-          timelines
-        end
-
-        # Interpolate a dateless track's play time from its dated neighbours on
-        # the same album, by track number. nil when we can't place it (no
-        # timeline, or the track has no number) so the caller falls back to the
-        # session start.
-        private def interpolated_time(item, pairs)
-          return if pairs.nil? || pairs.empty?
-
-          index = positive_int(item["IndexNumber"])
-          return if index.nil?
-
-          # pairs is sorted by track number: the nearest lower neighbour is the
-          # last one at/under index, the nearest higher is the first one above.
-          before = after = nil
-          pairs.each do |pair|
-            if pair.first <= index
-              before = pair
-            else
-              after ||= pair
-            end
-          end
-          if before && after && before.first != after.first
-            a, ta = before
-            b, tb = after
-            ta + ((tb - ta) * (index - a) / (b - a).to_f)
-          else
-            (before || after).last
-          end
-        end
-
-        # Have we already stored any play for this track — a real-dated one, or
-        # a previously-recovered dateless ":played" one? Once we have, stop
-        # re-recovering it: the dateless pull returns these forever, so without
-        # this they'd be re-processed and re-logged on every sync.
-        private def already_recorded?(item_id)
-          !Rewind::Play
-            .where(user_id: @source.user_id, item_id: item_id)
-            .empty?
-        end
-
-        # Whether this watch was already recorded within the item's runtime
-        # window — the pull re-dates a playing video every tick, so each tick
-        # would otherwise be a fresh play. Only video types qualify; see
-        # Play.watch_recorded?.
-        private def watch_duplicate?(resolved, played_at)
-          types = Rewind::Play::WATCH_DEDUP_MEDIA_TYPES
-          return false unless types.include?(resolved.media_type)
-
-          Rewind::Play.watch_recorded?(
-            user_id: @source.user_id,
-            item_id: resolved.id,
-            instance_id: @source.instance_id,
-            played_at: played_at,
-            window: Rewind::Play.watch_window(resolved)
-          )
         end
 
         # Logs why an item isn't being recorded and returns nil, so callers can
@@ -358,23 +199,6 @@ module Rewind
 
         private def describe(item)
           "#{item['Type']} #{item['Name'].inspect} (#{item['Id']})"
-        end
-
-        # "Movie=3 Episode=11 Audio=200 MusicVideo=0" — a per-type count of the
-        # fetched items, so it's clear at a glance (at INFO) whether a given
-        # type (e.g. MusicVideo) came back at all. Follows the PLAYED_TYPES
-        # order, and always lists every requested type, including the zeros.
-        private def type_tally(items)
-          counts = items.each_with_object(Hash.new(0)) do |item, tally|
-            tally[presence(item["Type"]) || "Unknown"] += 1
-          end
-          Services::Jellyfin::PLAYED_TYPES.split(",").map do |type|
-            "#{type}=#{counts.delete(type) || 0}"
-          end.concat(counts.map {|type, n| "#{type}=#{n}" }).join(" ")
-        end
-
-        private def last_played(item)
-          item.dig("UserData", "LastPlayedDate")
         end
 
         private def resolve_movie(item)
@@ -684,8 +508,12 @@ module Rewind
         private def series_tmdb_id(item)
           series_id = item["SeriesId"]
           @series_tmdb.fetch(series_id) do
+            # A snapshot (the item has left the library) carries the series'
+            # ids itself; the series may be gone too, so don't ask for them.
             ids =
-              if series_id
+              if item["SeriesProviderIds"]
+                item["SeriesProviderIds"]
+              elsif series_id
                 @client.provider_ids(user_id: @source.external_user_id,
                                      item_id: series_id)
               else

@@ -24,21 +24,30 @@ class SourcesJellyfinTest < Minitest::Test
     Rewind::Services::Sources::Jellyfin.new(@source)
   end
 
-  def stub_items(items)
-    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items\?})
+  # Stubs the live library item a plugin history entry points at.
+  def stub_library_item(item)
+    WebMock.stub_request(:get,
+                         %r{https://jf\.test/Users/u-1/Items/#{item['Id']}\?})
            .to_return(status: 200,
-                      body: {
-                        "Items" => items,
-                        "TotalRecordCount" => items.size
-                      }.to_json,
+                      body: item.to_json,
                       headers: {"Content-Type" => "application/json"})
   end
 
-  def movie_item(id: "m1", last_played: "2026-10-16T05:00:00Z")
+  # A Rewind plugin changes-feed entry for a Jellyfin item, with the item
+  # stubbed as still in the library.
+  def play_entry(item)
+    stub_library_item(item)
+    {
+      "id" => "p-#{item['Id']}", "itemId" => item["Id"],
+      "itemType" => item["Type"], "name" => item["Name"],
+      "scrobbled" => true, "startedAt" => "2026-10-16T05:00:00Z"
+    }
+  end
+
+  def movie_item(id: "m1")
     {
       "Id" => id, "Type" => "Movie", "Name" => "Inception",
-      "ProviderIds" => {"Tmdb" => "27205"},
-      "UserData" => {"LastPlayedDate" => last_played}
+      "ProviderIds" => {"Tmdb" => "27205"}
     }
   end
 
@@ -59,8 +68,7 @@ class SourcesJellyfinTest < Minitest::Test
       "ParentIndexNumber" => 2026,
       "ProviderIds" => {"youtube" => "9n6sxWtYz6I"},
       "SeriesName" => "Porta dos Fundos", "SeriesId" => "series-jf-1",
-      "SeriesPrimaryImageTag" => "stag", "ImageTags" => {"Primary" => "etag"},
-      "UserData" => {"LastPlayedDate" => "2026-10-05T03:53:30Z"}
+      "SeriesPrimaryImageTag" => "stag", "ImageTags" => {"Primary" => "etag"}
     }
   end
 
@@ -93,8 +101,7 @@ class SourcesJellyfinTest < Minitest::Test
     item = adapter.resolve(
       "Id" => "vid-1", "Type" => "Video", "Name" => "Photography Course",
       "ImageTags" => {"Primary" => "ptag"},
-      "ProviderIds" => {"youtube" => "abc123"},
-      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+      "ProviderIds" => {"youtube" => "abc123"}
     )
 
     assert_equal "movie", item.media_type
@@ -110,8 +117,7 @@ class SourcesJellyfinTest < Minitest::Test
       "Artists" => ["Green Day"], "RunTimeTicks" => 1_800_000_000,
       "PremiereDate" => "1994-02-01T00:00:00Z",
       "ImageTags" => {"Primary" => "mvtag"},
-      "ProviderIds" => {"youtube" => "mv-yt"},
-      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+      "ProviderIds" => {"youtube" => "mv-yt"}
     }.merge(overrides)
   end
 
@@ -155,65 +161,10 @@ class SourcesJellyfinTest < Minitest::Test
   end
 
   test "stamps the jellyfin id on a played music video" do
-    stub_items([music_video_item])
-
-    adapter.recent_plays(since: nil)
+    adapter.resolve_entry(play_entry(music_video_item))
     video = Rewind::Item.where(media_type: "music_video").first
 
     assert_equal "mv-1", video.jellyfin_id
-  end
-
-  # A played music video already recorded for this watch, so a re-dated pull
-  # can be tested for collapse.
-  def seed_music_video_play(at:)
-    video = Rewind::Services::MusicVideo.build(
-      external_id: "youtube:mv-yt", title: "Basket Case",
-      artist_name: "Green Day", runtime: 3, jellyfin_id: "mv-1"
-    )
-    Rewind::Play.create(user_id: @user.id, item_id: video.id,
-                        source: "jellyfin", instance_id: @source.instance_id,
-                        source_event_id: "jellyfin:mv-1:#{at}",
-                        played_at: Time.parse(at))
-    video
-  end
-
-  def music_video_played_at(at)
-    music_video_item.merge("UserData" => {"LastPlayedDate" => at})
-  end
-
-  test "does not re-log a music video re-dated within its runtime window" do
-    video = seed_music_video_play(at: "2026-10-16T05:00:00Z")
-    # Next sync: Jellyfin advanced the date a minute into the same watch.
-    stub_items([music_video_played_at("2026-10-16T05:01:00Z")])
-
-    result = adapter.recent_plays(since: nil)
-
-    assert_empty(result[:plays].select {|p| p[:item_id] == video.id })
-  end
-
-  test "logs a music video watched again well after the window as a new play" do
-    video = seed_music_video_play(at: "2026-10-16T05:00:00Z")
-    # A genuine re-watch 20 minutes later (well past the ~5-min window).
-    stub_items([music_video_played_at("2026-10-16T05:20:00Z")])
-
-    result = adapter.recent_plays(since: nil)
-
-    assert_equal(1, result[:plays].count {|p| p[:item_id] == video.id })
-  end
-
-  test "does not re-log a movie re-dated within its runtime window" do
-    stub_tmdb_movie(27_205)
-    movie = adapter.resolve(movie_item)
-    Rewind::Play.create(user_id: @user.id, item_id: movie.id,
-                        source: "jellyfin", instance_id: @source.instance_id,
-                        source_event_id: "jellyfin:m1:2026-10-16T05:00:00Z",
-                        played_at: Time.parse("2026-10-16T05:00:00Z"))
-    # The pull a minute later sees the same watch under an advanced date.
-    stub_items([movie_item(last_played: "2026-10-16T05:01:00Z")])
-
-    result = adapter.recent_plays(since: nil)
-
-    assert_empty(result[:plays].select {|p| p[:item_id] == movie.id })
   end
 
   def stub_item(id, attrs)
@@ -233,8 +184,7 @@ class SourcesJellyfinTest < Minitest::Test
 
     item = adapter.resolve(
       "Id" => "v9", "Type" => "Video", "Name" => "001 - Intro",
-      "ParentId" => "f-sub", "ImageTags" => {"Primary" => "et"},
-      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+      "ParentId" => "f-sub", "ImageTags" => {"Primary" => "et"}
     )
 
     assert_equal "episode", item.media_type
@@ -255,50 +205,16 @@ class SourcesJellyfinTest < Minitest::Test
 
     item = adapter.resolve(
       "Id" => "v10", "Type" => "Video", "Name" => "A Fat Wreck",
-      "ParentId" => "f-root",
-      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+      "ParentId" => "f-root"
     )
 
     assert_equal "movie", item.media_type
     assert_equal "jellyfin:v10", item.external_id
   end
 
-  test "keeps a watched item with no play date as a null-dated play" do
-    stub_tmdb_movie(27_205)
-    stub_items([
-      {
-        "Id" => "m2", "Type" => "Movie", "Name" => "Inception",
-        "ProviderIds" => {"Tmdb" => "27205"},
-        "UserData" => {"Played" => true}
-      }
-    ])
-
-    play = adapter.recent_plays(since: nil)[:plays].first
-
-    assert_nil play[:played_at]
-    assert_equal "jellyfin:m2:played", play[:source_event_id]
-  end
-
-  test "anchors a dateless play to DateCreated when available" do
-    stub_tmdb_movie(27_205)
-    stub_items([
-      {
-        "Id" => "m3", "Type" => "Movie", "Name" => "Inception",
-        "ProviderIds" => {"Tmdb" => "27205"},
-        "DateCreated" => "2025-01-02T00:00:00Z",
-        "UserData" => {"Played" => true}
-      }
-    ])
-
-    play = adapter.recent_plays(since: nil)[:plays].first
-
-    assert_equal Time.parse("2025-01-02T00:00:00Z"), play[:played_at]
-    assert_equal "jellyfin:m3:played", play[:source_event_id]
-  end
-
   test "dumps the raw fields for every item, even resolved ones" do
     stub_tmdb_movie(27_205)
-    stub_items([movie_item(id: "m1")])
+    entry = play_entry(movie_item(id: "m1"))
 
     io = StringIO.new
     level = Rewind.logger.level
@@ -306,24 +222,18 @@ class SourcesJellyfinTest < Minitest::Test
     Rewind.logger.level = Logger::DEBUG
 
     begin
-      adapter.recent_plays(since: nil)
+      adapter.resolve_entry(entry)
     ensure
       Rewind.logger.level = level
       Rewind.logger.reopen($stdout)
     end
 
     assert_includes io.string, %[fields: {"Id":"m1"]
-    assert_includes io.string, "resolved Movie"
   end
 
   test "logs items it still can't keep so skips are visible with --verbose" do
     # Audio with no name can't resolve and has no fallback.
-    stub_items([
-      {
-        "Id" => "a1", "Type" => "Audio",
-        "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
-      }
-    ])
+    entry = play_entry("Id" => "a1", "Type" => "Audio")
 
     io = StringIO.new
     level = Rewind.logger.level
@@ -331,38 +241,16 @@ class SourcesJellyfinTest < Minitest::Test
     Rewind.logger.level = Logger::DEBUG
 
     begin
-      result = adapter.recent_plays(since: nil)
+      result = adapter.resolve_entry(entry)
     ensure
       Rewind.logger.level = level
       Rewind.logger.reopen($stdout)
     end
 
-    assert_empty result[:plays]
-    assert_includes io.string, "fetched 1 played items"
+    assert_nil result
     assert_includes io.string, "skipped Audio nil (a1)"
     assert_includes io.string, "no TMDB/MusicBrainz match"
     assert_includes io.string, %[fields: {"Id":"a1"]
-  end
-
-  test "the fetched log tallies items by type, including zero counts" do
-    stub_tmdb_movie(27_205)
-    stub_items([movie_item(id: "m1")])
-
-    io = StringIO.new
-    level = Rewind.logger.level
-    Rewind.logger.reopen(io)
-    Rewind.logger.level = Logger::INFO
-
-    begin
-      adapter.recent_plays(since: nil)
-    ensure
-      Rewind.logger.level = level
-      Rewind.logger.reopen($stdout)
-    end
-
-    assert_includes io.string,
-                    "fetched 1 played items (Movie=1 Episode=0 Audio=0 " \
-                    "Video=0 MusicVideo=0)"
   end
 
   test "resolves an episode via the series' TMDB id" do
@@ -375,8 +263,7 @@ class SourcesJellyfinTest < Minitest::Test
 
     item = adapter.resolve(
       "Id" => "e1", "Type" => "Episode", "SeriesId" => "series-1",
-      "ParentIndexNumber" => 1, "IndexNumber" => 2,
-      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+      "ParentIndexNumber" => 1, "IndexNumber" => 2
     )
 
     assert_equal "episode", item.media_type
@@ -392,8 +279,7 @@ class SourcesJellyfinTest < Minitest::Test
         "MusicBrainzTrack" => "rt-1",
         "MusicBrainzAlbum" => "rel-1",
         "MusicBrainzAlbumArtist" => "art-1"
-      },
-      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+      }
     )
 
     assert_equal "track", item.media_type
@@ -412,8 +298,7 @@ class SourcesJellyfinTest < Minitest::Test
       "ProviderIds" => {
         "MusicBrainzTrack" => "rt-new", "MusicBrainzAlbum" => "rel-1",
         "MusicBrainzAlbumArtist" => "art-1", "MusicBrainzRecording" => "rec-1"
-      },
-      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+      }
     }
   end
 
@@ -481,8 +366,7 @@ class SourcesJellyfinTest < Minitest::Test
         "MusicBrainzTrack" => "rt-split", "MusicBrainzAlbum" => "rel-split",
         "MusicBrainzAlbumArtist" => "nfg-id",
         "MusicBrainzRecording" => "rec-split"
-      },
-      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+      }
     )
 
     assert_equal "New Found Glory", item.artist
@@ -521,8 +405,7 @@ class SourcesJellyfinTest < Minitest::Test
       "ProviderIds" => {
         "MusicBrainzTrack" => "rt-split", "MusicBrainzAlbum" => "rel-split",
         "MusicBrainzAlbumArtist" => "nfg-id; dc-id"
-      },
-      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+      }
     }
     stub_album_tracks("split-alb", [split])
 
@@ -547,8 +430,7 @@ class SourcesJellyfinTest < Minitest::Test
       "ProviderIds" => {
         "MusicBrainzTrack" => "rt-bc", "MusicBrainzAlbum" => "rel-bc",
         "MusicBrainzAlbumArtist" => "bc-id"
-      },
-      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+      }
     )
 
     assert_equal "Bad Cop/Bad Cop", item.artist
@@ -558,8 +440,7 @@ class SourcesJellyfinTest < Minitest::Test
     {
       "Id" => id, "Type" => "Audio", "Name" => name,
       "Album" => "Dookie", "AlbumArtist" => "Green Day",
-      "ParentId" => parent_id, "IndexNumber" => index,
-      "UserData" => {"LastPlayedDate" => "2026-10-16T05:00:00Z"}
+      "ParentId" => parent_id, "IndexNumber" => index
     }
   end
 
@@ -585,7 +466,7 @@ class SourcesJellyfinTest < Minitest::Test
 
     assert_equal ["Burnout", "Chump", "Having a Blast"], tracks.map(&:title)
     assert_equal [1, 3, 2], tracks.map(&:track_number)
-    # None of the backfilled tracks carry a play — plays come from recent_plays.
+    # None of the backfilled tracks carry a play — plays come from the sync.
     assert_equal 0, Rewind::Play.count
   end
 
@@ -710,7 +591,7 @@ class SourcesJellyfinTest < Minitest::Test
 
     assert_equal %w[Dookie Insomniac Nimrod], albums.map(&:title)
     assert(albums.all? {|a| a.parent_external_id == artist.external_id })
-    # Backfilled albums carry no plays — plays come from recent_plays.
+    # Backfilled albums carry no plays — plays come from the sync.
     assert_equal 0, Rewind::Play.count
   end
 
@@ -884,131 +765,10 @@ class SourcesJellyfinTest < Minitest::Test
                      query: hash_including("AlbumArtistIds" => "jf-artist-1"))
   end
 
-  test "records a dateless audio track with no session as a null-dated play" do
-    stub_items([
-      {
-        "Id" => "a9", "Type" => "Audio", "Name" => "Ghost Play",
-        "Album" => "Nowhere", "AlbumArtist" => "Nobody",
-        "UserData" => {"Played" => true}
-      }
-    ])
-
-    result = adapter.recent_plays(since: nil)
-    play = result[:plays].first
-
-    # No session to date it, but the play still counts — just without a day.
-    refute_nil play
-    assert_nil play[:played_at]
-    assert_equal "jellyfin:a9:played", play[:source_event_id]
-  end
-
-  def audio_dated(id:, name:, at:, parent_id: "alb-1")
-    {
-      "Id" => id, "Type" => "Audio", "Name" => name,
-      "Album" => "Dookie", "AlbumArtist" => "Green Day",
-      "ParentId" => parent_id, "UserData" => {"LastPlayedDate" => at}
-    }
-  end
-
-  def audio_dateless(id:, name:, parent_id: "alb-1", provider_ids: nil)
-    item = {
-      "Id" => id, "Type" => "Audio", "Name" => name,
-      "Album" => "Dookie", "AlbumArtist" => "Green Day",
-      "ParentId" => parent_id, "UserData" => {"Played" => true}
-    }
-    item["ProviderIds"] = provider_ids if provider_ids
-    item
-  end
-
-  test "anchors a dateless audio track onto its album's session" do
-    stub_items([
-      audio_dated(id: "d1", name: "Opener", at: "2026-10-18T20:00:00Z"),
-      audio_dated(id: "d2", name: "Middle", at: "2026-10-18T20:03:00Z"),
-      audio_dateless(id: "d3", name: "Closer")
-    ])
-
-    result = adapter.recent_plays(since: nil)
-    closer = Rewind::Item.where(title: "Closer").first
-    recovered = result[:plays].find {|p| p[:item_id] == closer.id }
-
-    assert_equal 3, result[:plays].size
-    refute_nil recovered
-    # Anchored to the album's earliest session time, with a stable event id.
-    assert_equal Time.parse("2026-10-18T20:00:00Z"), recovered[:played_at]
-    assert_equal "jellyfin:d3:played", recovered[:source_event_id]
-  end
-
-  def audio_indexed(id:, name:, index:, at: nil)
-    {
-      "Id" => id, "Type" => "Audio", "Name" => name, "Album" => "Dookie",
-      "AlbumArtist" => "Green Day", "ParentId" => "alb-1",
-      "IndexNumber" => index,
-      "UserData" => at ? {"LastPlayedDate" => at} : {"Played" => true}
-    }
-  end
-
-  test "slots a dateless track between its dated neighbours by track number" do
-    stub_album_tracks("alb-1", [])
-    stub_items([
-      audio_indexed(id: "t1", name: "One", index: 1,
-                    at: "2026-10-18T20:00:00Z"),
-      audio_indexed(id: "t3", name: "Three", index: 3,
-                    at: "2026-10-18T20:06:00Z"),
-      audio_indexed(id: "t2", name: "Two", index: 2)
-    ])
-
-    result = adapter.recent_plays(since: nil)
-    two = Rewind::Item.where(title: "Two").first
-    recovered = result[:plays].find {|p| p[:item_id] == two.id }
-
-    refute_nil recovered
-    # Track 2 lands halfway between track 1 (20:00) and track 3 (20:06).
-    assert_equal Time.parse("2026-10-18T20:03:00Z"), recovered[:played_at]
-    assert_equal "jellyfin:t2:played", recovered[:source_event_id]
-  end
-
-  test "does not recover a dateless track that already has a dated play" do
-    track = create_item(media_type: "track", external_id: "mbid:rec-xyz",
-                        title: "Rec")
-    Rewind::Play.create(
-      user_id: @user.id, item_id: track.id, source: "jellyfin",
-      source_event_id: "jellyfin:recA:2026-10-18T19:00:00Z",
-      played_at: Time.parse("2026-10-18T19:00:00Z")
-    )
-    stub_items([
-      audio_dated(id: "sess", name: "Session", at: "2026-10-18T20:00:00Z"),
-      audio_dateless(id: "recB", name: "Rec",
-                     provider_ids: {"MusicBrainzRecording" => "rec-xyz"})
-    ])
-
-    result = adapter.recent_plays(since: nil)
-
-    refute(result[:plays].any? {|p| p[:item_id] == track.id })
-  end
-
-  test "recent_plays re-scans the lookback window before the cursor" do
-    # A play dated an hour before the cursor would be cut off without the
-    # 24h lookback; with it, the late-dated play is recovered.
-    stub_items([
-      {
-        "Id" => "late", "Type" => "Audio", "Name" => "Late Dated",
-        "Album" => "X", "AlbumArtist" => "Y",
-        "UserData" => {"LastPlayedDate" => "2026-10-18T11:00:00Z"}
-      }
-    ])
-
-    result = adapter.recent_plays(since: "2026-10-18T12:00:00Z")
-
-    assert_equal 1, result[:plays].size
-    # The cursor never rewinds behind the incoming one.
-    assert_equal "2026-10-18T12:00:00Z", result[:cursor]
-  end
-
   test "stamps the jellyfin id on a played movie" do
     stub_tmdb_movie(27_205)
-    stub_items([movie_item(id: "m1")])
 
-    adapter.recent_plays(since: nil)
+    adapter.resolve_entry(play_entry(movie_item(id: "m1")))
     movie = Rewind::Item.where(media_type: "movie",
                                external_id: "tmdb:27205").first
 
@@ -1016,25 +776,15 @@ class SourcesJellyfinTest < Minitest::Test
   end
 
   test "stamps jellyfin ids on a played audio track and its album" do
-    stub_items([audio_item(id: "a1", name: "Burnout", index: 1)])
+    stub_album_tracks("alb-1", [])
 
-    adapter.recent_plays(since: nil)
+    adapter.resolve_entry(
+      play_entry(audio_item(id: "a1", name: "Burnout", index: 1))
+    )
     track = Rewind::Item.where(media_type: "track", title: "Burnout").first
     album = Rewind::Item.where(media_type: "album").first
 
     assert_equal "a1", track.jellyfin_id
     assert_equal "alb-1", album.jellyfin_id
-  end
-
-  test "recent_plays builds plays with a stable source_event_id and cursor" do
-    stub_tmdb_movie(27_205)
-    stub_items([movie_item(id: "m1", last_played: "2026-10-16T05:00:00Z")])
-
-    result = adapter.recent_plays(since: nil)
-    play = result[:plays].first
-
-    assert_equal "jellyfin:m1:2026-10-16T05:00:00Z", play[:source_event_id]
-    assert_equal "2026-10-16T05:00:00Z", result[:cursor]
-    refute_nil play[:item_id]
   end
 end

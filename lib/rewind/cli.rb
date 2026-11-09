@@ -129,7 +129,7 @@ module Rewind
       true
     end
 
-    LIST_FORMAT = "%-5s %-10s %-40s %-8s %-18s"
+    LIST_FORMAT = "%-5s %-10s %-40s %-20s %-8s %-18s"
 
     desc "list", "List connected sync sources"
     def list
@@ -140,13 +140,15 @@ module Rewind
         return
       end
 
-      say format(LIST_FORMAT, "ID", "TYPE", "URL", "ENABLED", "LAST SYNC")
+      say format(LIST_FORMAT, "ID", "TYPE", "URL", "USER", "ENABLED",
+                 "LAST SYNC")
       rows.each do |source|
         say format(
           LIST_FORMAT,
           source.id,
           source.type,
           source.url,
+          source.external_user_name || source.external_user_id,
           source.enabled? ? "yes" : "no",
           source.last_synced_at&.strftime("%Y-%m-%d %H:%M") || "-"
         )
@@ -248,80 +250,10 @@ module Rewind
     end
   end
 
-  class WebhooksCLI < Thor
-    class_option :env_file, type: :string,
-                            desc: "Dotenv file to load before executing"
-
-    def self.exit_on_failure?
-      true
-    end
-
-    desc "new", "Mint a webhook secret (shown once)"
-    option :name, type: :string, desc: "A label, e.g. the instance name"
-    def new
-      boot!
-      record, secret = Rewind::Webhook.mint(name: options[:name])
-      say "\n== Webhook created =="
-      say "  id:    #{record.id}"
-      say "  name:  #{record.name || '-'}"
-      say "  path:  /webhooks/jellyfin/#{secret}"
-      say "\nStore the secret now — it can't be shown again. Register your " \
-          "host + that path in Jellyfin's webhook plugin."
-    end
-
-    desc "list", "List webhook secrets"
-    def list
-      boot!
-      rows = Rewind::Webhook.order(:id).all
-      return say "No webhooks yet. Run: rewind webhooks:new" if rows.empty?
-
-      say "ID    NAME                 ENABLED  LAST USED"
-      rows.each do |w|
-        say format(
-          "%-5s %-20s %-8s %-20s",
-          w.id, w.name || "-", w.enabled ? "yes" : "no",
-          w.last_used_at&.strftime("%Y-%m-%d %H:%M") || "never"
-        )
-      end
-    end
-
-    desc "rotate", "Replace a webhook's secret (shown once)"
-    option :id, type: :numeric, required: true
-    def rotate
-      boot!
-      webhook = find(options[:id])
-      secret = webhook.rotate!
-      say "Rotated webhook #{webhook.id}. New path: " \
-          "/webhooks/jellyfin/#{secret}"
-    end
-
-    desc "revoke", "Disable a webhook without deleting it"
-    option :id, type: :numeric, required: true
-    def revoke
-      boot!
-      webhook = find(options[:id])
-      webhook.update(enabled: false)
-      say "Revoked webhook #{webhook.id}."
-    end
-
-    no_commands do
-      def boot!
-        Rewind::CLI.load_env!(options)
-        Rewind::CLI.boot_db!
-      end
-
-      def find(id)
-        webhook = Rewind::Webhook[id.to_i]
-        abort("Webhook not found: #{id}") unless webhook
-        webhook
-      end
-    end
-  end
-
   # On-demand refreshes. The sync fetches each item once and skips it while
   # unchanged (fast, never stale for what it tracks), so these are the manual
   # path to re-pull data that grows or changes out of band — new albums for an
-  # artist, new seasons of a show, or plays Jellyfin recorded without a date.
+  # artist, or new seasons of a show.
   class BackfillCLI < Thor
     class_option :env_file, type: :string,
                             desc: "Dotenv file to load before executing"
@@ -384,33 +316,6 @@ module Rewind
       pruned = Rewind::Services::Sources::Jellyfin.prune_orphaned_albums
       say "Backfilled albums for #{done} artists."
       say "Removed #{pruned} stale #{pruned == 1 ? 'album' : 'albums'}."
-    end
-
-    desc "undated-plays", "Record played tracks Jellyfin left without a date"
-    def undated_plays
-      Rewind::CLI.load_env!(options)
-      Rewind::CLI.boot_db!
-      # Surface the pull/resolve timings as it works — a full scan is slow.
-      Rewind.logger.level = Logger::INFO
-
-      sources = Rewind::Source.where(type: "jellyfin", enabled: true)
-      abort("No enabled Jellyfin sources.") if sources.empty?
-
-      recovered = 0
-      sources.each do |source|
-        say "Source #{source.id} (#{source.url}): scanning full history…"
-        adapter = Rewind::Services::Sources::Jellyfin.new(source)
-        plays = adapter.recent_plays(since: nil)[:plays]
-        written = plays.count do |play|
-          Rewind::Services::Sync.record_play(source, play) == :written
-        end
-        recovered += written
-        say "  recorded #{written} of #{plays.size} plays"
-      rescue StandardError => error
-        say "  source #{source.id} failed: #{error.message}"
-      end
-
-      say "Recorded #{recovered} missing #{recovered == 1 ? 'play' : 'plays'}."
     end
 
     desc "rekey-music", "Re-key albums/tracks to release + release-track ids"
@@ -648,16 +553,6 @@ module Rewind
       say "Migrations complete."
     end
 
-    desc "dedupe-plays",
-         "Collapse duplicate Jellyfin plays: a video re-logged while it " \
-         "played, and a track's pull-start / webhook-stop pair. Idempotent."
-    def dedupe_plays
-      CLI.load_env!(options)
-      CLI.boot_db!
-      removed = Rewind::Services::PlayDedup.run
-      say "Removed #{removed} duplicate #{removed == 1 ? 'play' : 'plays'}."
-    end
-
     desc "sync", "Sync plays from enabled sources"
     option :source, type: :numeric,
                     desc: "Only sync this source id (default: all enabled)"
@@ -666,8 +561,10 @@ module Rewind
     option :verbose, type: :boolean, aliases: "-v",
                      desc: "Shortcut for --verbose-level=info"
     option :reset, type: :boolean, default: false,
-                   desc: "Clear cursors and re-pull the full history, then " \
-                         "rebuild streaks (non-destructive: deletes nothing)"
+                   desc: "Delete the Jellyfin plays and re-import the full " \
+                         "history from the Rewind plugin, then rebuild streaks"
+    option :yes, type: :boolean, default: false,
+                 desc: "Don't ask for confirmation with --reset"
     def sync
       CLI.load_env!(options)
       CLI.boot_db!
@@ -698,20 +595,37 @@ module Rewind
         abort("Sync failed for source #{source.id}: #{error.message}")
       end
 
-      # --reset: re-pull the full history and rebuild derived data. It deletes
-      # NOTHING — `plays` is an accumulated event log that Jellyfin does not
-      # retain (it keeps only the latest LastPlayedDate per item), so wiping it
-      # would be irreversible data loss. Clearing cursors refetches everything;
-      # re-syncing refreshes item metadata and dedupes plays by source_event_id;
-      # rebuilding recomputes streaks from the (intact) plays.
+      # --reset: start over from the Rewind plugin. Deletes the plays imported
+      # from the selected sources (every enabled one, or --source) and
+      # re-imports their full history from the plugin's changes feed. Ratings,
+      # reviews, items and plays from other origins (Trakt, manual) are kept.
       def resync
         scope = Rewind::Source.where(enabled: true)
-        abort("No enabled sources to sync.") if scope.empty?
+        scope = scope.where(id: options[:source].to_i) if options[:source]
+        sources = scope.all
+        abort("No enabled sources to sync.") if sources.empty?
+        confirm_reset!(sources)
 
-        scope.update(cursor: nil)
-        Rewind::Services::Sync.run_once
+        removed = Rewind::Services::Sync.reset(sources)
+        sources.each do |source|
+          Rewind::Services::Sync.sync_source(source)
+        rescue StandardError => error
+          say "Sync failed for source #{source.id}: #{error.message}"
+        end
         Rewind::Services::Streaks.rebuild_all
-        say "Re-pulled full history and rebuilt streaks. Nothing was deleted."
+        imported = Rewind::Play.where(source_id: sources.map(&:id)).count
+        say "Removed #{removed} and imported #{imported} plays; " \
+            "rebuilt streaks."
+      end
+
+      def confirm_reset!(sources)
+        return if options[:yes]
+
+        ids = sources.map(&:id).join(", ")
+        print "Delete every play imported from source #{ids} and " \
+              "re-import from the Rewind plugin? [y/N] "
+        answer = $stdin.gets.to_s.strip.downcase
+        abort("Aborted.") unless %w[y yes].include?(answer)
       end
     end
 
@@ -749,11 +663,8 @@ module Rewind
     desc "import SUBCOMMAND", "Import data from other services (trakt)"
     subcommand "import", ImportCLI
 
-    desc "webhooks SUBCOMMAND", "Manage webhook secrets"
-    subcommand "webhooks", WebhooksCLI
-
     desc "backfill SUBCOMMAND",
-         "Refresh data on demand (series, artist-albums, undated-plays)"
+         "Refresh data on demand (series, artist-albums)"
     subcommand "backfill", BackfillCLI
 
     desc "artists SUBCOMMAND", "Music artist admin fixes (merge)"

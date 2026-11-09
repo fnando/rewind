@@ -39,28 +39,14 @@ class JellyfinServiceTest < Minitest::Test
     assert_empty Rewind::Services::Jellyfin.public_users("https://jf.test")
   end
 
-  def item(id, last_played, name: "Movie")
-    {
-      "Id" => id, "ItemType" => "Movie", "Name" => name,
-      "UserData" => {"LastPlayedDate" => last_played, "Played" => true}
-    }
-  end
-
-  def stub_items(body, start_index: 0)
-    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
-           .with(query: hash_including("StartIndex" => start_index.to_s))
-           .to_return(status: 200, body: body.to_json,
-                      headers: {"Content-Type" => "application/json"})
-  end
-
-  test "authenticate returns the access token and jellyfin user id" do
+  test "authenticate returns the access token and jellyfin user" do
     WebMock.stub_request(:post, "https://jf.test/Users/AuthenticateByName")
            .with(body: {Username: "fnando", Pw: "secret"}.to_json)
            .to_return(
              status: 200,
              body: {
                "AccessToken" => "tok-123",
-               "User" => {"Id" => "u-1"},
+               "User" => {"Id" => "u-1", "Name" => "fnando"},
                "ServerId" => "srv-9"
              }.to_json,
              headers: {"Content-Type" => "application/json"}
@@ -71,7 +57,11 @@ class JellyfinServiceTest < Minitest::Test
                                                      password: "secret")
 
     assert_equal(
-      {access_token: "tok-123", user_id: "u-1", server_id: "srv-9"}, result
+      {
+        access_token: "tok-123", user_id: "u-1", user_name: "fnando",
+        server_id: "srv-9"
+      },
+      result
     )
   end
 
@@ -102,82 +92,6 @@ class JellyfinServiceTest < Minitest::Test
       Rewind::Services::Jellyfin.new("https://jf.test")
                                 .authenticate(username: "x", password: "y")
     end
-  end
-
-  test "played_items returns only items newer than the cursor" do
-    stub_items({
-                 "Items" => [
-                   item("a", "2026-10-16T05:00:00Z"),
-                   item("b", "2026-10-16T04:00:00Z"),
-                   item("c", "2026-10-16T03:00:00Z")
-                 ], "TotalRecordCount" => 3
-               })
-
-    client = Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
-    items = client.played_items(user_id: "u-1", since: "2026-10-16T04:00:00Z")
-
-    assert_equal(%w[a], items.map {|i| i["Id"] })
-  end
-
-  def undated(id, parent: nil)
-    item = {
-      "Id" => id, "ItemType" => "Audio", "Name" => id,
-      "UserData" => {"Played" => true}
-    }
-    item["ParentId"] = parent if parent
-    item
-  end
-
-  def dated(id, played, parent: nil)
-    item = item(id, played)
-    item["ParentId"] = parent if parent
-    item
-  end
-
-  test "played_items catches undated IsPlayed tracks on a played album" do
-    # Descending scan early-returns at the cursor, before any undated tail.
-    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
-           .with(query: hash_including("SortOrder" => "Descending"))
-           .to_return(status: 200,
-                      headers: {"Content-Type" => "application/json"},
-                      body: {
-                        "Items" => [
-                          dated("new", "2026-10-16T05:00:00Z", parent: "alb"),
-                          dated("old", "2026-10-16T03:00:00Z", parent: "alb")
-                        ], "TotalRecordCount" => 2
-                      }.to_json)
-    # Ascending scan: undated IsPlayed items sort first, then a dated one. "u3"
-    # is on an album not in this batch, so it's left for a full scan.
-    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items})
-           .with(query: hash_including("SortOrder" => "Ascending"))
-           .to_return(status: 200,
-                      headers: {"Content-Type" => "application/json"},
-                      body: {
-                        "Items" => [
-                          undated("u1", parent: "alb"),
-                          undated("u2", parent: "alb"),
-                          undated("u3", parent: "other"),
-                          dated("d", "2026-10-16T02:00:00Z", parent: "alb")
-                        ], "TotalRecordCount" => 4
-                      }.to_json)
-
-    client = Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
-    items = client.played_items(user_id: "u-1", since: "2026-10-16T04:00:00Z")
-
-    assert_equal(%w[new u1 u2], items.map {|i| i["Id"] })
-  end
-
-  test "played_items skips the undated query on a full scan" do
-    stub_items({
-                 "Items" => [item("a", "2026-10-16T05:00:00Z")],
-                 "TotalRecordCount" => 1
-               })
-
-    Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
-                              .played_items(user_id: "u-1")
-
-    refute_requested(:get, %r{https://jf\.test/Users/u-1/Items},
-                     query: hash_including("SortOrder" => "Ascending"))
   end
 
   test "album_tracks lists the audio children of an album" do
@@ -316,26 +230,121 @@ class JellyfinServiceTest < Minitest::Test
     )
   end
 
-  test "played_items paginates until the records are exhausted" do
-    stub_items({
-                 "Items" => Array.new(2) do |n|
-                   item("p#{n}",
-                        "2026-10-16T0#{9 - n}:00:00Z")
-                 end,
-                 "TotalRecordCount" => 4
-               }, start_index: 0)
-    stub_items({
-                 "Items" => Array.new(2) do |n|
-                   item("q#{n}",
-                        "2026-10-16T0#{3 - n}:00:00Z")
-                 end,
-                 "TotalRecordCount" => 4
-               }, start_index: 2)
+  def client
+    Rewind::Services::Jellyfin.new("https://jf.test", token: "t")
+  end
 
-    items = Rewind::Services::Jellyfin.new("https://jf.test", token: "t",
-                                                              page_size: 2)
-                                      .played_items(user_id: "u-1")
+  test "rewind_changes reads a page of the plugin's changes feed" do
+    WebMock.stub_request(:get, "https://jf.test/Rewind/History/Changes")
+           .with(query: {"since" => "12", "limit" => "1000"},
+                 headers: {"Authorization" => 'MediaBrowser Token="t"'})
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {
+                        "items" => [{"id" => "p1"}], "nextSince" => 13,
+                        "hasMore" => false
+                      }.to_json)
 
-    assert_equal(%w[p0 p1 q0 q1], items.map {|i| i["Id"] })
+    page = client.rewind_changes(since: 12)
+
+    assert_equal 13, page["nextSince"]
+    assert_equal(["p1"], page["items"].map { it["id"] })
+  end
+
+  test "rewind_changes reports a server without the plugin" do
+    WebMock.stub_request(:get, %r{https://jf\.test/Rewind/History/Changes})
+           .to_return(status: 404)
+
+    assert_raises(Rewind::Services::Jellyfin::PluginMissing) do
+      client.rewind_changes(since: 0)
+    end
+  end
+
+  test "library_item asks for the fields the resolver reads" do
+    WebMock.stub_request(:get, "https://jf.test/Users/u-1/Items/m1")
+           .with(query: {"Fields" => Rewind::Services::Jellyfin::ITEM_FIELDS})
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {"Id" => "m1", "Etag" => "e"}.to_json)
+
+    assert_equal "e", client.library_item(user_id: "u-1", item_id: "m1")["Etag"]
+  end
+
+  test "library_item is nil for a deleted item and raises on failures" do
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items/gone})
+           .to_return(status: 404)
+    WebMock.stub_request(:get, %r{https://jf\.test/Users/u-1/Items/down})
+           .to_return(status: 503)
+
+    assert_nil client.library_item(user_id: "u-1", item_id: "gone")
+    assert_raises(Rewind::Services::Jellyfin::Error) do
+      client.library_item(user_id: "u-1", item_id: "down")
+    end
+  end
+
+  test "server_id reads the id from the public system info" do
+    WebMock.stub_request(:get, "https://jf.test/System/Info/Public")
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {"Id" => "srv-1"}.to_json)
+
+    assert_equal "srv-1", client.server_id
+  end
+
+  test "rewind_info confirms the plugin without signing in" do
+    WebMock.stub_request(:get, "https://jf.test/Rewind/Info")
+           .with {|request| request.headers["Authorization"].nil? }
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {
+                        "id" => Rewind::Services::Jellyfin::PLUGIN_ID,
+                        "version" => "1.0.0"
+                      }.to_json)
+
+    info = Rewind::Services::Jellyfin.new("https://jf.test").rewind_info
+
+    assert_equal "1.0.0", info["version"]
+  end
+
+  test "rewind_info accepts the id as Jellyfin writes it, without dashes" do
+    WebMock.stub_request(:get, "https://jf.test/Rewind/Info")
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {
+                        "id" => "6bcfddb4c3fb48f6996f5b02d07e3e62",
+                        "name" => "Rewind",
+                        "version" => "0.0.0.0"
+                      }.to_json)
+
+    info = Rewind::Services::Jellyfin.new("https://jf.test").rewind_info
+
+    assert_equal "Rewind", info["name"]
+  end
+
+  test "rewind_info reports a server without the plugin" do
+    WebMock.stub_request(:get, "https://bare.test/Rewind/Info")
+           .to_return(status: 404)
+    # Something else answering on that path isn't the plugin either.
+    WebMock.stub_request(:get, "https://other.test/Rewind/Info")
+           .to_return(status: 200, body: "<html></html>")
+
+    %w[https://bare.test https://other.test].each do |url|
+      assert_raises(Rewind::Services::Jellyfin::PluginMissing) do
+        Rewind::Services::Jellyfin.new(url).rewind_info
+      end
+    end
+  end
+
+  test "rewind_changes rejects a response that isn't the feed" do
+    WebMock.stub_request(:get, %r{https://jf\.test/Rewind/History/Changes})
+           .to_return(status: 200,
+                      headers: {"Content-Type" => "application/json"},
+                      body: {"Items" => [], "NextSince" => 0}.to_json)
+
+    error = assert_raises(Rewind::Services::Jellyfin::Error) do
+      client.rewind_changes(since: 0)
+    end
+
+    assert_match(/Unexpected Rewind changes response/, error.message)
   end
 end

@@ -9,28 +9,34 @@ module Rewind
     #
     # - `public_users` (unauthenticated) suggests users when linking an account.
     # - `authenticate` exchanges username/password for a per-user access token.
-    # - `played_items` pages through a user's watched/listened history, newest
-    #   first, stopping once it reaches the sync cursor.
+    # - `rewind_changes` pages through the Rewind plugin's play history feed.
+    # - `library_item` and friends read item metadata for the resolver.
     class Jellyfin
       Error = Class.new(Rewind::Error)
       AuthError = Class.new(Error)
+      PluginMissing = Class.new(Error)
+
+      # The Rewind Jellyfin plugin's id, as reported by /Rewind/Info.
+      PLUGIN_ID = "6bcfddb4-c3fb-48f6-996f-5b02d07e3e62"
+      PLUGIN_URL = "https://github.com/fnando/jellyfin-rewind-plugin"
 
       TIMEOUT = 8
-      PAGE_SIZE = 100
-      PLAYED_TYPES = "Movie,Episode,Audio,Video,MusicVideo"
+      CHANGES_LIMIT = 1000
+      ITEM_FIELDS = "ProviderIds,ParentIndexNumber,IndexNumber,SeriesId," \
+                    "ParentId,DateCreated,PremiereDate,ProductionYear,Genres," \
+                    "Path,Artists,AlbumArtists,Etag"
 
       def self.public_users(url)
         new(url).public_users
       end
 
-      def initialize(url, token: nil, device_id: nil, page_size: PAGE_SIZE)
+      def initialize(url, token: nil, device_id: nil)
         @url = self.class.normalize_url(url)
         @token = token
         # A per-source device id keeps tokens from clobbering each other.
         # Default to a random one (not a shared constant) so we can never emit a
         # colliding device id even if a caller forgets to pass one.
         @device_id = device_id || SecureRandom.hex(16)
-        @page_size = page_size
       end
 
       def self.normalize_url(url)
@@ -73,94 +79,102 @@ module Rewind
         data = JSON.parse(response.body.to_s)
         {
           access_token: data["AccessToken"], user_id: data.dig("User", "Id"),
-          server_id: data["ServerId"]
+          user_name: data.dig("User", "Name"), server_id: data["ServerId"]
         }
       end
 
-      # Every played Movie/Episode/Audio for a user, newest first, newer than
-      # `since` (a LastPlayedDate string cursor; nil = full history).
-      def played_items(user_id:, since: nil)
-        cutoff = parse_time(since)
-        collected = dated_played_items(user_id, cutoff)
-
-        # On an incremental sync the descending scan stops at the cutoff, before
-        # it reaches IsPlayed items that have no DatePlayed (they sort last).
-        # Pull those too so played-but-undated tracks aren't stranded — but only
-        # ones on an album also played in this batch, so we have a session to
-        # place them in and don't re-resolve the whole undated backlog every
-        # sync. A full scan (no cutoff) already pages all the way down to them.
-        if cutoff
-          albums = {}
-          seen = {}
-          collected.each do |item|
-            seen[item["Id"]] = true
-            albums[item["ParentId"]] = true if item["ParentId"]
-          end
-          undated_played_items(user_id:).each do |item|
-            next unless albums[item["ParentId"]]
-
-            collected << item unless seen[item["Id"]]
-          end
-        end
-
-        collected
+      # The username the token signs in as, or nil when it can't be read.
+      def current_user_name
+        name = JSON.parse(get("#{@url}/Users/Me").body.to_s)["Name"].to_s.strip
+        name.empty? ? nil : name
+      rescue Error, JSON::ParserError
+        nil
       end
 
-      # The descending-by-DatePlayed scan: newest first, stopping at the cutoff.
-      private def dated_played_items(user_id, cutoff)
-        collected = []
-        start = 0
+      # The server's own id (the ServerId every payload carries), from its
+      # unauthenticated public info. nil when unreachable.
+      def server_id
+        response = http.get("#{@url}/System/Info/Public")
+        return if response.is_a?(HTTPX::ErrorResponse)
+        return unless response.status.between?(200, 299)
 
-        loop do
-          page = get_items(user_id, start)
-          items = Array(page["Items"])
-          break if items.empty?
-
-          items.each do |item|
-            played = parse_time(item.dig("UserData", "LastPlayedDate"))
-            return collected if cutoff && played && played <= cutoff
-
-            collected << item
-          end
-
-          start += items.size
-          break if start >= page["TotalRecordCount"].to_i
-          break if items.size < @page_size
-        end
-
-        collected
+        id = JSON.parse(response.body.to_s)["Id"].to_s.strip
+        id.empty? ? nil : id
+      rescue JSON::ParserError
+        nil
       end
 
-      # IsPlayed items Jellyfin never stamped with a DatePlayed (e.g. clients
-      # that set the played flag but skip the progress API). Ascending by
-      # DatePlayed puts the undated rows first, so we collect the leading run
-      # and stop at the first dated row — bounded by the number of undated
-      # items, not the whole history.
-      def undated_played_items(user_id:)
-        collected = []
-        start = 0
-
-        loop do
-          page = get_items(user_id, start, order: "Ascending")
-          items = Array(page["Items"])
-          break if items.empty?
-
-          stop = false
-          items.each do |item|
-            if parse_time(item.dig("UserData", "LastPlayedDate"))
-              stop = true
-              break
-            end
-            collected << item
-          end
-          break if stop
-
-          start += items.size
-          break if start >= page["TotalRecordCount"].to_i
-          break if items.size < @page_size
+      # The Rewind plugin's public info ({"id", "name", "repositoryUrl",
+      # "version"}), to confirm a server has the plugin before an account is
+      # linked. No sign-in needed. Raises PluginMissing when the server doesn't
+      # have it (404, or a body that isn't the plugin's), Error on any other
+      # failure.
+      def rewind_info
+        response = http.get("#{@url}/Rewind/Info")
+        if not_found?(response)
+          raise PluginMissing,
+                "Rewind plugin not installed on this Jellyfin server " \
+                "(/Rewind/Info: 404)"
         end
 
-        collected
+        body = check!(response).body.to_s
+        info = JSON.parse(body)
+        return info if info.is_a?(Hash) && plugin_id?(info["id"])
+
+        raise PluginMissing,
+              "/Rewind/Info isn't the Rewind plugin: #{body[0, 200]}"
+      rescue JSON::ParserError
+        raise PluginMissing,
+              "/Rewind/Info isn't the Rewind plugin: #{body.to_s[0, 200]}"
+      end
+
+      # Jellyfin writes GUIDs without dashes ("N" format), so compare the
+      # bare hex, whatever the format.
+      private def plugin_id?(value)
+        normalize = ->(id) { id.to_s.delete("-").downcase }
+        normalize.call(value) == normalize.call(PLUGIN_ID)
+      end
+
+      # One page of the Rewind plugin's changes feed for the token's user:
+      # every play created or changed after `since` (a sequence number), in
+      # change order. Returns {"items" => [...], "nextSince" => Integer,
+      # "hasMore" => bool}. Raises PluginMissing when the server doesn't have
+      # the plugin (the route 404s).
+      def rewind_changes(since:, limit: CHANGES_LIMIT)
+        response = http(auth: token_auth_header).get(
+          "#{@url}/Rewind/History/Changes",
+          params: {since: since.to_i, limit: limit}
+        )
+        if not_found?(response)
+          raise PluginMissing,
+                "Rewind plugin not installed on this Jellyfin server"
+        end
+
+        page = JSON.parse(check!(response).body.to_s)
+        # A page that isn't the feed's shape must fail loudly: read as "no
+        # changes", it would silently import nothing.
+        unless page.is_a?(Hash) && page["items"].is_a?(Array) &&
+               page.key?("nextSince")
+          raise Error, "Unexpected Rewind changes response: " \
+                       "#{response.body.to_s[0, 200]}"
+        end
+
+        page
+      rescue JSON::ParserError
+        raise Error, "Rewind changes response isn't JSON"
+      end
+
+      # A single library item with every field the resolver reads. nil when the
+      # server no longer has it (404); raises Error on any other failure, so a
+      # transient outage is never mistaken for a deleted item.
+      def library_item(user_id:, item_id:)
+        response = http(auth: token_auth_header).get(
+          "#{@url}/Users/#{user_id}/Items/#{item_id}",
+          params: {Fields: ITEM_FIELDS}
+        )
+        return if not_found?(response)
+
+        JSON.parse(check!(response).body.to_s)
       end
 
       # A single item's ProviderIds (used to resolve an episode's *series* TMDB
@@ -288,25 +302,13 @@ module Rewind
         album_metadata(album_id)[:release_type]
       end
 
-      private def get_items(user_id, start_index, order: "Descending")
-        response = get(
-          "#{@url}/Users/#{user_id}/Items",
-          IncludeItemTypes: PLAYED_TYPES,
-          Recursive: true,
-          Filters: "IsPlayed",
-          SortBy: "DatePlayed",
-          SortOrder: order,
-          Fields: "ProviderIds,ParentIndexNumber,IndexNumber,SeriesId," \
-                  "ParentId,DateCreated,PremiereDate,ProductionYear,Genres," \
-                  "Path,Artists,AlbumArtists,Etag",
-          Limit: @page_size,
-          StartIndex: start_index
-        )
-        JSON.parse(response.body.to_s)
+      private def get(url, params = {})
+        check!(http(auth: token_auth_header).get(url, params: params))
       end
 
-      private def get(url, params = {})
-        response = http(auth: token_auth_header).get(url, params: params)
+      # The response when it succeeded; raises AuthError on 401, Error on any
+      # other failure (transport error or non-2xx status).
+      private def check!(response)
         if response.is_a?(HTTPX::ErrorResponse) ||
            !response.status.between?(200, 299)
           status = response.respond_to?(:status) ? response.status : "error"
@@ -316,6 +318,10 @@ module Rewind
         end
 
         response
+      end
+
+      private def not_found?(response)
+        !response.is_a?(HTTPX::ErrorResponse) && response.status == 404
       end
 
       private def http(auth: nil)
@@ -335,14 +341,6 @@ module Rewind
 
       private def token_auth_header
         %[MediaBrowser Token="#{@token}"]
-      end
-
-      private def parse_time(value)
-        return if value.nil? || value.to_s.strip.empty?
-
-        Time.parse(value.to_s)
-      rescue ArgumentError
-        nil
       end
 
       private def first_tag(values)

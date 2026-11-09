@@ -15,7 +15,7 @@
     if format_time(times[0]) == format_time(times[1])
       format_time(first.played_at)
     else
-      "#{format_time(times[1])} – #{format_time(times[0])}"
+      "#{format_time(times[0])} – #{format_time(times[1])}"
     end
   detail = +""
   detail << "#{item_link(artist_item, track.artist)} · " if track.artist

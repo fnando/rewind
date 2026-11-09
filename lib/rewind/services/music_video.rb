@@ -2,8 +2,7 @@
 
 module Rewind
   module Services
-    # Builds a music_video Item from already-extracted fields, shared by the
-    # pull sync and the webhook so both resolve a MusicVideo identically.
+    # Builds a music_video Item from already-extracted fields.
     #
     # There's no external metadata provider for the video itself (TMDB is for
     # movies/TV, MusicBrainz for audio), so a music video is Jellyfin-native —
@@ -48,9 +47,8 @@ module Rewind
             "source" => "jellyfin"
           }
         }
-        # Only set the stable id when we have one, so a webhook build (which may
-        # carry it) or a later pull can fill it without an earlier nil clearing
-        # it back out.
+        # Only set the stable id when we have one, so a later build can fill it
+        # without an earlier nil clearing it back out.
         attrs[:jellyfin_id] = jellyfin_id if jellyfin_id
 
         existing = Rewind::Item.where(media_type: "music_video",
