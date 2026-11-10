@@ -1,6 +1,6 @@
 [package]
 name = "rewind"
-version = "0.0.0"
+version = "0.0.1"
 edition = "2024"
 description = "Your own watch and listening history, fed by the Jellyfin Rewind plugin."
 license = "MIT"
