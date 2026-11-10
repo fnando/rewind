@@ -261,3 +261,85 @@ fn admins_see_the_error_log_and_others_dont() {
     );
     assert!(!browser.get("/settings").body.contains("View error log"));
 }
+
+/// A photo straight off a phone camera: big, noisy (so it doesn't compress
+/// away), several megabytes.
+fn phone_photo() -> Vec<u8> {
+    let mut seed: u32 = 1;
+    let image = image::RgbImage::from_fn(1600, 1200, |_, _| {
+        seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let [r, g, b, _] = seed.to_le_bytes();
+        image::Rgb([r, g, b])
+    });
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90)
+        .encode_image(&image)
+        .unwrap();
+    out
+}
+
+#[test]
+fn uploads_a_full_size_phone_photo_as_the_avatar() {
+    let env = Env::new();
+    let (mut browser, user) = env.signed_in("alice");
+    let photo = phone_photo();
+    assert!(
+        photo.len() > 2 * 1024 * 1024,
+        "photo is {} bytes",
+        photo.len()
+    );
+
+    let response = browser.upload("/settings/avatar", "avatar", "IMG_0001.jpg", &photo);
+
+    assert!(
+        response.redirected_to("/settings"),
+        "{} {}",
+        response.status,
+        response.body
+    );
+    let stored = image::open(env.config.avatar_path(user.id)).unwrap();
+    assert_eq!((stored.width(), stored.height()), (250, 250));
+}
+
+#[test]
+fn an_avatar_over_the_limit_shows_a_message_instead_of_failing() {
+    let env = Env::new();
+    let (mut browser, user) = env.signed_in("alice");
+    let huge = vec![0u8; rewind::web::settings::MAX_AVATAR_BYTES + 1];
+
+    let response = browser.upload("/settings/avatar", "avatar", "huge.jpg", &huge);
+
+    assert!(
+        response.redirected_to("/settings"),
+        "{} {}",
+        response.status,
+        response.body
+    );
+    assert!(
+        browser
+            .get("/settings")
+            .body
+            .contains("That image is too big")
+    );
+    assert!(!env.config.avatar_path(user.id).exists());
+}
+
+#[test]
+fn an_avatar_over_the_limit_is_answered_not_dropped_on_the_wire() {
+    let env = Env::new();
+    let (mut browser, _user) = env.signed_in("alice");
+    let token = browser.csrf();
+    let cookie = browser.cookie.clone().unwrap();
+    let addr = common::serve(&env);
+
+    let status = common::upload_over_the_wire(
+        addr,
+        &cookie,
+        &token,
+        "/settings/avatar",
+        rewind::web::settings::MAX_AVATAR_BYTES + 5 * 1024 * 1024,
+    )
+    .expect("the server dropped the connection mid-upload");
+
+    assert!(status.contains("303"), "{status}");
+}

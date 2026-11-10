@@ -391,3 +391,107 @@ pub fn days_ago(days: i64) -> String {
     let at = jiff::Timestamp::now() - jiff::SignedDuration::from_hours(24 * days);
     at.to_string()
 }
+
+impl Browser {
+    /// Posts a multipart form with one file field, plus the CSRF token.
+    pub fn upload(&mut self, path: &str, field: &str, filename: &str, bytes: &[u8]) -> Response {
+        let token = self.csrf();
+        let boundary = "rewind-test-boundary";
+        let mut body = Vec::new();
+        body.extend_from_slice(
+            format!(
+                "--{boundary}\r\nContent-Disposition: form-data; name=\"authenticity_token\"\r\n\r\n{token}\r\n"
+            )
+            .as_bytes(),
+        );
+        body.extend_from_slice(
+            format!(
+                "--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{filename}\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+            )
+            .as_bytes(),
+        );
+        body.extend_from_slice(bytes);
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+        self.request(
+            Request::post(path)
+                .header(
+                    header::CONTENT_TYPE,
+                    format!("multipart/form-data; boundary={boundary}"),
+                )
+                .body(Body::from(body))
+                .unwrap(),
+        )
+    }
+}
+
+/// Starts the real HTTP server for `env` on a free local port, so tests can
+/// see what a browser sees on the wire (not just what the router returns).
+pub fn serve(env: &Env) -> std::net::SocketAddr {
+    let db = rewind::db::Db::new(env.config.db_path(), 100).unwrap();
+    let state = rewind::web::AppState::new(env.config.clone(), db).unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let addr = listener.local_addr().unwrap();
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async move {
+                let listener = tokio::net::TcpListener::from_std(listener).unwrap();
+                axum::serve(listener, rewind::web::app(state))
+                    .await
+                    .unwrap();
+            });
+    });
+    addr
+}
+
+/// Sends a multipart upload over a real socket, the whole body like a
+/// browser does, and returns the response's status line. Fails if the
+/// server drops the connection before the upload is sent and answered.
+pub fn upload_over_the_wire(
+    addr: std::net::SocketAddr,
+    cookie: &str,
+    token: &str,
+    path: &str,
+    file_size: usize,
+) -> std::io::Result<String> {
+    use std::io::{Read, Write};
+
+    let boundary = "rewind-wire-boundary";
+    let head = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"authenticity_token\"\r\n\r\n{token}\r\n\
+         --{boundary}\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"big.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n"
+    );
+    let tail = format!("\r\n--{boundary}--\r\n");
+    let length = head.len() + file_size + tail.len();
+
+    let mut stream = std::net::TcpStream::connect(addr)?;
+    write!(
+        stream,
+        "POST {path} HTTP/1.1\r\nHost: rewind.test\r\nCookie: {cookie}\r\n\
+         Content-Type: multipart/form-data; boundary={boundary}\r\nContent-Length: {length}\r\n\r\n"
+    )?;
+    stream.write_all(head.as_bytes())?;
+    let chunk = vec![0u8; 64 * 1024];
+    let mut left = file_size;
+    while left > 0 {
+        let n = left.min(chunk.len());
+        stream.write_all(&chunk[..n])?;
+        left -= n;
+    }
+    stream.write_all(tail.as_bytes())?;
+
+    let mut response = Vec::new();
+    let mut buf = [0u8; 4096];
+    loop {
+        let n = stream.read(&mut buf)?;
+        response.extend_from_slice(&buf[..n]);
+        if n == 0 || response.windows(4).any(|w| w == b"\r\n\r\n") {
+            break;
+        }
+    }
+    let text = String::from_utf8_lossy(&response).into_owned();
+    Ok(text.lines().next().unwrap_or_default().to_string())
+}

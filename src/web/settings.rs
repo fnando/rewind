@@ -3,7 +3,9 @@
 
 use askama::Template;
 use axum::Router;
-use axum::extract::{Form, Multipart, Path, Query};
+use axum::body::{Body, Bytes};
+use axum::extract::multipart::MultipartError;
+use axum::extract::{DefaultBodyLimit, Form, FromRequest, Multipart, Path, Query, Request};
 use axum::http::{StatusCode, header};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
@@ -14,11 +16,24 @@ use crate::models::source::NewSource;
 use crate::models::{Source, User};
 use crate::services::{avatar, jellyfin};
 
+/// Largest avatar upload accepted. Photos straight off a phone camera are
+/// often 5–15 MB, well above axum's 2 MB default.
+pub const MAX_AVATAR_BYTES: usize = 25 * 1024 * 1024;
+
+/// How much of an oversized upload is read (and thrown away) so the browser
+/// gets the "too big" message. Answering before the browser has finished
+/// sending makes it report a dropped connection instead of showing the page.
+/// Beyond this, the connection is closed.
+const MAX_DRAIN_BYTES: usize = 250 * 1024 * 1024;
+
 pub fn routes() -> Router<State> {
     Router::new()
         .route("/settings", get(index))
         .route("/settings/rating-style", post(rating_style))
-        .route("/settings/avatar", post(upload_avatar))
+        .route(
+            "/settings/avatar",
+            post(upload_avatar).layer(DefaultBodyLimit::disable()),
+        )
         .route("/settings/avatar/delete", post(delete_avatar))
         .route("/avatars/{user_id}", get(show_avatar))
         .route("/settings/timezone", post(timezone))
@@ -152,33 +167,22 @@ async fn timezone(ctx: Ctx, Form(form): Form<Timezone>) -> Result {
     Ok(redirect("/settings"))
 }
 
-async fn upload_avatar(ctx: Ctx, mut multipart: Multipart) -> Result {
-    let mut token = None;
-    let mut bytes = Vec::new();
-    while let Some(field) = multipart
-        .next_field()
+async fn upload_avatar(ctx: Ctx, request: Request) -> Result {
+    let (parts, body) = request.into_parts();
+    let Some(body) = read_upload(body, MAX_AVATAR_BYTES, MAX_DRAIN_BYTES).await? else {
+        ctx.session.error(format!(
+            "That image is too big; the limit is {} MB.",
+            MAX_AVATAR_BYTES / 1024 / 1024
+        ));
+        return Ok(redirect("/settings"));
+    };
+    let request = Request::from_parts(parts, Body::from(body));
+    let multipart = Multipart::from_request(request, &())
         .await
-        .map_err(|e| AppError::BadRequest(e.to_string()))?
-    {
-        match field.name() {
-            Some("authenticity_token") => {
-                token = Some(
-                    field
-                        .text()
-                        .await
-                        .map_err(|e| AppError::BadRequest(e.to_string()))?,
-                );
-            }
-            Some("avatar") => {
-                bytes = field
-                    .bytes()
-                    .await
-                    .map_err(|e| AppError::BadRequest(e.to_string()))?
-                    .to_vec();
-            }
-            _ => {}
-        }
-    }
+        .map_err(|e| AppError::BadRequest(e.body_text()))?;
+    let (token, bytes) = read_avatar_form(multipart)
+        .await
+        .map_err(|e| AppError::BadRequest(e.body_text()))?;
     if !super::middleware::token_matches(token.as_deref(), &ctx.session.csrf()) {
         return Ok((StatusCode::FORBIDDEN, "Forbidden").into_response());
     }
@@ -191,6 +195,45 @@ async fn upload_avatar(ctx: Ctx, mut multipart: Multipart) -> Result {
         ctx.session.error(format!("{error:#}"));
     }
     Ok(redirect("/settings"))
+}
+
+/// Reads a whole upload. Returns `None` when it's over `max` bytes, after
+/// reading and discarding the rest (up to `drain`) so the browser is done
+/// sending by the time it gets the answer.
+async fn read_upload(mut body: Body, max: usize, drain: usize) -> anyhow::Result<Option<Bytes>> {
+    use http_body_util::BodyExt;
+
+    let mut kept = Vec::new();
+    let mut seen = 0usize;
+    while let Some(frame) = body.frame().await {
+        let Ok(data) = frame?.into_data() else {
+            continue;
+        };
+        seen += data.len();
+        if seen > drain {
+            anyhow::bail!("upload over {drain} bytes");
+        }
+        if seen <= max {
+            kept.extend_from_slice(&data);
+        }
+    }
+    Ok((seen <= max).then(|| Bytes::from(kept)))
+}
+
+/// The CSRF token and the image bytes from the avatar form.
+async fn read_avatar_form(
+    mut multipart: Multipart,
+) -> std::result::Result<(Option<String>, Vec<u8>), MultipartError> {
+    let mut token = None;
+    let mut bytes = Vec::new();
+    while let Some(field) = multipart.next_field().await? {
+        match field.name() {
+            Some("authenticity_token") => token = Some(field.text().await?),
+            Some("avatar") => bytes = field.bytes().await?.to_vec(),
+            _ => {}
+        }
+    }
+    Ok((token, bytes))
 }
 
 async fn delete_avatar(ctx: Ctx) -> Result {
