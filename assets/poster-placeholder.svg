@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300" aria-hidden="true">
+  <defs>
+    <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#2A3140"/>
+      <stop offset="1" stop-color="#1A1F27"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="300" fill="url(#g)"/>
+  <g transform="translate(100 150)" fill="none" stroke="#6B7585" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.75">
+    <path d="M-28 -12 L-50 0 L-28 12 Z"/>
+    <path d="M22 -12 L0 0 L22 12 Z"/>
+  </g>
+  <text x="100" y="220" text-anchor="middle" fill="#6B7585" font-family="system-ui, -apple-system, sans-serif" font-size="14" letter-spacing="2">NO POSTER</text>
+</svg>

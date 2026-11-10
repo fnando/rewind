@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block content %}
+<main class="page page--wide">
+  <div class="stats-controls">
+    <nav class="segmented" aria-label="Period">
+      {% for (value, label) in periods %}
+        <a href="/stats?period={{ value }}&type={{ media_type }}"{% if period == *value %} aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <nav class="segmented" aria-label="Media type">
+      {% for (value, label) in media_types %}
+        <a href="/stats?period={{ period }}&type={{ value }}"{% if media_type == *value %} aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+
+  {% include "partials/stats/hero.html" %}
+  {% include "partials/stats/cards.html" %}
+  {% include "partials/stats/rhythm.html" %}
+  {% include "partials/stats/streak.html" %}
+  {% include "partials/stats/heatmap.html" %}
+
+  {% for list in lists_before %}{% include "partials/stats/rank_list.html" %}{% endfor %}
+  {% for grid in people %}{% include "partials/stats/people_grid.html" %}{% endfor %}
+  {% for list in lists_after %}{% include "partials/stats/rank_list.html" %}{% endfor %}
+</main>
+{% endblock %}

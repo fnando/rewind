@@ -1,0 +1,48 @@
+[package]
+name = "rewind"
+version = "0.0.0"
+edition = "2024"
+description = "Your own watch and listening history, fed by the Jellyfin Rewind plugin."
+license = "MIT"
+publish = false
+
+[dependencies]
+anyhow = "1.0.104"
+arc-swap = "1.9.5"
+askama = "0.16.1"
+axum = { version = "0.8.9", features = ["multipart"] }
+axum-extra = { version = "0.12.6", features = ["cookie-signed", "cookie"] }
+base64 = "0.23.1"
+bcrypt = "0.19.3"
+chacha20poly1305 = "0.11.0"
+clap = { version = "4.6.7", features = ["derive", "env"] }
+cookie = "0.18.2"
+deunicode = "1.6.2"
+dotenvy = "0.15.7"
+hex = "0.4.3"
+http-body-util = "0.1.5"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
+jiff = { version = "0.2.41", features = ["serde", "tzdb-bundle-always"] }
+percent-encoding = "2.3.2"
+rand = "0.10.3"
+rusqlite = { version = "0.41.1", features = ["bundled"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+serde_urlencoded = "0.7.1"
+sha2 = "0.11.1"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "signal", "net", "fs"] }
+tower = "0.5.3"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+ureq = { version = "3.5.1", features = ["json"] }
+url = "2.5.8"
+zip = { version = "9.5.0", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+http-body-util = "0.1.5"
+mockito = "1.7.2"
+percent-encoding = "2.3.2"
+serde_urlencoded = "0.7.1"
+tempfile = "3.27.0"
+tower = { version = "0.5.3", features = ["util"] }

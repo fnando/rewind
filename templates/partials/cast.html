@@ -1,0 +1,22 @@
+{% if !cast.is_empty() %}
+  <section class="section" aria-labelledby="cast-h">
+    <h2 id="cast-h">Top cast</h2>
+    <ul class="cast-grid">
+      {% for actor in cast %}
+        <li class="cast">
+          <a class="cast__link" href="https://www.themoviedb.org/person/{{ actor.id }}" target="_blank" rel="noopener">
+            {% if let Some(photo) = actor.photo %}
+              <img class="cast__photo" src="https://image.tmdb.org/t/p/w92{{ photo }}" alt="" loading="lazy" decoding="async">
+            {% else %}
+              <span class="cast__photo" aria-hidden="true"></span>
+            {% endif %}
+            <span class="cast__text">
+              <span class="cast__name">{{ actor.name }}</span>
+              {% if let Some(role) = actor.role %}<span class="cast__role">{{ role }}</span>{% endif %}
+            </span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}

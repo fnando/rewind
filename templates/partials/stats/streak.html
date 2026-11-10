@@ -1,0 +1,45 @@
+<section class="streak-card{{ streak.card_class }}">
+  <div class="streak-card__main">
+    <div class="streak-card__summary">
+      <span class="streak-card__icon" aria-hidden="true"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c.6 3.2 4.8 5.6 4.8 10.4A4.8 4.8 0 0 1 12 17.7a4.8 4.8 0 0 1-4.8-4.8c0-1.9.9-3.3 1.9-4.4.2 1.5 1 2.6 2.1 3 0-3.5.5-6.4.8-9z"/><path class="stroke-only" d="M12 21.5c-3.9 0-7-2.7-7-6.4" stroke-linecap="round"/><path class="stroke-only" d="M19 15.1c0 2.6-1.6 4.8-4 5.8" stroke-linecap="round"/></svg></span>
+      <div class="streak-card__text">
+        <div class="streak-card__head">
+          <h2>Streak</h2>
+          {% if streak.record %}
+            <span class="streak-card__badge">New record</span>
+          {% endif %}
+        </div>
+        <p class="streak-card__count"><strong>{{ streak.current }}</strong><span>{{ streak.days_word }}</span></p>
+        <p class="streak-card__line">{{ streak.line|safe }}</p>
+      </div>
+    </div>
+    <div class="streak-strip">
+      <div class="streak-strip__scroll">
+        <ol aria-label="Last 14 days">
+          {% for cell in streak.strip %}
+            <li title="{{ cell.title }}">
+              <span class="{{ cell.classes }}" role="img" aria-label="{{ cell.title }}">{% if cell.watched %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>{% endif %}</span>
+              <span class="streak-day__label{% if cell.today %} is-today{% endif %}" aria-hidden="true">{{ cell.label }}</span>
+            </li>
+          {% endfor %}
+        </ol>
+      </div>
+      <div class="streak-legend" aria-hidden="true"><span><i class="is-streak"></i>Streak</span><span><i class="is-watched"></i>Watched</span><span><i class="is-today"></i>Today</span></div>
+    </div>
+  </div>
+
+  {% if let Some(foot) = streak.foot %}
+    <div class="streak-card__foot">
+      <span class="streak-best"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg><span>{{ foot.best_label }} <strong>{{ foot.best_length }}</strong> <small>· {{ foot.range }}</small></span></span>
+      <span class="streak-progress">
+        <span class="streak-progress__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ foot.pct }}"><span class="streak-progress__fill" style="width: {{ foot.pct }}%"></span></span>
+        <span class="streak-progress__text">{{ foot.text }}</span>
+      </span>
+    </div>
+  {% else %}
+    <div class="streak-card__foot streak-card__foot--cta">
+      <span>Watch something on two days in a row and the counter starts climbing.</span>
+      <a class="btn btn--primary" href="/search">Log a watch</a>
+    </div>
+  {% endif %}
+</section>

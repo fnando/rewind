@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block content %}
+<main class="page page--title">
+  <section class="title-hero">
+    <img class="{{ poster_class }}" src="{{ poster }}" alt="">
+    <div class="title-hero__info">
+      <div class="title-hero__heading">
+        <span class="eyebrow">{{ eyebrow }}</span>
+        <h1>{{ item.title }}</h1>
+        <span class="title-meta">{{ meta_html|safe }}</span>
+      </div>
+      {% include "partials/watched_chips.html" %}
+      <div class="hero-actions">
+        {% include "partials/hero_rating.html" %}
+      </div>
+    </div>
+  </section>
+
+  {% include "partials/review.html" %}
+  {% include "partials/plays_list.html" %}
+</main>
+{% endblock %}

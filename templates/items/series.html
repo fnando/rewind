@@ -1,0 +1,94 @@
+{% extends "layout.html" %}
+{% block content %}
+<main class="page page--title">
+  <section class="title-hero">
+    <img class="title-hero__poster" src="{{ poster }}" alt="">
+    <div class="title-hero__info">
+      <div class="title-hero__heading">
+        <span class="eyebrow">Series</span>
+        <h1>{{ item.title }}</h1>
+        <span class="title-meta">{{ meta }}</span>
+      </div>
+      {% if let Some(overview) = item.overview %}<p class="overview">{{ overview }}</p>{% endif %}
+      {% if !credit.is_empty() %}
+        <span class="credit">Created by <strong>{{ credit }}</strong></span>
+      {% endif %}
+
+      {% if total_episodes > 0 %}
+        <div class="progress">
+          <div class="progress__head">
+            <strong>{{ watched_episodes }} of {{ total_episodes }} episodes watched</strong>
+            <span>{{ percent }}%</span>
+          </div>
+          <div class="progress__bar" role="progressbar" aria-valuemin="0" aria-valuemax="{{ total_episodes }}" aria-valuenow="{{ watched_episodes }}">
+            <div class="progress__fill" style="width: {{ percent.min(100) }}%"></div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="episodes-h">
+    <div class="section__head">
+      <h2 id="episodes-h">Episodes</h2>
+      {% if seasons.len() > 1 %}
+        <nav class="segmented" aria-label="Seasons">
+          {% for number in seasons %}
+            <a href="?season={{ number }}"{% if *number == current_season %} aria-current="page"{% endif %}>Season {{ number }}</a>
+          {% endfor %}
+        </nav>
+      {% endif %}
+    </div>
+
+    <ol class="play-grid">
+      {% for ep in episodes %}
+        <li class="play-card{% if ep.latest.is_none() %} play-card--unwatched{% endif %}">
+          <img class="play-card__still" src="{{ ep.still }}" alt="" loading="lazy" decoding="async">
+          <div class="play-card__body">
+            {% if let Some(latest) = ep.latest %}
+              <a class="play-card__title" href="/items/{{ latest.item_id }}">{{ ep.name }}</a>
+            {% else %}
+              <span class="play-card__title">{{ ep.name }}</span>
+            {% endif %}
+            <span class="play-card__detail">S{{ current_season }} · E{{ ep.number }}</span>
+            {% if let Some(latest) = ep.latest %}
+              <span class="play-card__status is-watched">{{ crate::web::helpers::check_svg(13)|safe }}{{ latest.status }}</span>
+              {% if ep.watches > 1 %}
+                <span class="badge">{{ ep.watches }} watches</span>
+              {% endif %}
+              <div class="play-card__actions">
+                {{ ep.rating_html|safe }}
+                <div class="play-card__tools">
+                  <form method="post" action="/items/{{ item.id }}/log-episode">
+                    {{ page.csrf_tag()|safe }}
+                    <input type="hidden" name="season" value="{{ current_season }}">
+                    <input type="hidden" name="episode" value="{{ ep.number }}">
+                    <button class="icon-btn" type="submit" aria-label="Log a rewatch">{{ crate::web::helpers::PLUS_SVG|safe }}</button>
+                  </form>
+                  <form method="post" action="/history/{{ latest.play_id }}">
+                    {{ page.csrf_tag()|safe }}
+                    <input type="hidden" name="_method" value="delete">
+                    <button class="icon-btn" type="submit" aria-label="Remove latest watch">{{ crate::web::helpers::TRASH_SVG|safe }}</button>
+                  </form>
+                </div>
+              </div>
+            {% else %}
+              <span class="play-card__status">Not watched</span>
+              <div class="play-card__actions">
+                <form method="post" action="/items/{{ item.id }}/log-episode">
+                  {{ page.csrf_tag()|safe }}
+                  <input type="hidden" name="season" value="{{ current_season }}">
+                  <input type="hidden" name="episode" value="{{ ep.number }}">
+                  <button class="btn btn--soft" type="submit">{{ crate::web::helpers::check_svg(14)|safe }}Mark watched</button>
+                </form>
+              </div>
+            {% endif %}
+          </div>
+        </li>
+      {% endfor %}
+    </ol>
+  </section>
+
+  {% include "partials/cast.html" %}
+</main>
+{% endblock %}

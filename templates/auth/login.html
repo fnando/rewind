@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+{% block content %}
+<header class="topbar">
+  <a class="brand" href="/">
+    <span class="brand__mark"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 L3 12 L11 18 Z M21 6 L13 12 L21 18 Z" fill="currentColor"/></svg></span>
+    <span>rewind</span>
+  </a>
+</header>
+
+<main class="page page--narrow">
+  <div class="page-head">
+    <h1>Sign in</h1>
+    <p>Welcome back to your watch log.</p>
+  </div>
+
+  {% if no_users %}
+    <div class="panel panel--warn">
+      <div class="panel__body">
+        <p>No accounts yet. On the server, run:</p>
+        <pre><code>rewind users new --username USERNAME</code></pre>
+        <p>Share the generated password with the user; they'll be prompted to change it on first login.</p>
+        <p><a href="/login">Refresh once you've created an account.</a></p>
+      </div>
+    </div>
+  {% else %}
+    {% if let Some(error) = error %}
+      <div class="flash flash--error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form class="panel" method="post" action="/login">
+      {{ page.csrf_tag()|safe }}
+      <div class="panel__body">
+        <div class="field">
+          <label for="username">Username</label>
+          <input class="input" id="username" name="username" type="text" autocomplete="username" placeholder="E.g. {{ placeholder }}" required autofocus>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input class="input" id="password" name="password" type="password" autocomplete="current-password" placeholder="Password" required>
+        </div>
+        <button class="btn btn--primary btn--block" type="submit">Sign in</button>
+      </div>
+      <p class="panel__note">Forgot your password? Ask the server operator to run <code>rewind users update --username YOU --new-password</code>.</p>
+    </form>
+  {% endif %}
+</main>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+{% block content %}
+<main class="page page--title">
+  <section class="title-hero">
+    <img class="title-hero__poster" src="{{ poster }}" alt="">
+    <div class="title-hero__info">
+      <div class="title-hero__heading">
+        <span class="eyebrow">Movie</span>
+        <h1>{{ item.title }}</h1>
+        <span class="title-meta">{{ meta }}</span>
+      </div>
+      {% if let Some(overview) = item.overview %}<p class="overview">{{ overview }}</p>{% endif %}
+      {% if !credit.is_empty() %}
+        <span class="credit">Directed by <strong>{{ credit }}</strong></span>
+      {% endif %}
+      {% include "partials/watched_chips.html" %}
+      <div class="hero-actions">
+        {% include "partials/log_watch_form.html" %}
+        {% include "partials/hero_rating.html" %}
+      </div>
+    </div>
+  </section>
+
+  {% include "partials/review.html" %}
+  {% include "partials/plays_list.html" %}
+  {% include "partials/cast.html" %}
+</main>
+{% endblock %}

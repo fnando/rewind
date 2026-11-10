@@ -1,0 +1,34 @@
+<section class="panel">
+  <div class="section__head panel__title">
+    <div>
+      <h2>{{ grid.title }}</h2>
+      <p class="muted">{{ grid.subtitle }}</p>
+    </div>
+  </div>
+  <div class="panel__body">
+    {% if grid.people.is_empty() %}
+      <p class="muted">No data yet.</p>
+    {% else %}
+      <ul class="people-grid people-grid--{{ grid.variant }}">
+        {% for person in grid.people %}
+          <li class="person">
+            <span class="person__avatar-wrap">
+              <span class="person__avatar">
+                {% if let Some(photo) = person.profile_path %}
+                  <img src="https://image.tmdb.org/t/p/w92{{ photo }}" alt="" loading="lazy" decoding="async">
+                {% else %}
+                  {{ person.initials }}
+                {% endif %}
+              </span>
+              <span class="person__badge" title="{{ person.appearances }}">{{ person.count }}</span>
+            </span>
+            <span class="person__name">{{ person.name }}</span>
+            {% if let Some(title) = person.top_item_title %}
+              <span class="person__sub">{{ title }}</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+</section>

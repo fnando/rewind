@@ -1,0 +1,29 @@
+<li class="cover-card cover-card--track cover-card--group">
+  {% if album.has_cover %}
+  <img class="cover-card__img" src="{{ album.cover_url }}"
+       alt="" loading="lazy" decoding="async">
+  {% else %}
+  <img class="cover-card__img cover-card__img--placeholder" src="/poster-placeholder.svg" alt="" loading="lazy" decoding="async">
+  {% endif %}
+  <span class="cover-card__scrim" aria-hidden="true"></span>
+
+  <div class="cover-card__top">
+    <span class="cover-card__badge">Album</span>
+    {% if let Some(key) = album.group_key %}
+      <button type="button" class="cover-card__remove cover-card__album-toggle" data-album-toggle="{{ key }}" aria-expanded="false" aria-label="Show tracks">
+        <svg class="cover-card__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+    {% endif %}
+  </div>
+
+  <div class="cover-card__body">
+    <span class="cover-card__titlewrap"><a class="cover-card__title" href="/items/{{ album.album_id }}">{{ album.title }}</a></span>
+    {% if !album.detail_html.is_empty() %}
+      <span class="cover-card__detail">{{ album.detail_html|safe }}</span>
+    {% endif %}
+    {% if !album.meta_html.is_empty() %}
+      <span class="cover-card__meta">{{ album.meta_html|safe }}</span>
+    {% endif %}
+    {{ album.rating_html|safe }}
+  </div>
+</li>

@@ -1,0 +1,35 @@
+<section class="panel rank-panel rank-panel--{{ list.variant }}">
+  <div class="section__head panel__title">
+    <div>
+      <h2>{{ list.title }}</h2>
+      {% if let Some(subtitle) = list.subtitle %}
+        <p class="muted">{{ subtitle }}</p>
+      {% endif %}
+    </div>
+  </div>
+  <div class="panel__body">
+    <div class="rank-hero">
+      {% if let Some(poster) = list.hero.poster_url %}
+        <img class="rank-hero__poster" src="{{ poster }}" alt="" loading="lazy" decoding="async">
+      {% endif %}
+      <div class="rank-hero__body">
+        <span class="rank-hero__eyebrow">Your #1</span>
+        <strong class="rank-hero__name">{{ list.hero.name_html|safe }}</strong>
+        <span class="rank-hero__meta">{{ list.hero.meta }}</span>
+      </div>
+    </div>
+    <ol class="rank-list">
+      {% for row in list.rows %}
+        <li class="rank-list__row{% if row.poster_url.is_some() %} rank-list__row--with-poster{% endif %}">
+          <span class="rank-list__rank">{{ loop.index + 1 }}</span>
+          {% if let Some(poster) = row.poster_url %}
+            <img class="rank-list__poster" src="{{ poster }}" alt="" loading="lazy" decoding="async">
+          {% endif %}
+          <span class="rank-list__label">{{ row.name_html|safe }}</span>
+          <span class="rank-list__bar" style="--w: {{ row.width }}%"></span>
+          <span class="rank-list__count">{{ row.count_label }}</span>
+        </li>
+      {% endfor %}
+    </ol>
+  </div>
+</section>

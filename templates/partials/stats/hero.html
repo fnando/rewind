@@ -1,0 +1,32 @@
+<section class="hero-stat panel">
+  <div class="hero-stat__body">
+    <span class="hero-stat__eyebrow">Your {{ hero.period_label }} so far</span>
+    <div class="hero-stat__count">
+      <span class="hero-stat__big">{{ hero.big_number }}</span>
+      <span class="hero-stat__suffix">{{ hero.unit }}</span>
+    </div>
+    <p class="hero-stat__sentence">{{ hero.sentence }}</p>
+  </div>
+  {% if !hero.segments.is_empty() %}
+    <div class="hero-stat__donut-wrap">
+      <svg class="donut" viewBox="0 0 42 42" role="img" aria-label="{{ hero.aria }}">
+        <g transform="rotate(-90 21 21)">
+          {% for s in hero.segments %}
+            <circle class="donut__seg donut__seg--{{ s.class }}" cx="21" cy="21" r="15.9155"
+                    pathLength="100"
+                    stroke-dasharray="{{ s.dasharray }}"
+                    stroke-dashoffset="{{ s.dashoffset }}"></circle>
+          {% endfor %}
+        </g>
+      </svg>
+      <ul class="donut-legend">
+        {% for s in hero.segments %}
+          <li><span class="donut-legend__swatch donut-legend__swatch--{{ s.class }}"></span>
+            <span class="donut-legend__count">{{ s.count_label }}</span>
+            <span class="donut-legend__pct">{{ s.pct }}%</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+</section>

@@ -1,0 +1,38 @@
+<section class="panel stats-hide-sm">
+  <div class="section__head panel__title">
+    <div>
+      <h2>Your rhythm</h2>
+      {% if let Some(line) = rhythm.busiest_line %}
+        <p class="muted">{{ line }}</p>
+      {% endif %}
+    </div>
+    <ul class="chart-legend">
+      <li><span class="chart-legend__swatch chart-legend__swatch--movies"></span>Movies</li>
+      <li><span class="chart-legend__swatch chart-legend__swatch--series"></span>Series</li>
+      {% if rhythm.has_music %}
+        <li><span class="chart-legend__swatch chart-legend__swatch--music"></span>Music</li>
+      {% endif %}
+    </ul>
+  </div>
+  <div class="panel__body">
+    {% if rhythm.columns.is_empty() %}
+      <p class="muted">No plays in this period.</p>
+    {% else %}
+      <ol class="rhythm-chart">
+        {% for col in rhythm.columns %}
+          <li class="rhythm-chart__col" title="{{ col.tooltip }}">
+            <div class="rhythm-chart__stack">
+              {% if col.peak %}
+                <span class="rhythm-chart__peak">Peak</span>
+              {% endif %}
+              <span class="rhythm-chart__seg rhythm-chart__seg--music" style="height: {{ col.music }}%"></span>
+              <span class="rhythm-chart__seg rhythm-chart__seg--series" style="height: {{ col.series }}%"></span>
+              <span class="rhythm-chart__seg rhythm-chart__seg--movies" style="height: {{ col.movies }}%"></span>
+            </div>
+            <span class="rhythm-chart__label">{{ col.label }}</span>
+          </li>
+        {% endfor %}
+      </ol>
+    {% endif %}
+  </div>
+</section>

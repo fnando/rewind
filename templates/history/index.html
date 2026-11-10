@@ -1,0 +1,72 @@
+{% extends "layout.html" %}
+{% block content %}
+<main class="page page--wide">
+  <div class="history-head">
+    <div class="history-head__left">
+      <h1>History</h1>
+      <nav class="segmented" aria-label="Media type">
+        <a href="/history"{% if kind == "all" %} aria-current="page"{% endif %}>All</a>
+        <a href="/history?type=movie"{% if kind == "movie" %} aria-current="page"{% endif %}>Movies</a>
+        <a href="/history?type=episode"{% if kind == "episode" %} aria-current="page"{% endif %}>Series</a>
+        <a href="/history?type=track"{% if kind == "track" %} aria-current="page"{% endif %}>Music</a>
+      </nav>
+    </div>
+    <a class="btn btn--primary" href="/search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Log a watch
+    </a>
+  </div>
+
+  {% if days.is_empty() %}
+    <p class="muted">No plays recorded for this filter.</p>
+  {% endif %}
+
+  {% for day in days %}
+    <section class="day" aria-labelledby="day-{{ day.id }}">
+      <h2 class="day__title" id="day-{{ day.id }}">
+        {{ day.label }}
+        <span class="day__meta">{{ day.meta }}</span>
+      </h2>
+      <ul class="cover-grid">
+        {% for entry in day.entries %}
+          {% match entry %}
+            {% when crate::web::cards::Entry::Single(card) %}
+              {% include "partials/cover_card.html" %}
+            {% when crate::web::cards::Entry::Album { album, tracks } %}
+              {% include "partials/album_card.html" %}
+              {% for card in tracks %}{% include "partials/cover_card.html" %}{% endfor %}
+          {% endmatch %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endfor %}
+
+  {% if prev_url.is_some() || next_url.is_some() %}
+    <nav class="pagination" aria-label="History pages">
+      {% if let Some(url) = prev_url %}
+        <a class="btn btn--secondary" rel="prev" href="{{ url }}">Newer</a>
+      {% endif %}
+      {% if let Some(url) = next_url %}
+        <a class="btn btn--secondary" rel="next" href="{{ url }}">Older</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+</main>
+
+<script>
+  (function () {
+    function toggle(card) {
+      var key = card.getAttribute("data-album-toggle");
+      var open = card.getAttribute("aria-expanded") === "true";
+      card.setAttribute("aria-expanded", String(!open));
+      document.querySelectorAll('[data-album-tracks="' + key + '"]')
+        .forEach(function (el) { el.hidden = open; });
+    }
+
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-album-toggle]");
+      if (btn) { toggle(btn); }
+    });
+  })();
+</script>
+{% endblock %}

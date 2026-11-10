@@ -1,0 +1,33 @@
+<section class="section" aria-labelledby="review-h">
+  <div class="section__head">
+    <h2 id="review-h">What did you think about this {{ review.kind_label }}?</h2>
+    {% if !review.editing %}
+      <a class="btn btn--ghost btn--sm" href="/items/{{ item.id }}?editing=1">Edit</a>
+    {% endif %}
+  </div>
+  {% if review.editing %}
+    <form method="post" action="/items/{{ item.id }}/review" class="panel">
+      {{ page.csrf_tag()|safe }}
+      <div class="panel__body">
+        <textarea class="input" name="review" rows="4" placeholder="Your thoughts (optional)">{{ review.text }}</textarea>
+      </div>
+      <div class="panel__foot panel__foot--inline">
+        <button class="btn btn--primary" type="submit">Save review</button>
+        {% if !review.text.is_empty() %}
+          <a class="btn btn--ghost" href="/items/{{ item.id }}">Cancel</a>
+        {% endif %}
+      </div>
+    </form>
+  {% else %}
+    <div class="panel">
+      <div class="panel__body">
+        <p class="review__text">{{ review.text }}</p>
+        {% if !review.written_html.is_empty() %}
+          <p class="review__meta">
+            Written {{ review.written_html|safe }}
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</section>

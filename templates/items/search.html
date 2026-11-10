@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+{% block content %}
+<main class="page page--wide">
+  <div class="page-head">
+    <h1>Search</h1>
+    <p>Find a movie or series, then log a watch.</p>
+  </div>
+
+  <form class="panel" method="get" action="/search">
+    <div class="panel__body">
+      <div class="field">
+        <label for="q">Search movies and series</label>
+        <div class="search-row">
+          <input class="input" id="q" name="q" type="search" value="{{ query }}" placeholder="e.g. Inception" autofocus>
+          <button class="btn btn--primary" type="submit">Search</button>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  {% if let Some(error) = error %}
+    <div class="flash flash--error">{{ error }}</div>
+  {% endif %}
+
+  {% if !configured %}
+    <div class="flash flash--notice">TMDB_API_KEY not configured. Set it in the environment and restart.</div>
+  {% endif %}
+
+  {% if !results.is_empty() %}
+    <ul class="search-grid">
+      {% for r in results %}
+        <li class="search-card">
+          {% if let Some(poster) = r.poster_path %}
+            <img class="search-card__poster" src="https://image.tmdb.org/t/p/w185{{ poster }}" alt="" loading="lazy" decoding="async">
+          {% else %}
+            <img class="search-card__poster" src="/poster-placeholder.svg" alt="" loading="lazy" decoding="async">
+          {% endif %}
+          <div class="search-card__body">
+            <strong>{{ r.title }}</strong>
+            <span class="muted">{{ r.media_type }}{% if let Some(date) = r.release_date %} · {{ date.chars().take(4).collect::<String>() }}{% endif %}</span>
+            <p>{{ r.overview.as_deref().unwrap_or_default().chars().take(180).collect::<String>() }}</p>
+            <form method="post" action="/items/import">
+              {{ page.csrf_tag()|safe }}
+              <input type="hidden" name="media_type" value="{{ r.media_type }}">
+              <input type="hidden" name="tmdb_id" value="{{ r.tmdb_id }}">
+              <button class="btn btn--secondary" type="submit">Open</button>
+            </form>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</main>
+{% endblock %}

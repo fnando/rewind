@@ -1,0 +1,24 @@
+<section class="section" aria-labelledby="plays-h">
+  <h2 id="plays-h">{{ plays.heading }}</h2>
+  {% if plays.rows.is_empty() %}
+    <p class="muted">{{ plays.empty }}</p>
+  {% else %}
+    <ul class="watch-list">
+      {% for row in plays.rows %}
+        <li class="watch-row">
+          <div class="watch-row__when">
+            <strong><time datetime="{{ row.iso }}">{{ row.date }}</time></strong>
+            <span>{{ row.time }} · {{ row.via }}</span>
+          </div>
+          <div class="watch-row__actions">
+            <form method="post" action="/history/{{ row.id }}">
+              {{ page.csrf_tag()|safe }}
+              <input type="hidden" name="_method" value="delete">
+              <button class="icon-btn" type="submit" aria-label="{{ plays.remove_label }}">{{ crate::web::helpers::TRASH_SVG|safe }}</button>
+            </form>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</section>

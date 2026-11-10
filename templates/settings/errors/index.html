@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+{% block content %}
+<main class="page page--wide">
+  <div class="page-head">
+    <h1>Errors</h1>
+    <p class="muted">{{ total_label }} logged</p>
+  </div>
+
+  <section class="panel">
+    <div class="panel__body">
+      {% if errors.is_empty() %}
+        <p class="muted">No errors logged. Nice.</p>
+      {% else %}
+        <table class="error-table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Error</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for (error, when) in errors %}
+              <tr>
+                <td class="error-when">
+                  <a href="/settings/errors/{{ error.id }}">{{ when }}</a>
+                </td>
+                <td class="error-class">{{ error.error_class }}</td>
+                <td><a class="content-link" href="/settings/errors/{{ error.id }}">{{ error.message.chars().take(140).collect::<String>() }}</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if prev_url.is_some() || next_url.is_some() %}
+    <nav class="pagination" aria-label="Error pages">
+      {% if let Some(url) = prev_url %}
+        <a class="btn btn--secondary" rel="prev" href="{{ url }}">Newer</a>
+      {% endif %}
+      {% if let Some(url) = next_url %}
+        <a class="btn btn--secondary" rel="next" href="{{ url }}">Older</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+</main>
+{% endblock %}

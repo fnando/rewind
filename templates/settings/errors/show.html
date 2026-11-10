@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+{% block content %}
+<main class="page page--wide">
+  <div class="page-head">
+    <h1>Error #{{ error.id }}</h1>
+    <p class="muted"><a class="content-link" href="/settings/errors">← Back to errors</a></p>
+  </div>
+
+  <section class="panel">
+    <h2 class="panel__title">{{ error.error_class }}</h2>
+    <div class="panel__body">
+      <p class="error-message">{{ error.message }}</p>
+      <p class="muted">Logged {{ when }}</p>
+    </div>
+  </section>
+
+  {% if !error.context.is_empty() %}
+    <section class="panel">
+      <h2 class="panel__title">Data</h2>
+      <div class="panel__body">
+        <pre class="error-context">{{ context }}</pre>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2 class="panel__title">Backtrace</h2>
+    <div class="panel__body">
+      {% if error.backtrace_lines().is_empty() %}
+        <p class="muted">No backtrace captured.</p>
+      {% else %}
+        <pre class="error-trace">{{ error.backtrace.as_deref().unwrap_or_default() }}</pre>
+      {% endif %}
+    </div>
+  </section>
+</main>
+{% endblock %}
