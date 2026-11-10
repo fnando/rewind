@@ -1,16 +1,14 @@
-# rewind-app
+# rewind
 
-[![Tests](https://github.com/fnando/rewind/workflows/ruby-tests/badge.svg)](https://github.com/fnando/rewind)
-[![Gem](https://img.shields.io/gem/v/rewind-app.svg)](https://rubygems.org/gems/rewind-app)
-[![Gem](https://img.shields.io/gem/dt/rewind-app.svg)](https://rubygems.org/gems/rewind-app)
+[![CI](https://github.com/fnando/rewind/actions/workflows/ci.yml/badge.svg)](https://github.com/fnando/rewind/actions/workflows/ci.yml)
 [![MIT License](https://img.shields.io/:License-MIT-blue.svg)](https://tldrlegal.com/license/mit-license)
 
 A self-hosted media tracker — a lightweight alternative to Trakt / Letterboxd.
 Log movies, TV episodes, and music manually, or connect your [Jellyfin] account
 and Rewind syncs your play history automatically in the background. Movie and TV
 metadata comes from [TMDB]; music is enriched via [MusicBrainz] (with cover art
-from the [Cover Art Archive] and artist photos from [fanart.tv]). Stores
-everything in a single SQLite file.
+from the [Cover Art Archive] and artist photos from [fanart.tv]). Everything is
+stored in a single SQLite file, and Rewind ships as a single binary.
 
 [Jellyfin]: https://jellyfin.org
 [TMDB]: https://www.themoviedb.org
@@ -21,26 +19,53 @@ Highlights:
 
 - Multi-user, with per-user ratings, reviews, timezone and rating style (stars
   1–5 or thumbs).
-- All user management lives in the CLI — no self-serve registration, no admin
-  UI, no in-app admin role. Privileged ops require shell access.
+- User management lives in the CLI — no self-serve registration. Privileged ops
+  require shell access.
 - Connect a Jellyfin account (username/password) and a background thread mirrors
   its play history from the [Rewind Jellyfin plugin][plugin]. Access tokens are
   stored encrypted at rest.
 - Incremental, idempotent sync: each source tracks the plugin's change cursor,
   and every play is keyed on the plugin's own record id.
+- Every play keeps when it happened, in UTC and in your local time as it was
+  then, so changing your timezone never rewrites history.
+- Time zone data updates itself daily, no restart needed.
 - Dark/light theme follows the OS via `prefers-color-scheme`.
 
 ## Install
 
+Download the archive for your platform from the
+[latest release](https://github.com/fnando/rewind/releases/latest):
+
+| Platform              | Archive                                    |
+| --------------------- | ------------------------------------------ |
+| macOS (Apple Silicon) | `rewind-aarch64-apple-darwin.tar.gz`       |
+| Linux x86_64          | `rewind-x86_64-unknown-linux-gnu.tar.gz`   |
+| Linux arm64           | `rewind-aarch64-unknown-linux-gnu.tar.gz`  |
+| Linux x86_64 (static) | `rewind-x86_64-unknown-linux-musl.tar.gz`  |
+| Linux arm64 (static)  | `rewind-aarch64-unknown-linux-musl.tar.gz` |
+
+The static (musl) builds have no system dependencies, which makes them a good
+fit for containers.
+
 ```bash
-gem install rewind-app
+tar -xzf rewind-x86_64-unknown-linux-musl.tar.gz
+sudo mv rewind /usr/local/bin/
 ```
 
-This installs the `rewind` executable.
+### Verifying a download
+
+Each release has a `SHA256SUMS` file, signed with the key in
+[`rewind-signing-key.asc`](rewind-signing-key.asc) (fingerprint
+`D366 096A 1522 F73D 01CA 1189 27DA F70E 8647 44F3`):
+
+```bash
+gpg --import rewind-signing-key.asc
+gpg --verify SHA256SUMS.sig SHA256SUMS
+sha256sum --check --ignore-missing SHA256SUMS
+```
 
 ### Requirements
 
-- Ruby 4.0 or newer.
 - A [TMDB API key][tmdb-api] (free, personal use).
 
 [tmdb-api]: https://www.themoviedb.org/settings/api
@@ -56,102 +81,99 @@ export TMDB_API_KEY=…your-tmdb-key…
 rewind migrate
 
 # 3. Create your first user (prints a one-time password):
-rewind users:new --username you
+rewind users new --username you
 
 # 4. Start the server:
 rewind run --port 55455
 ```
 
 Open <http://localhost:55455>, sign in with the printed password, and change it
-when prompted.
+when prompted. The first user created is the admin.
 
 ## Configuration
 
 Rewind reads its configuration from environment variables. You can keep them in
-a `.env` file and pass `--env PATH` to any CLI command.
+a `.env` file and pass `--env-file PATH` to any command.
 
-| Variable                | Default                   | Purpose                                                                                               |
-| ----------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `REWIND_DATA_DIR`       | `./data`                  | Where the SQLite file and session secret live.                                                        |
-| `REWIND_HOST`           | `0.0.0.0`                 | Interface the server binds to.                                                                        |
-| `REWIND_PORT`           | `55455`                   | Port the server binds to.                                                                             |
-| `REWIND_ALLOWED_HOSTS`  | _(empty)_                 | Comma-separated hostnames allowed by Sinatra's host authorization.                                    |
-| `REWIND_SESSION_SECRET` | auto-generated            | Rack session cookie secret. Generated into `$REWIND_DATA_DIR/.session_secret` on first run.           |
-| `REWIND_KEYRING`        | _(required for sources)_  | JSON keyring used to encrypt connected sources' access tokens, e.g. `{"1":"<base64 32-byte key>"}`.    |
-| `REWIND_SYNC_INTERVAL`  | `60`                      | Seconds between background sync passes.                                                                |
-| `REWIND_AUTO_MIGRATE`   | _(unset)_                 | When `1`, boot runs pending migrations automatically.                                                 |
-| `REWIND_PUMA_PLUGINS`   | _(empty)_                 | Comma-separated extra Puma plugins to load on top of the built-in `tmp_restart`.                      |
-| `TMDB_API_KEY`          | _(required for metadata)_ | Your TMDB bearer token.                                                                               |
-| `FANART_API_KEY`        | _(optional)_              | [fanart.tv] project key, used for artist photos. Without it, artists fall back to a placeholder.      |
+| Variable                   | Default                   | Purpose                                                                                     |
+| -------------------------- | ------------------------- | ------------------------------------------------------------------------------------------- |
+| `REWIND_DATA_DIR`          | `./data`                  | Where the database, secrets, images, avatars and time zone data live.                       |
+| `REWIND_HOST`              | `0.0.0.0`                 | Interface the server binds to.                                                              |
+| `REWIND_PORT`              | `55455`                   | Port the server binds to.                                                                   |
+| `REWIND_ALLOWED_HOSTS`     | _(empty)_                 | Comma-separated hostnames the server answers to. Empty allows any.                          |
+| `REWIND_SECRET_KEY`        | auto-generated            | Base64 32-byte key that encrypts stored access tokens. Generated into `$REWIND_DATA_DIR/.secret_key`. |
+| `REWIND_SESSION_SECRET`    | auto-generated            | Session cookie secret. Generated into `$REWIND_DATA_DIR/.session_secret`.                   |
+| `REWIND_SYNC_INTERVAL`     | `60`                      | Seconds between background sync passes.                                                     |
+| `REWIND_DB_BUSY_TIMEOUT`   | `15000`                   | Milliseconds to wait for a locked database.                                                 |
+| `REWIND_IMAGE_STORAGE_DIR` | `$REWIND_DATA_DIR/images` | Where proxied cover images are cached.                                                      |
+| `REWIND_AUTO_MIGRATE`      | _(unset)_                 | When `1`, pending migrations run on start.                                                  |
+| `REWIND_LOG`               | _(unset)_                 | Log filter, e.g. `info` or `rewind=debug`.                                                  |
+| `TMDB_API_KEY`             | _(required for metadata)_ | Your TMDB bearer token.                                                                     |
+| `FANART_API_KEY`           | _(optional)_              | [fanart.tv] project key, used for artist photos. Without it, artists get a placeholder.     |
 
 [fanart.tv]: https://fanart.tv/get-an-api-key/
 
-`REWIND_KEYRING` is required before anyone connects a source — it encrypts the
-Jellyfin access tokens Rewind stores. Generate a key and wrap it in a keyring:
+Keep `REWIND_SECRET_KEY` (or the generated `.secret_key` file) stable: losing it
+makes stored access tokens undecryptable, and users have to reconnect their
+Jellyfin accounts. To set one yourself:
 
 ```bash
-echo "{\"1\":\"$(dd if=/dev/urandom bs=32 count=1 2>/dev/null | openssl base64 -A)\"}"
+openssl rand -base64 32
 ```
-
-Keep the key stable (losing it makes existing tokens undecryptable — users just
-reconnect). To rotate, add a new id (`"2": …`) and keep the old key around so
-existing rows can be re-encrypted on save.
 
 Example `.env`:
 
 ```
 REWIND_DATA_DIR=/var/lib/rewind
 REWIND_ALLOWED_HOSTS=rewind.example.com,localhost
-REWIND_KEYRING={"1":"<base64 key>"}
 TMDB_API_KEY=eyJ…
 ```
 
 ```bash
-rewind run --env .env
+rewind run --env-file .env
 ```
+
+Behind a reverse proxy that terminates TLS, forward `X-Forwarded-Proto: https`
+so the session cookie is marked secure.
 
 ## CLI reference
 
 ```bash
-rewind migrate                                 # run all pending migrations
-rewind run [--port N] [--host HOST] [--workers N] [--threads N] [-e ENV] [-v]  # start the web server (puma)
-rewind restart                                 # restart a running server (touches tmp/restart.txt)
-rewind console                                 # IRB with models loaded
-rewind config                                  # print resolved config (secrets redacted)
+rewind run [--port N] [--host HOST] [--migrate]  # start the web server and background sync
+rewind migrate                                   # run pending migrations
+rewind config                                    # print resolved config (secrets redacted)
 rewind version
 ```
 
-User management (CLI-only — there is no in-app admin):
+User management:
 
 ```bash
-rewind users:new    --username USERNAME [--name NAME]
-rewind users:update --username USERNAME [--new-password] [--name NAME] \
-                                        [--rating-style stars|thumbs]
-rewind users:delete --username USERNAME [--yes]
-rewind users:list
+rewind users new    --username USERNAME [--name NAME]
+rewind users update --username USERNAME [--new-password] [--name NAME] \
+                                        [--rating-style stars|thumbs] [--admin true|false]
+rewind users delete --username USERNAME [--yes]
+rewind users list
 ```
 
-Any CLI command accepts `--env-file PATH` to load a dotenv file first, and
-`--environment NAME` / `-e` to set the run environment (defaults to
-`production`, falling back to `APP_ENV`/`RACK_ENV`).
-
-Operators can inspect/cleanup connected sources (users connect them from
-Settings, so there's no `new`):
+Connected sources (users connect them from Settings, so there's no `new`):
 
 ```bash
-rewind sources:list
-rewind sources:disable --id N
-rewind sources:enable  --id N
-rewind sources:delete  --id N [--yes]
+rewind sources list
+rewind sources disable --id N
+rewind sources enable  --id N
+rewind sources delete  --id N [--yes]
 ```
 
-Re-import a source's plays from the plugin (deletes that source's Jellyfin
-plays first; ratings, reviews and Trakt/manual plays are kept):
+Sync now, or re-import a source's plays from the plugin (deletes that source's
+Jellyfin plays first; ratings, reviews and manual plays are kept):
 
 ```bash
-rewind sync [--source N]               # sync now
+rewind sync [--source N]
 rewind sync --reset [--source N] [--yes]
 ```
+
+The colon form also works (`rewind users:new`). Every command accepts
+`--env-file PATH`, and `-v` / `--verbose-level LEVEL` for logging.
 
 ## Jellyfin integration
 
@@ -166,10 +188,9 @@ removed. Configure the thresholds in Jellyfin → Dashboard → Rewind.
 1. Install the plugin on your Jellyfin server and restart Jellyfin.
 2. Sign in → **Settings** → **Connect Jellyfin**.
 3. Enter your **Jellyfin URL**, **username**, and **password**. Rewind checks
-   that the server has the plugin, signs in once via Jellyfin's
-   `AuthenticateByName`, and keeps the returned access token (encrypted — your
-   password is never stored; `REWIND_KEYRING` must be set). The token is scoped
-   to your Jellyfin user, so Rewind only ever reads your own history.
+   that the server has the plugin, signs in once, and keeps the returned access
+   token, encrypted. Your password is never stored. The token is scoped to your
+   Jellyfin user, so Rewind only ever reads your own history.
 4. Within one `REWIND_SYNC_INTERVAL` the background thread imports the plugin's
    history, then keeps it up to date. History and Stats fill in as items
    resolve via TMDB / MusicBrainz.
@@ -181,9 +202,8 @@ source any time from **Settings**.
 
 - **"Rewind plugin not installed"** on the source card: install the plugin on
   that server and restart Jellyfin.
-- **Nothing syncs.** Confirm `REWIND_KEYRING` is set and the source is enabled
-  (`rewind sources:list`). A revoked/expired token shows as a sync error —
-  reconnect from Settings.
+- **Nothing syncs.** Confirm the source is enabled (`rewind sources list`). A
+  revoked or expired token shows as a sync error — reconnect from Settings.
 - **An item isn't recorded.** It couldn't be resolved: a movie/episode with
   neither a TMDB nor IMDB id, or an audio track with no title. It's listed on
   the errors page (**Settings** → errors); re-identify it in Jellyfin so it
@@ -191,67 +211,19 @@ source any time from **Settings**.
 
 [plugin]: https://github.com/fnando/jellyfin-rewind-plugin
 
-## Importing from Trakt
-
-Migrating from [Trakt]? Request a data export (trakt.tv → _Settings_ → _Data_)
-and you'll get a `.zip` of JSON files. Import your history into an existing
-Rewind user with:
-
-```bash
-rewind import:trakt --archive trakt-export.zip --username you
-```
-
-This imports:
-
-- **Watchings** from `watched-history.json` (movies and episodes), each as a
-  play attributed to the user.
-- **Ratings** from `ratings-{movies,shows,episodes}.json`. Trakt's 1–10 scale is
-  mapped to Rewind's 1–5.
-- **Reviews** from `comments-{movies,shows,episodes}.json`.
-
-Items are resolved through TMDB using the tmdb ids in the export, so
-`TMDB_API_KEY` must be set (see [Configuration](#configuration)). Season-level
-ratings/comments, lists, and private notes are not imported. The import is safe
-to re-run: watchings are de-duplicated by their Trakt history id, so you can
-re-import an updated export without creating duplicate plays.
-
-## Running under your own stack
-
-For Docker, systemd, or a custom Rack app, write a `config.ru`:
-
-```ruby
-require "rewind"
-
-Rewind.boot!   # loads config from ENV, connects the DB, loads models
-
-run Rewind.application
-```
-
-```bash
-puma -p 55455 config.ru
-```
-
-Set `REWIND_AUTO_MIGRATE=1` to run migrations on boot, or run `rewind migrate`
-as a release step.
-
-`rewind run` launches Puma with the built-in `tmp_restart` plugin enabled, so a
-running server can be restarted by touching `tmp/restart.txt` in its working
-directory. Load additional Puma plugins with `REWIND_PUMA_PLUGINS`.
-
 ## Database
 
-A single SQLite file at `$REWIND_DATA_DIR/rewind.sqlite3`. Back it up by copying
-the file (while the server is idle or after a `.backup` SQLite command). No
-external services required.
+A single SQLite file at `$REWIND_DATA_DIR/rewind.db`. Back it up by copying the
+file while the server is stopped, or with SQLite's `.backup` command.
 
 ## Development
 
 ```bash
 git clone https://github.com/fnando/rewind
 cd rewind
-bundle install
-bundle exec rake test       # minitest + rack-test + webmock
-bundle exec rubocop         # lint (rubocop-fnando)
+make test     # run the tests
+make check    # rustfmt + clippy (pedantic)
+make fmt      # format the code
 ```
 
 ## Maintainer
@@ -269,12 +241,12 @@ https://github.com/fnando/rewind/blob/main/CONTRIBUTING.md.
 
 ## License
 
-The gem is available as open source under the terms of the
+Rewind is available as open source under the terms of the
 [MIT License](https://opensource.org/licenses/MIT). A copy of the license can be
 found at https://github.com/fnando/rewind/blob/main/LICENSE.md.
 
 ## Code of Conduct
 
-Everyone interacting in the rewind-app project's codebases, issue trackers, chat
+Everyone interacting in the rewind project's codebases, issue trackers, chat
 rooms and mailing lists is expected to follow the
 [code of conduct](https://github.com/fnando/rewind/blob/main/CODE_OF_CONDUCT.md).

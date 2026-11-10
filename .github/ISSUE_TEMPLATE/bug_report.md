@@ -31,8 +31,8 @@ labels: 'Status: Unconfirmed'
 
 ## Software:
 
-- Gem version: [Add gem version here]
-- Ruby version: [Add version here]
+- Rewind version (`rewind version`): [Add version here]
+- OS and architecture: [Add here]
 
 ## Full backtrace
 

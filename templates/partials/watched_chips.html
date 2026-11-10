@@ -1,0 +1,6 @@
+{% if plays.count > 0 %}
+  <div class="chips">
+    <span class="chip chip--soft">{{ plays.verb }} {{ plays.count_label }}</span>
+    {% if let Some(last) = plays.last %}<span class="chip">Last {{ plays.verb|lower }} {{ last }}</span>{% endif %}
+  </div>
+{% endif %}

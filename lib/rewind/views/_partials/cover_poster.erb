@@ -1,9 +1,0 @@
-<%# The poster image for a cover card: the item's art, else the placeholder.
-    Shared by every cover card so the markup stays identical across them.
-    locals: item %>
-<% if poster?(item) %>
-  <img class="cover-card__img" src="<%= poster_url(item) %>"
-       alt="" loading="lazy" decoding="async">
-<% else %>
-  <img class="cover-card__img cover-card__img--placeholder" src="/poster-placeholder.svg" alt="" loading="lazy" decoding="async">
-<% end %>

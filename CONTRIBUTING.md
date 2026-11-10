@@ -1,4 +1,4 @@
-# Contributing to rewind-app
+# Contributing to rewind
 
 👍🎉 First off, thanks for taking the time to contribute! 🎉👍
 
@@ -31,7 +31,7 @@ by [opening an issue on Github](https://github.com/fnando/rewind/issues).
 When you're ready to make your pull request, follow checklist below to make sure
 your contribution is according to how this project works.
 
-1. [Fork](https://help.github.com/forking/) rewind-app
+1. [Fork](https://help.github.com/forking/) rewind
 2. Create a topic branch - `git checkout -b my_branch`
 3. Make your changes using [descriptive commit messages](#commit-messages)
 4. Update CHANGELOG.md describing your changes by adding an entry to the
@@ -62,18 +62,9 @@ your contribution is according to how this project works.
   - `[Fixed]` for any bug fixes.
   - `[Security]` in case of vulnerabilities.
 
-### Ruby code
+### Rust code
 
-- This project uses [Rubocop](https://rubocop.org) to enforce code style. Before
-  submitting your changes, make sure your tests are passing and code conforms to
-  the expected style by running `rake`.
-- Do not change the library version. This will be done by the maintainer
-  whenever a new version is about to be released.
-
-### JavaScript code
-
-- This project uses [ESLint](https://eslint.org) to enforce code style. Before
-  submitting your changes, make sure your tests are passing and code conforms to
-  the expected style by running `yarn test:ci`.
-- Do not change the library version. This will be done by the maintainer
-  whenever a new version is about to be released.
+- Before submitting your changes, make sure the code is formatted and the tests
+  and lints pass by running `make fmt check test`.
+- Do not change the version. This will be done by the maintainer whenever a new
+  version is about to be released.

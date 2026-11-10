@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block content %}
+<main class="page page--title">
+  <section class="title-hero">
+    <img class="title-hero__poster" src="{{ poster }}" alt="">
+    <div class="title-hero__info">
+      <div class="title-hero__heading">
+        <span class="eyebrow">Series</span>
+        <h1>{{ item.title }}</h1>
+        <span class="title-meta">{{ watched_label }} watched</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="episodes-h">
+    <div class="section__head"><h2 id="episodes-h">Episodes</h2></div>
+    <ol class="play-grid">
+      {% for ep in episodes %}
+        <li class="play-card">
+          <img class="play-card__still" src="{{ ep.poster }}" alt="" loading="lazy" decoding="async">
+          <div class="play-card__body">
+            <a class="play-card__title" href="/items/{{ ep.item_id }}">{{ ep.title }}</a>
+            {% if let Some(date) = ep.date %}<span class="play-card__detail">{{ date }}</span>{% endif %}
+            <span class="play-card__status is-watched">{{ crate::web::helpers::check_svg(13)|safe }}{{ ep.status }}</span>
+            {% if ep.watches > 1 %}<span class="badge">{{ ep.watches }} watches</span>{% endif %}
+            <div class="play-card__actions">
+              {{ ep.rating_html|safe }}
+              <div class="play-card__tools">
+                <form method="post" action="/history/{{ ep.latest_play_id }}">
+                  {{ page.csrf_tag()|safe }}
+                  <input type="hidden" name="_method" value="delete">
+                  <button class="icon-btn" type="submit" aria-label="Remove latest watch">{{ crate::web::helpers::TRASH_SVG|safe }}</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </li>
+      {% endfor %}
+    </ol>
+  </section>
+</main>
+{% endblock %}

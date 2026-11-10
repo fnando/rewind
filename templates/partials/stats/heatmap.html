@@ -1,0 +1,44 @@
+<section class="panel stats-hide-sm">
+  <div class="section__head panel__title">
+    <div>
+      <h2>Activity · {{ heat.period_label }}</h2>
+      <p class="muted">
+        {{ heat.days_label }} with something to watch.
+        {% if let Some(line) = heat.biggest_line %}
+          {{ line }}
+        {% endif %}
+      </p>
+    </div>
+    <ul class="heatmap-legend">
+      <li>Less</li>
+      {% for lvl in 0..5 %}
+        <li class="heatmap__cell" data-level="{{ lvl }}" aria-hidden="true"></li>
+      {% endfor %}
+      <li>More</li>
+    </ul>
+  </div>
+  <div class="panel__body heatmap-wrap">
+    <div class="heatmap" role="img" aria-label="Daily plays heatmap" style="--cols: {{ heat.weeks }};">
+      <div class="heatmap__months">
+        {% for label in heat.month_labels %}
+          <span class="heatmap__month">{{ label }}</span>
+        {% endfor %}
+      </div>
+      <div class="heatmap__days">
+        <span class="heatmap__day" style="grid-row: 2;">Mon</span>
+        <span class="heatmap__day" style="grid-row: 4;">Wed</span>
+        <span class="heatmap__day" style="grid-row: 6;">Fri</span>
+      </div>
+      <div class="heatmap__cells">
+        {% for cell in heat.cells %}
+          {% if let Some((level, muted, title)) = cell %}
+            <span class="heatmap__cell{% if *muted %} heatmap__cell--muted{% endif %}" data-level="{{ level }}"
+                  title="{{ title }}"></span>
+          {% else %}
+            <span class="heatmap__cell heatmap__cell--empty" aria-hidden="true"></span>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>

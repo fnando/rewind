@@ -13,19 +13,11 @@ Prefix your message with one of the following:
 
 ## Unreleased
 
-- Initial release.
-- [Added] Music tracking: artist/album/track items enriched via MusicBrainz,
-  with cover art from the Cover Art Archive and artist photos from fanart.tv.
-  Music plays arrive through the existing Jellyfin webhook (`Audio` events) and
-  surface on the stats page (top artists/albums/tracks).
-- [Changed] Items are now identified by a prefixed `external_id` (`tmdb:…`,
-  `mbid:…`) instead of a TMDB-specific `tmdb_id` column.
-- [Changed] Jellyfin ingestion moved from push webhooks to a background sync
-  thread that polls the Jellyfin API per user — capturing plays from every
-  client, not just ones that fire webhooks. Users connect their account with
-  their Jellyfin username/password (Settings → Connect Jellyfin); the resulting
-  access token is stored encrypted via `attr_keyring` (`REWIND_KEYRING`).
-- [Removed] The push-webhook endpoint, token model, and `webhooks:*` CLI, plus
-  the now-unused `REWIND_SALT`. Server connections are modeled as per-user
-  `sources` behind pluggable provider adapters (Jellyfin today; Plex/Spotify/
-  Apple Music later). Managed with `rewind sources:*`.
+- Initial release, as a single binary.
+- [Added] Track movies, TV episodes and music, logged by hand or synced from
+  Jellyfin through the Rewind plugin, with metadata from TMDB, MusicBrainz, the
+  Cover Art Archive and fanart.tv.
+- [Added] Every play keeps its start and end time, how long it played, and the
+  local date, time and timezone it happened in.
+- [Added] Time zone data updates itself daily.
+- [Added] Signed release archives for macOS and Linux.

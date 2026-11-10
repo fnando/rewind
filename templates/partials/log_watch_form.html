@@ -1,0 +1,11 @@
+<form class="log-watch" method="post" action="/history">
+  {{ page.csrf_tag()|safe }}
+  <input type="hidden" name="item_id" value="{{ item.id }}">
+  <label class="visually-hidden" for="played-at">When you watched it</label>
+  <input class="input log-watch__when" type="datetime-local" id="played-at"
+         name="played_at" value="{{ now_local }}" max="{{ now_local }}" required>
+  <button class="btn btn--primary" type="submit">
+    {{ crate::web::helpers::PLUS_SVG|safe }}
+    Log a watch
+  </button>
+</form>

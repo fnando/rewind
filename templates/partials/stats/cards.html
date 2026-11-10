@@ -1,0 +1,30 @@
+<section class="stat-cards">
+  <div class="stat-card stat-card--titles">
+    <span class="stat-card__icon">◉</span>
+    <span class="stat-card__value">{{ cards.different_titles }}</span>
+    <span class="stat-card__label">{{ cards.titles_label }}</span>
+  </div>
+
+  <div class="stat-card stat-card--rewatches">
+    <span class="stat-card__icon">↻</span>
+    <span class="stat-card__value">{{ cards.rewatches }}</span>
+    <span class="stat-card__label">{{ cards.rewatch_label }}</span>
+  </div>
+
+  <div class="stat-card stat-card--busiest">
+    <span class="stat-card__icon">▣</span>
+    {% if let Some((label, line)) = cards.busiest %}
+      <span class="stat-card__value">{{ label }}</span>
+      <span class="stat-card__label">{{ line }}</span>
+    {% else %}
+      <span class="stat-card__value">—</span>
+      <span class="stat-card__label">not enough data yet</span>
+    {% endif %}
+  </div>
+
+  <div class="stat-card stat-card--avg">
+    <span class="stat-card__icon">⏱</span>
+    <span class="stat-card__value">{{ cards.average }}</span>
+    <span class="stat-card__label">{{ cards.average_label }} a week, on average</span>
+  </div>
+</section>

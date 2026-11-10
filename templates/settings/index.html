@@ -1,0 +1,115 @@
+{% extends "layout.html" %}
+{% block content %}
+<main class="page page--wide">
+  <div class="page-head">
+    <h1>Settings</h1>
+  </div>
+
+  <section class="panel">
+    <h2 class="panel__title">Session</h2>
+    <div class="panel__body panel__body--inline">
+      <p class="muted">Signed in as <strong>{{ user.username }}</strong>.</p>
+      <form method="post" action="/logout">
+        {{ page.csrf_tag()|safe }}
+        <button class="btn btn--secondary" type="submit">Log out</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">Avatar</h2>
+    <div class="panel__body avatar-row">
+      <span class="avatar avatar--lg">
+        {% if let Some(url) = page.avatar_url %}<img src="{{ url }}" alt="">{% else %}{{ page.avatar_letter() }}{% endif %}
+      </span>
+      <div class="avatar-row__actions">
+        <form method="post" action="/settings/avatar" enctype="multipart/form-data">
+          {{ page.csrf_tag()|safe }}
+          <input class="file-input" id="avatar-file" type="file" name="avatar" accept="image/*" required>
+          <label class="btn btn--secondary" for="avatar-file">Choose image…</label>
+          <button class="btn btn--primary" type="submit">Upload</button>
+        </form>
+        {% if page.avatar_url.is_some() %}
+          <form method="post" action="/settings/avatar/delete">
+            {{ page.csrf_tag()|safe }}
+            <button class="btn btn--secondary" type="submit">Remove</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">Timezone</h2>
+    <form method="post" action="/settings/timezone" class="panel__body panel__body--inline">
+      {{ page.csrf_tag()|safe }}
+      <select class="input" name="timezone">
+        {% for tz in zones %}
+          <option value="{{ tz }}"{% if user.timezone == **tz %} selected{% endif %}>{{ tz }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn--secondary" type="submit">Save</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">Rating style</h2>
+    <form method="post" action="/settings/rating-style" class="panel__body panel__body--inline">
+      {{ page.csrf_tag()|safe }}
+      <label><input type="radio" name="rating_style" value="stars"{% if user.rating_style == "stars" %} checked{% endif %}> Stars (1–5)</label>
+      <label><input type="radio" name="rating_style" value="thumbs"{% if user.rating_style == "thumbs" %} checked{% endif %}> Thumbs up / down</label>
+      <button class="btn btn--secondary" type="submit">Save</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">Password</h2>
+    <div class="panel__body">
+      <p class="muted"><a href="/settings/password">Change your password →</a></p>
+    </div>
+  </section>
+
+  {% if user.admin %}
+    <section class="panel">
+      <h2 class="panel__title">Admin</h2>
+      <div class="panel__body">
+        <p class="muted"><a href="/settings/errors">View error log →</a></p>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2 class="panel__title">Connected sources</h2>
+    <div class="panel__body">
+      {% if sources.is_empty() %}
+        <p class="muted">No sources connected yet.</p>
+      {% else %}
+        <ul class="integration-list">
+          {% for card in sources %}{% include "partials/source_card.html" %}{% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+
+    <details class="disclosure"{% if open_source_form %} open{% endif %}>
+      <summary>Connect Jellyfin</summary>
+      <form method="post" action="/settings/sources" class="panel__body">
+        {{ page.csrf_tag()|safe }}
+        <div class="field">
+          <label for="jf-url">Jellyfin URL</label>
+          <input class="input" id="jf-url" type="url" name="url" placeholder="https://jellyfin.example.com" value="{{ form_url }}" required>
+        </div>
+        <div class="field">
+          <label for="jf-username">Username</label>
+          <input class="input" id="jf-username" type="text" name="username" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" value="{{ form_username }}" required>
+        </div>
+        <div class="field">
+          <label for="jf-password">Password</label>
+          <input class="input" id="jf-password" type="password" name="password" autocomplete="off">
+          <span class="field__hint">We sign in once to get an access token and store it encrypted. Your password is never saved.</span>
+        </div>
+        <button class="btn btn--primary" type="submit">Connect</button>
+      </form>
+    </details>
+  </section>
+</main>
+{% endblock %}
