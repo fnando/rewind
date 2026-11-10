@@ -18,7 +18,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       sha: ${{ github.event.pull_request.merge_commit_sha }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
       - id: version
@@ -55,7 +55,7 @@ jobs:
             os: ubuntu-24.04-arm
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.version.outputs.sha }}
       - name: Install musl
