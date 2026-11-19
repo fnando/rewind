@@ -22,7 +22,7 @@ dotenvy = "0.15.7"
 hex = "0.4.3"
 http-body-util = "0.1.5"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
-jiff = { version = "0.2.41", features = ["serde", "tzdb-bundle-always"] }
+jiff = { version = "1.0.0", features = ["serde", "tzdb-bundle-always"] }
 percent-encoding = "2.3.2"
 rand = "0.10.3"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
